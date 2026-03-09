@@ -1,7 +1,5 @@
 import "dotenv/config";
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
-import { serveStatic } from "./static";
 import { createServer } from "http";
 import session from "express-session";
 import createMemoryStore from "memorystore";
@@ -21,6 +19,12 @@ declare global {
     interface Session {
       authenticated?: boolean;
     }
+  }
+}
+
+declare module "express-session" {
+  interface SessionData {
+    authenticated?: boolean;
   }
 }
 
@@ -56,6 +60,26 @@ export function log(message: string, source = "express") {
   console.log(`${formattedTime} [${source}] ${message}`);
 }
 
+function validateStartupEnv() {
+  const missing = ["DATABASE_URL", "DASHBOARD_PASSWORD"].filter(
+    (key) => !process.env[key],
+  );
+
+  if (process.env.NODE_ENV === "production" && !process.env.SESSION_SECRET) {
+    missing.push("SESSION_SECRET");
+  }
+
+  if (missing.length === 0) {
+    return;
+  }
+
+  console.error("Startup configuration error:");
+  for (const key of missing) {
+    console.error(`- Missing required environment variable: ${key}`);
+  }
+  process.exit(1);
+}
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
@@ -83,6 +107,13 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  validateStartupEnv();
+
+  const [{ registerRoutes }, { serveStatic }] = await Promise.all([
+    import("./routes"),
+    import("./static"),
+  ]);
+
   await registerRoutes(httpServer, app);
 
   app.use((err: any, _req: Request, res: Response, next: NextFunction) => {
