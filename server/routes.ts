@@ -40,7 +40,7 @@ const requireWebhookSecret = (req: any, res: any, next: any) => {
 
 // Helper to send push to all agents
 const notifyAgents = async (payload: any) => {
-  const promises = Array.from(pushSubscriptions.values()).map(sub => 
+  const promises = Array.from(pushSubscriptions.values()).map(sub =>
     webpush.sendNotification(sub, JSON.stringify(payload)).catch(e => console.error("Push error", e))
   );
   await Promise.all(promises);
@@ -50,7 +50,7 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
-  
+
   // Auth Routes
   app.post(api.auth.login.path, (req, res) => {
     const { password } = req.body;
@@ -113,16 +113,19 @@ export async function registerRoutes(
     try {
       const { customer_phone } = api.escalations.close.input.parse(req.body);
       await storage.closeEscalation(customer_phone);
-      
+
       // Call n8n webhook
       if (process.env.N8N_CLOSE_WEBHOOK) {
         fetch(process.env.N8N_CLOSE_WEBHOOK, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-webhook-secret': process.env.WEBHOOK_SECRET || ''
+          },
           body: JSON.stringify({ customer_phone })
         }).catch(e => console.error("Error calling n8n close webhook", e));
       }
-      
+
       res.json({ success: true });
     } catch (err: any) {
       res.status(400).json({ message: err.message });
@@ -150,7 +153,10 @@ export async function registerRoutes(
       if (process.env.N8N_SEND_WEBHOOK) {
         fetch(process.env.N8N_SEND_WEBHOOK, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: {
+            'Content-Type': 'application/json',
+            'x-webhook-secret': process.env.WEBHOOK_SECRET || ''
+          },
           body: JSON.stringify({ customer_phone: data.customer_phone, message: data.message })
         }).catch(e => console.error("Error calling n8n send webhook", e));
       }
