@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { LogOut, Wifi, WifiOff, Fingerprint } from "lucide-react";
+import { LogOut, Wifi, WifiOff, Fingerprint, Bell } from "lucide-react";
 import { startRegistration } from "@simplewebauthn/browser";
 import { useAuth, useLogout } from "@/hooks/use-auth";
 import { useConversations } from "@/hooks/use-conversations";
@@ -16,7 +16,7 @@ export default function Dashboard() {
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [connected, setConnected] = useState(true);
 
-  usePushNotifications(isAuthenticated);
+  const { showBanner, enableNotifications } = usePushNotifications(isAuthenticated);
 
   useEffect(() => {
     if (!isAuthLoading && !isAuthenticated) {
@@ -127,6 +127,22 @@ export default function Dashboard() {
           </button>
         </div>
       </header>
+
+      {/* Enable Notifications Banner */}
+      {showBanner && (
+        <div className="bg-amber-50 border-b border-amber-200 px-5 py-2.5 flex items-center justify-between gap-3 flex-shrink-0">
+          <div className="flex items-center gap-2 text-sm text-amber-800">
+            <Bell className="w-4 h-4 flex-shrink-0" />
+            <span>Enable notifications to get alerted when customers message you.</span>
+          </div>
+          <button
+            onClick={enableNotifications}
+            className="flex-shrink-0 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg transition-colors"
+          >
+            Enable Notifications
+          </button>
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="flex-1 flex overflow-hidden">
