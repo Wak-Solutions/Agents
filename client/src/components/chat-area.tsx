@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { format } from "date-fns";
-import { Send, CheckCircle2, User, Bot, HeadphonesIcon, Info } from "lucide-react";
+import { Send, CheckCircle2, User, Bot, HeadphonesIcon, Info, ArrowLeft } from "lucide-react";
 import { Button } from "./ui-elements";
 import { cn } from "@/lib/utils";
 import type { Message, Escalation } from "@shared/schema";
@@ -66,8 +66,14 @@ function ActiveChat({ escalation, onClose }: { escalation: Escalation; onClose: 
     <div className="flex-1 flex flex-col h-full bg-[#F7F9F7] relative">
       {/* Header */}
       <div className="h-16 px-6 border-b border-border/60 bg-white/50 backdrop-blur-md flex items-center justify-between sticky top-0 z-10">
-        <div className="flex items-center gap-4">
-          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-inner">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={onClose}
+            className="md:hidden w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted transition-colors"
+          >
+            <ArrowLeft className="w-5 h-5 text-foreground" />
+          </button>
+          <div className="w-10 h-10 rounded-full bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-inner shrink-0">
             <User className="w-5 h-5 text-white" />
           </div>
           <div>

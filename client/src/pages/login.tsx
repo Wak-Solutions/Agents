@@ -44,9 +44,11 @@ export default function Login() {
       <div className="w-full max-w-md relative z-10">
         {/* Logo area */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-[140px] h-[40px] bg-muted rounded-md flex items-center justify-center border border-border mb-4">
-            <span className="text-sm font-semibold text-muted-foreground tracking-widest">LOGO</span>
-          </div>
+          <img
+            src="/logo.png"
+            alt="WAK Solutions"
+            className="h-[64px] w-auto object-contain mb-4"
+          />
           <h1 className="text-xl font-bold text-foreground tracking-tight">WAK Solutions</h1>
           <p className="text-sm text-muted-foreground mt-1">Your Strategic AI Partner</p>
         </div>

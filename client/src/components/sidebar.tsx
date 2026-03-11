@@ -14,7 +14,7 @@ export function Sidebar({ escalations, selectedPhone, onSelect }: SidebarProps) 
   const closedEscalations = escalations.filter(e => e.status === 'closed');
 
   return (
-    <div className="w-80 h-full bg-card border-r border-border flex flex-col z-10 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
+    <div className="w-full md:w-80 h-full bg-card border-r border-border flex flex-col z-10 shadow-[4px_0_24px_rgba(0,0,0,0.02)]">
       <div className="p-4 border-b border-border/50 flex items-center gap-3">
         <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
           <Inbox className="w-5 h-5" />

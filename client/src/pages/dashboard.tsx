@@ -55,7 +55,7 @@ export default function Dashboard() {
             data-testid="img-logo"
             src="/logo.png"
             alt="WAK Solutions"
-            className="h-[40px] w-auto"
+            className="h-[36px] w-auto object-contain shrink-0"
           />
           <div className="hidden sm:block">
             <span className="font-semibold text-sm text-white/90">WAK Solutions</span>
@@ -98,30 +98,36 @@ export default function Dashboard() {
 
       {/* Main Content */}
       <main className="flex-1 flex overflow-hidden">
-        {isEscalationsLoading ? (
-          <div className="w-80 h-full border-r border-border bg-card flex flex-col">
-            {[1, 2, 3].map(i => (
-              <div key={i} className="p-4 border-b border-border/40 animate-pulse flex gap-3">
-                <div className="w-10 h-10 rounded-full bg-muted flex-shrink-0" />
-                <div className="flex-1 space-y-2 py-1">
-                  <div className="h-3 bg-muted rounded w-1/2" />
-                  <div className="h-2 bg-muted rounded w-3/4" />
+        {/* Sidebar: full screen on mobile when no chat selected, fixed width on desktop */}
+        <div className={`${selectedPhone ? 'hidden md:flex' : 'flex w-full md:w-80'} md:w-80 h-full flex-shrink-0`}>
+          {isEscalationsLoading ? (
+            <div className="w-full h-full border-r border-border bg-card flex flex-col">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="p-4 border-b border-border/40 animate-pulse flex gap-3">
+                  <div className="w-10 h-10 rounded-full bg-muted flex-shrink-0" />
+                  <div className="flex-1 space-y-2 py-1">
+                    <div className="h-3 bg-muted rounded w-1/2" />
+                    <div className="h-2 bg-muted rounded w-3/4" />
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <Sidebar
-            escalations={escalations}
-            selectedPhone={selectedPhone}
-            onSelect={setSelectedPhone}
-          />
-        )}
+              ))}
+            </div>
+          ) : (
+            <Sidebar
+              escalations={escalations}
+              selectedPhone={selectedPhone}
+              onSelect={setSelectedPhone}
+            />
+          )}
+        </div>
 
-        <ChatArea
-          escalation={selectedEscalation}
-          onClose={() => setSelectedPhone(null)}
-        />
+        {/* Chat: full screen on mobile when chat selected, hidden when none */}
+        <div className={`${selectedPhone ? 'flex' : 'hidden md:flex'} flex-1 min-w-0`}>
+          <ChatArea
+            escalation={selectedEscalation}
+            onClose={() => setSelectedPhone(null)}
+          />
+        </div>
       </main>
     </div>
   );
