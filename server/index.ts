@@ -38,9 +38,17 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
+// Trust Railway's reverse proxy so session cookies work correctly on HTTPS
+app.set('trust proxy', 1);
+
 // Session middleware - MUST be before routes
 app.use(session({
-  cookie: { maxAge: 86400000, httpOnly: true, sameSite: 'lax' },
+  cookie: {
+    maxAge: 86400000,
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+  },
   store: new MemoryStore({
     checkPeriod: 86400000 
   }),

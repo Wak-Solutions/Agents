@@ -53,7 +53,7 @@ export default function Login() {
         credentials: 'include',
       });
       if (!verifyRes.ok) throw new Error("Biometric verification failed");
-      setLocation("/");
+      window.location.href = "/";
     } catch (e: any) {
       setBiometricError(e.message || "Biometric login failed");
     } finally {
