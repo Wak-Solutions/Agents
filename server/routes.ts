@@ -4,6 +4,12 @@ import { storage } from "./storage";
 import { api } from "@shared/routes";
 import { z } from "zod";
 import webpush from "web-push";
+import {
+  generateRegistrationOptions,
+  verifyRegistrationResponse,
+  generateAuthenticationOptions,
+  verifyAuthenticationResponse,
+} from "@simplewebauthn/server";
 
 if (!process.env.DASHBOARD_PASSWORD) {
   throw new Error("Missing required environment variable: DASHBOARD_PASSWORD");
@@ -20,6 +26,13 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
 
 // In-memory store for push subscriptions
 const pushSubscriptions = new Map<string, any>();
+
+// WebAuthn state
+const RP_NAME = "WAK Solutions Agent";
+const RP_ID = process.env.RP_ID || "localhost";
+const RP_ORIGIN = process.env.RP_ORIGIN || `https://${RP_ID}`;
+let webAuthnCredential: any = null;      // stored registered credential
+let currentChallenge: string | undefined; // temp challenge during auth flow
 
 // Auth check middleware
 const requireAuth = (req: any, res: any, next: any) => {
@@ -82,6 +95,90 @@ export async function registerRoutes(
     } else {
       res.status(401).json({ message: "Unauthorized" });
     }
+  });
+
+  // WebAuthn Routes
+  // Step 1: generate options for registering a new biometric credential
+  app.post('/api/auth/webauthn/register/options', requireAuth, async (req, res) => {
+    const options = await generateRegistrationOptions({
+      rpName: RP_NAME,
+      rpID: RP_ID,
+      userID: new TextEncoder().encode('wak-agent'),
+      userName: 'agent',
+      attestationType: 'none',
+      authenticatorSelection: {
+        authenticatorAttachment: 'platform', // device biometrics only (Face ID / Touch ID / fingerprint)
+        residentKey: 'preferred',
+        userVerification: 'required',
+      },
+    });
+    currentChallenge = options.challenge;
+    res.json(options);
+  });
+
+  // Step 2: verify and save the registered credential
+  app.post('/api/auth/webauthn/register/verify', requireAuth, async (req, res) => {
+    try {
+      const { verified, registrationInfo } = await verifyRegistrationResponse({
+        response: req.body,
+        expectedChallenge: currentChallenge!,
+        expectedOrigin: RP_ORIGIN,
+        expectedRPID: RP_ID,
+      });
+      if (verified && registrationInfo) {
+        webAuthnCredential = registrationInfo.credential;
+        currentChallenge = undefined;
+        res.json({ verified: true });
+      } else {
+        res.status(400).json({ message: "Verification failed" });
+      }
+    } catch (e: any) {
+      res.status(400).json({ message: e.message });
+    }
+  });
+
+  // Step 3: generate options for authenticating with biometrics
+  app.post('/api/auth/webauthn/login/options', async (req, res) => {
+    if (!webAuthnCredential) {
+      return res.status(400).json({ message: "No biometric registered" });
+    }
+    const options = await generateAuthenticationOptions({
+      rpID: RP_ID,
+      allowCredentials: [{ id: webAuthnCredential.id }],
+      userVerification: 'required',
+    });
+    currentChallenge = options.challenge;
+    res.json(options);
+  });
+
+  // Step 4: verify the biometric assertion and log in
+  app.post('/api/auth/webauthn/login/verify', async (req, res) => {
+    try {
+      const { verified } = await verifyAuthenticationResponse({
+        response: req.body,
+        expectedChallenge: currentChallenge!,
+        expectedOrigin: RP_ORIGIN,
+        expectedRPID: RP_ID,
+        credential: webAuthnCredential,
+      });
+      if (verified) {
+        req.session.authenticated = true;
+        req.session.save((err) => {
+          if (err) return res.status(500).json({ message: "Session error" });
+          currentChallenge = undefined;
+          res.json({ success: true });
+        });
+      } else {
+        res.status(401).json({ message: "Biometric verification failed" });
+      }
+    } catch (e: any) {
+      res.status(401).json({ message: e.message });
+    }
+  });
+
+  // Check if biometric is registered
+  app.get('/api/auth/webauthn/registered', (req, res) => {
+    res.json({ registered: !!webAuthnCredential });
   });
 
   // Escalation Routes
@@ -166,14 +263,11 @@ export async function registerRoutes(
     try {
       const data = api.messages.incoming.input.parse(req.body);
 
-      const escalation = await storage.getEscalation(data.customer_phone);
-      if (escalation && escalation.status === 'open') {
-        await notifyAgents({
-          title: "New Message",
-          body: `${data.customer_phone}: ${data.message_text.substring(0, 50)}...`,
-          url: `/?phone=${data.customer_phone}`
-        });
-      }
+      await notifyAgents({
+        title: "New Customer Message",
+        body: `${data.customer_phone}: ${data.message_text.substring(0, 60)}`,
+        url: `/?phone=${data.customer_phone}`
+      });
 
       res.json({ success: true });
     } catch (err: any) {

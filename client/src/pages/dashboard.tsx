@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { LogOut, Wifi, WifiOff } from "lucide-react";
+import { LogOut, Wifi, WifiOff, Fingerprint } from "lucide-react";
+import { startRegistration } from "@simplewebauthn/browser";
 import { useAuth, useLogout } from "@/hooks/use-auth";
 import { useEscalations } from "@/hooks/use-escalations";
 import { usePushNotifications } from "@/hooks/use-push";
@@ -40,6 +41,28 @@ export default function Dashboard() {
 
   const handleLogout = () => {
     logout(undefined, { onSuccess: () => setLocation("/login") });
+  };
+
+  const handleRegisterBiometric = async () => {
+    try {
+      const optRes = await fetch('/api/auth/webauthn/register/options', { method: 'POST', credentials: 'include' });
+      if (!optRes.ok) return alert("Failed to start biometric registration");
+      const options = await optRes.json();
+      const attResp = await startRegistration({ optionsJSON: options });
+      const verifyRes = await fetch('/api/auth/webauthn/register/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(attResp),
+        credentials: 'include',
+      });
+      if (verifyRes.ok) {
+        alert("Biometric registered! You can now log in with Face ID / fingerprint.");
+      } else {
+        alert("Registration failed. Please try again.");
+      }
+    } catch (e: any) {
+      alert(e.message || "Biometric registration failed");
+    }
   };
 
   return (
@@ -84,6 +107,15 @@ export default function Dashboard() {
               </>
             )}
           </div>
+
+          <button
+            onClick={handleRegisterBiometric}
+            title="Set up Face ID / Fingerprint login"
+            className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white transition-colors px-3 py-1.5 rounded-md hover:bg-white/10"
+          >
+            <Fingerprint className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Biometric</span>
+          </button>
 
           <button
             data-testid="button-logout"

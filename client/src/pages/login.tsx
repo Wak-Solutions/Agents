@@ -1,20 +1,65 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { MessageSquareQuote, Lock } from "lucide-react";
+import { MessageSquareQuote, Lock, Fingerprint } from "lucide-react";
 import { useAuth, useLogin } from "@/hooks/use-auth";
 import { Card, Input, Button } from "@/components/ui-elements";
+import {
+  startRegistration,
+  startAuthentication,
+} from "@simplewebauthn/browser";
 
 export default function Login() {
   const [password, setPassword] = useState("");
   const [, setLocation] = useLocation();
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
   const { mutate: login, isPending, error } = useLogin();
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+  const [biometricRegistered, setBiometricRegistered] = useState(false);
+  const [biometricError, setBiometricError] = useState("");
+  const [biometricPending, setBiometricPending] = useState(false);
 
   useEffect(() => {
     if (isAuthenticated && !isAuthLoading) {
       setLocation("/");
     }
   }, [isAuthenticated, isAuthLoading, setLocation]);
+
+  // Check if device supports platform biometrics and if one is registered
+  useEffect(() => {
+    const check = async () => {
+      if (!window.PublicKeyCredential) return;
+      const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
+      if (!available) return;
+      setBiometricAvailable(true);
+      const res = await fetch('/api/auth/webauthn/registered');
+      const data = await res.json();
+      setBiometricRegistered(data.registered);
+    };
+    check();
+  }, []);
+
+  const handleBiometricLogin = async () => {
+    setBiometricError("");
+    setBiometricPending(true);
+    try {
+      const optRes = await fetch('/api/auth/webauthn/login/options', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+      if (!optRes.ok) throw new Error("No biometric registered on this device");
+      const options = await optRes.json();
+      const assertion = await startAuthentication({ optionsJSON: options });
+      const verifyRes = await fetch('/api/auth/webauthn/login/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(assertion),
+        credentials: 'include',
+      });
+      if (!verifyRes.ok) throw new Error("Biometric verification failed");
+      setLocation("/");
+    } catch (e: any) {
+      setBiometricError(e.message || "Biometric login failed");
+    } finally {
+      setBiometricPending(false);
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,7 +79,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4 relative overflow-hidden">
-      
+
       {/* Subtle background blobs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-96 h-96 bg-primary/8 rounded-full blur-3xl" />
@@ -64,6 +109,29 @@ export default function Login() {
             <h2 className="text-lg font-semibold text-foreground">Agent Dashboard</h2>
             <p className="text-sm text-muted-foreground mt-1">Sign in to manage escalations</p>
           </div>
+
+          {/* Biometric login button */}
+          {biometricAvailable && biometricRegistered && (
+            <div className="mb-5">
+              <button
+                type="button"
+                onClick={handleBiometricLogin}
+                disabled={biometricPending}
+                className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl border-2 border-primary/20 bg-primary/5 hover:bg-primary/10 transition-all text-sm font-medium text-primary disabled:opacity-50"
+              >
+                <Fingerprint className="w-5 h-5" />
+                {biometricPending ? "Verifying..." : "Sign in with Face ID / Fingerprint"}
+              </button>
+              {biometricError && (
+                <p className="text-sm text-destructive mt-2 text-center">{biometricError}</p>
+              )}
+              <div className="flex items-center gap-3 mt-5 mb-1">
+                <div className="flex-1 h-px bg-border" />
+                <span className="text-xs text-muted-foreground">or use password</span>
+                <div className="flex-1 h-px bg-border" />
+              </div>
+            </div>
+          )}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-1.5">
