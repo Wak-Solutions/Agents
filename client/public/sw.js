@@ -45,10 +45,12 @@ self.addEventListener('push', (event) => {
 
   const options = {
     body: data.body || '',
-    icon: '/logo.png',
-    badge: '/logo.png',
-    tag: data.tag || 'wak-notification',
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    tag: data.tag || ('wak-' + Date.now()), // unique tag so each notification stacks with sound
+    renotify: true,
     requireInteraction: true,
+    vibrate: [200, 100, 200, 100, 400], // pulse pattern for Android
     data: { url: data.url || '/' }
   };
 
