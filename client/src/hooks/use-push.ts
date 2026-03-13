@@ -2,15 +2,51 @@ import { useState, useEffect } from "react";
 import { api } from "@shared/routes";
 import { urlBase64ToUint8Array } from "@/lib/utils";
 
+/** Detect if running as installed PWA (standalone / fullscreen) */
+function isStandalone(): boolean {
+  return (
+    window.matchMedia('(display-mode: standalone)').matches ||
+    (window.navigator as any).standalone === true
+  );
+}
+
+/** Detect iOS */
+function isIOS(): boolean {
+  return (
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  );
+}
+
 async function doSubscribe() {
-  const registration = await navigator.serviceWorker.register('/sw.js');
+  const registration = await navigator.serviceWorker.ready; // wait for active SW
   const vapidRes = await fetch(api.push.vapidPublicKey.path, { credentials: "include" });
   if (!vapidRes.ok) throw new Error("Failed to fetch VAPID key");
   const { publicKey } = await vapidRes.json();
-  const subscription = await registration.pushManager.subscribe({
+
+  // Check for existing subscription — reuse if still valid
+  let subscription = await registration.pushManager.getSubscription();
+  if (subscription) {
+    // Validate the key hasn't changed
+    const existingKey = subscription.options?.applicationServerKey;
+    const newKey = urlBase64ToUint8Array(publicKey);
+    if (existingKey && arrayBufferEqual(existingKey, newKey.buffer)) {
+      // Existing subscription is valid — just re-register with backend
+      await sendSubscriptionToBackend(subscription);
+      return;
+    }
+    // Key changed — unsubscribe old one
+    await subscription.unsubscribe();
+  }
+
+  subscription = await registration.pushManager.subscribe({
     userVisibleOnly: true,
     applicationServerKey: urlBase64ToUint8Array(publicKey),
   });
+  await sendSubscriptionToBackend(subscription);
+}
+
+async function sendSubscriptionToBackend(subscription: PushSubscription) {
   await fetch(api.push.subscribe.path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -19,15 +55,38 @@ async function doSubscribe() {
   });
 }
 
+function arrayBufferEqual(a: ArrayBuffer, b: ArrayBuffer): boolean {
+  if (a.byteLength !== b.byteLength) return false;
+  const va = new Uint8Array(a);
+  const vb = new Uint8Array(b);
+  for (let i = 0; i < va.length; i++) {
+    if (va[i] !== vb[i]) return false;
+  }
+  return true;
+}
+
 export function usePushNotifications(isAuthenticated: boolean) {
   const [showBanner, setShowBanner] = useState(false);
+  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) return;
     if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return;
 
+    // Register SW early so it's ready
+    navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(err =>
+      console.error("SW registration error:", err)
+    );
+
+    // On iOS, push only works inside installed PWA (standalone mode)
+    if (isIOS() && !isStandalone()) {
+      setShowInstallPrompt(true);
+      return;
+    }
+
     if (Notification.permission === "granted") {
-      // Already permitted — subscribe silently (no user gesture needed)
+      // Already permitted — re-subscribe to ensure backend has current subscription
+      // This handles the case where subscription was lost after PWA reinstall
       doSubscribe().catch(err => console.error("Push subscribe error:", err));
     } else if (Notification.permission === "default") {
       // Not yet asked — show the banner so the user can trigger it with a tap
@@ -49,5 +108,7 @@ export function usePushNotifications(isAuthenticated: boolean) {
     }
   };
 
-  return { showBanner, enableNotifications };
+  const dismissInstallPrompt = () => setShowInstallPrompt(false);
+
+  return { showBanner, showInstallPrompt, enableNotifications, dismissInstallPrompt };
 }

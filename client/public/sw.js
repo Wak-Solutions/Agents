@@ -1,13 +1,8 @@
 // WAK Solutions Agent - Service Worker
-const CACHE_NAME = 'wak-agent-v1';
-const OFFLINE_URL = '/offline.html';
+const CACHE_NAME = 'wak-agent-v2';
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll([OFFLINE_URL]).catch(() => {});
-    })
-  );
+  // Skip caching offline.html — not critical, avoids install failures
   self.skipWaiting();
 });
 
@@ -28,34 +23,42 @@ self.addEventListener('fetch', (event) => {
 
   event.respondWith(
     fetch(event.request).catch(() => {
-      return caches.match(OFFLINE_URL).then((r) => r || new Response('Offline'));
+      return caches.match(event.request).then((r) => r || new Response('Offline', { status: 503 }));
     })
   );
 });
 
 self.addEventListener('push', (event) => {
-  if (!event.data) return;
-
+  // iOS requires showNotification to be called inside event.waitUntil ALWAYS.
+  // Never exit early without calling showNotification — iOS will kill the SW.
   let data;
   try {
-    data = event.data.json();
+    data = event.data ? event.data.json() : {};
   } catch (e) {
-    data = { title: 'WAK Solutions', body: event.data.text() };
+    data = { title: 'WAK Solutions', body: event.data ? event.data.text() : '' };
   }
 
+  const title = data.title || 'WAK Solutions Agent';
+  const isIOS = /iPad|iPhone|iPod/.test(self.navigator?.userAgent || '') ||
+    (self.navigator?.platform === 'MacIntel' && self.navigator?.maxTouchPoints > 1);
+
   const options = {
-    body: data.body || '',
+    body: data.body || 'New notification',
     icon: '/icon-192.png',
     badge: '/icon-192.png',
-    tag: data.tag || ('wak-' + Date.now()), // unique tag so each notification stacks with sound
+    tag: data.tag || ('wak-' + Date.now()),
     renotify: true,
-    requireInteraction: true,
-    vibrate: [200, 100, 200, 100, 400], // pulse pattern for Android
+    vibrate: [200, 100, 200, 100, 400],
     data: { url: data.url || '/' }
   };
 
+  // iOS does not support requireInteraction — only set on non-iOS
+  if (!isIOS) {
+    options.requireInteraction = true;
+  }
+
   event.waitUntil(
-    self.registration.showNotification(data.title || 'WAK Solutions Agent', options)
+    self.registration.showNotification(title, options)
   );
 });
 

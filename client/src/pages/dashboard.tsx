@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { LogOut, Wifi, WifiOff, Fingerprint, Bell } from "lucide-react";
+import { LogOut, Wifi, WifiOff, Fingerprint, Bell, Share, X } from "lucide-react";
 import { startRegistration } from "@simplewebauthn/browser";
 import { useAuth, useLogout } from "@/hooks/use-auth";
 import { useConversations } from "@/hooks/use-conversations";
@@ -16,7 +16,7 @@ export default function Dashboard() {
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
   const [connected, setConnected] = useState(true);
 
-  const { showBanner, enableNotifications } = usePushNotifications(isAuthenticated);
+  const { showBanner, showInstallPrompt, enableNotifications, dismissInstallPrompt } = usePushNotifications(isAuthenticated);
 
   useEffect(() => {
     if (!isAuthLoading && !isAuthenticated) {
@@ -127,6 +127,26 @@ export default function Dashboard() {
           </button>
         </div>
       </header>
+
+      {/* iOS PWA Install Prompt */}
+      {showInstallPrompt && (
+        <div className="bg-blue-50 border-b border-blue-200 px-5 py-2.5 flex items-center justify-between gap-3 flex-shrink-0">
+          <div className="flex items-center gap-2 text-sm text-blue-800">
+            <Share className="w-4 h-4 flex-shrink-0" />
+            <span>
+              To receive notifications on iOS, tap{" "}
+              <strong>Share</strong> → <strong>Add to Home Screen</strong>, then open from your Home Screen.
+            </span>
+          </div>
+          <button
+            onClick={dismissInstallPrompt}
+            className="flex-shrink-0 text-blue-600 hover:text-blue-800 p-1 rounded transition-colors"
+            aria-label="Dismiss"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
 
       {/* Enable Notifications Banner */}
       {showBanner && (
