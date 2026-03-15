@@ -12,6 +12,8 @@ export function useAuth() {
       return api.auth.me.responses[200].parse(await res.json());
     },
     retry: false,
+    staleTime: 5 * 60 * 1000,   // treat auth as fresh for 5 minutes — no refetch on focus
+    refetchOnWindowFocus: false,
   });
 
   return {

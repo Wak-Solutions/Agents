@@ -53,7 +53,7 @@ export default function Login() {
         credentials: 'include',
       });
       if (!verifyRes.ok) throw new Error("Biometric verification failed");
-      window.location.href = "/";
+      setLocation("/");
     } catch (e: any) {
       setBiometricError(e.message || "Biometric login failed");
     } finally {
@@ -82,8 +82,8 @@ export default function Login() {
 
       {/* Subtle background blobs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-40 -right-40 w-96 h-96 bg-primary/8 rounded-full blur-3xl" />
-        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-secondary/8 rounded-full blur-3xl" />
+        <div className="absolute -top-40 -right-40 w-96 h-96 bg-primary/8 rounded-full blur-2xl" />
+        <div className="absolute -bottom-40 -left-40 w-96 h-96 bg-secondary/8 rounded-full blur-2xl" />
       </div>
 
       <div className="w-full max-w-md relative z-10">

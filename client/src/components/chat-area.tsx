@@ -146,6 +146,7 @@ function ActiveChat({ conversation, onClose }: { conversation: Conversation; onC
               type="text"
               value={text}
               onChange={(e) => setText(e.target.value)}
+              onTouchEnd={(e) => (e.currentTarget as HTMLInputElement).focus()}
               placeholder="Reply to customer..."
               className="flex-1 bg-transparent border-none focus:ring-0 px-4 text-sm"
               disabled={isSending}
