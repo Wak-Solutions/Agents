@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import { useLocation, Link } from "wouter";
-import { ArrowLeft, Video, ExternalLink, CheckCircle2, Clock, Filter } from "lucide-react";
+import { ArrowLeft, Video, ExternalLink, CheckCircle2, Clock, Filter, CalendarDays, ChevronLeft, ChevronRight, Ban } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 
 type MeetingStatus = "pending" | "completed";
-type Filter = "all" | "upcoming" | "completed";
+type FilterType = "all" | "upcoming" | "completed";
 
 interface Meeting {
   id: number;
@@ -16,19 +16,94 @@ interface Meeting {
   created_at: string;
 }
 
+// ── Availability helpers ──────────────────────────────────────────────────────
+
+const SLOT_HOURS = ["09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00"];
+const DAY_LABELS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+
+function getMondayOf(d: Date): Date {
+  const x = new Date(d);
+  const day = x.getDay(); // 0=Sun
+  x.setDate(x.getDate() - ((day + 6) % 7));
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+function toDateStr(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+function addDays(d: Date, n: number): Date {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
+
 export default function Meetings() {
   const [, setLocation] = useLocation();
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
 
-  const [filter, setFilter] = useState<Filter>("all");
+  const [filter, setFilter] = useState<FilterType>("all");
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [loading, setLoading] = useState(true);
   const [completing, setCompleting] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  // Availability state
+  const [weekStart, setWeekStart] = useState<Date>(() => getMondayOf(new Date()));
+  const [blockedSlots, setBlockedSlots] = useState<Set<string>>(new Set());
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [togglingSlot, setTogglingSlot] = useState<string | null>(null);
+
   useEffect(() => {
     if (!isAuthLoading && !isAuthenticated) setLocation("/login");
   }, [isAuthLoading, isAuthenticated, setLocation]);
+
+  // Fetch blocked slots for current week
+  const fetchSlots = useCallback(async () => {
+    setLoadingSlots(true);
+    try {
+      const res = await fetch(`/api/availability?weekStart=${toDateStr(weekStart)}`, { credentials: "include" });
+      if (!res.ok) return;
+      const rows: { date: string; time: string }[] = await res.json();
+      setBlockedSlots(new Set(rows.map(r => `${r.date}|${r.time}`)));
+    } catch (_) {} finally {
+      setLoadingSlots(false);
+    }
+  }, [weekStart]);
+
+  useEffect(() => {
+    if (isAuthenticated) fetchSlots();
+  }, [isAuthenticated, fetchSlots]);
+
+  const toggleSlot = async (date: string, time: string) => {
+    const key = `${date}|${time}`;
+    setTogglingSlot(key);
+    // optimistic update
+    setBlockedSlots(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+    try {
+      await fetch('/api/availability/toggle', {
+        method: 'POST', credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ date, time }),
+      });
+    } catch (_) {
+      // revert on failure
+      setBlockedSlots(prev => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key); else next.add(key);
+        return next;
+      });
+    } finally {
+      setTogglingSlot(null);
+    }
+  };
 
   const fetchMeetings = useCallback(async () => {
     setLoading(true);
@@ -74,11 +149,15 @@ export default function Meetings() {
     );
   }
 
-  const filters: { key: Filter; label: string }[] = [
+  const filters: { key: FilterType; label: string }[] = [
     { key: "all", label: "All" },
     { key: "upcoming", label: "Upcoming" },
     { key: "completed", label: "Completed" },
   ];
+
+  // Build the 7 dates for the current week
+  const weekDates = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const weekLabel = `${weekDates[0].toLocaleDateString("en-GB",{day:"numeric",month:"short"})} – ${weekDates[6].toLocaleDateString("en-GB",{day:"numeric",month:"short",year:"numeric"})}`;
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -247,6 +326,93 @@ export default function Meetings() {
             </div>
           )}
         </div>
+        {/* ── Availability Section ── */}
+        <section className="space-y-4 pb-8">
+          <div className="flex items-center gap-2">
+            <CalendarDays className="w-5 h-5 text-[#0F510F]" />
+            <h2 className="text-base font-semibold text-foreground">Manage Availability</h2>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Click a slot to block or unblock it. Blocked slots (red) cannot be booked by customers. All times are KSA (UTC+3).
+          </p>
+
+          {/* Week navigation */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setWeekStart(w => addDays(w, -7))}
+              className="p-1.5 rounded-lg border border-border hover:bg-muted transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="text-sm font-medium text-foreground min-w-[200px] text-center">{weekLabel}</span>
+            <button
+              onClick={() => setWeekStart(w => addDays(w, 7))}
+              className="p-1.5 rounded-lg border border-border hover:bg-muted transition-colors"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Grid */}
+          <div className="bg-card border border-border rounded-xl overflow-hidden">
+            {loadingSlots ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="w-6 h-6 border-4 border-[#0F510F]/20 border-t-[#0F510F] rounded-full animate-spin" />
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-muted/50">
+                      <th className="px-3 py-2 text-left text-muted-foreground font-medium w-16">Time</th>
+                      {weekDates.map((d, i) => (
+                        <th key={i} className="px-2 py-2 text-center text-muted-foreground font-medium min-w-[80px]">
+                          <div>{DAY_LABELS[i]}</div>
+                          <div className="font-normal">{d.toLocaleDateString("en-GB",{day:"numeric",month:"short"})}</div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {SLOT_HOURS.map(hour => (
+                      <tr key={hour} className="divide-x divide-border">
+                        <td className="px-3 py-2 text-muted-foreground font-mono whitespace-nowrap">{hour}</td>
+                        {weekDates.map((d, di) => {
+                          const dateStr = toDateStr(d);
+                          const key = `${dateStr}|${hour}`;
+                          const isBlocked = blockedSlots.has(key);
+                          const isToggling = togglingSlot === key;
+                          return (
+                            <td key={di} className="px-2 py-1 text-center">
+                              <button
+                                onClick={() => toggleSlot(dateStr, hour)}
+                                disabled={isToggling}
+                                title={isBlocked ? "Click to unblock" : "Click to block"}
+                                className={`w-full h-8 rounded-md text-xs font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-1 ${
+                                  isBlocked
+                                    ? "bg-red-100 text-red-700 hover:bg-red-200 border border-red-200"
+                                    : "bg-[#0F510F]/10 text-[#0F510F] hover:bg-[#0F510F]/20 border border-[#0F510F]/20"
+                                }`}
+                              >
+                                {isToggling ? (
+                                  <div className="w-3 h-3 border-2 border-current/30 border-t-current rounded-full animate-spin" />
+                                ) : isBlocked ? (
+                                  <><Ban className="w-3 h-3" /><span className="hidden sm:inline">Blocked</span></>
+                                ) : (
+                                  <span className="hidden sm:inline">Open</span>
+                                )}
+                              </button>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </section>
       </main>
     </div>
   );

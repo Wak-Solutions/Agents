@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
@@ -489,6 +490,186 @@ Rules:
     }
   });
 
+  // ── Availability Routes ────────────────────────────────────────────────────
+
+  // GET /api/availability?weekStart=YYYY-MM-DD
+  // Returns all blocked slots for the given week (7 days from weekStart).
+  app.get('/api/availability', requireAuth, async (req, res) => {
+    try {
+      const weekStart = (req.query.weekStart as string) || new Date().toISOString().slice(0, 10);
+      const result = await pool.query(
+        `SELECT date::text, time FROM blocked_slots
+         WHERE date >= $1::date AND date < $1::date + INTERVAL '7 days'
+         ORDER BY date, time`,
+        [weekStart]
+      );
+      res.json(result.rows);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // POST /api/availability/toggle — block or unblock a slot
+  app.post('/api/availability/toggle', requireAuth, async (req, res) => {
+    try {
+      const { date, time } = z.object({ date: z.string(), time: z.string() }).parse(req.body);
+      // Check if currently blocked
+      const existing = await pool.query(
+        'SELECT id FROM blocked_slots WHERE date=$1::date AND time=$2',
+        [date, time]
+      );
+      if (existing.rows.length > 0) {
+        await pool.query('DELETE FROM blocked_slots WHERE date=$1::date AND time=$2', [date, time]);
+        res.json({ blocked: false });
+      } else {
+        await pool.query(
+          'INSERT INTO blocked_slots (date, time) VALUES ($1::date, $2) ON CONFLICT DO NOTHING',
+          [date, time]
+        );
+        res.json({ blocked: true });
+      }
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ── Public Booking Routes (no auth) ───────────────────────────────────────
+
+  const KSA_OFFSET_MS = 3 * 60 * 60 * 1000; // UTC+3
+  const SLOT_HOURS = ["09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00"];
+
+  // GET /api/book/:token — returns available slots for the next 30 days
+  app.get('/api/book/:token', async (req, res) => {
+    try {
+      const { token } = req.params;
+      const mtg = await pool.query(
+        `SELECT id, customer_phone, scheduled_at, status, token_expires_at
+         FROM meetings WHERE meeting_token=$1 LIMIT 1`,
+        [token]
+      );
+      if (mtg.rows.length === 0) return res.status(404).json({ message: 'Invalid booking link.' });
+      const meeting = mtg.rows[0];
+      if (new Date(meeting.token_expires_at) < new Date()) {
+        return res.status(410).json({ message: 'This booking link has expired.' });
+      }
+      if (meeting.scheduled_at) {
+        // Already booked — return the booked time
+        const ksaTime = new Date(new Date(meeting.scheduled_at).getTime() + KSA_OFFSET_MS);
+        return res.json({ alreadyBooked: true, scheduled_at: meeting.scheduled_at, ksa_label: formatKsaDateTime(ksaTime) });
+      }
+
+      // Compute available slots for next 30 days (in KSA dates)
+      const now = new Date();
+      const ksaNow = new Date(now.getTime() + KSA_OFFSET_MS);
+      const days: { date: string; label: string; slots: string[] }[] = [];
+
+      for (let i = 1; i <= 30; i++) {
+        const d = new Date(ksaNow);
+        d.setUTCDate(d.getUTCDate() + i);
+        const ksaDate = d.toISOString().slice(0, 10);
+
+        const blockedRes = await pool.query(
+          'SELECT time FROM blocked_slots WHERE date=$1::date',
+          [ksaDate]
+        );
+        const blockedTimes = new Set(blockedRes.rows.map((r: any) => r.time));
+
+        const availableSlots: string[] = [];
+        for (const slot of SLOT_HOURS) {
+          if (blockedTimes.has(slot)) continue;
+          const [h] = slot.split(':').map(Number);
+          const [yr, mo, dy] = ksaDate.split('-').map(Number);
+          const slotUtc = new Date(Date.UTC(yr, mo - 1, dy, h - 3, 0, 0, 0));
+          if (slotUtc <= now) continue; // skip past slots
+          const takenRes = await pool.query(
+            `SELECT 1 FROM meetings
+             WHERE scheduled_at >= $1 AND scheduled_at < $2
+               AND status != 'completed' AND id != $3`,
+            [slotUtc, new Date(slotUtc.getTime() + 3600000), meeting.id]
+          );
+          if (takenRes.rows.length === 0) availableSlots.push(slot);
+        }
+
+        if (availableSlots.length > 0) {
+          days.push({ date: ksaDate, label: formatKsaDate(d), slots: availableSlots });
+        }
+      }
+
+      res.json({ valid: true, days });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // POST /api/book/:token — confirm a booking
+  app.post('/api/book/:token', async (req, res) => {
+    try {
+      const { token } = req.params;
+      const { date, time } = z.object({ date: z.string(), time: z.string() }).parse(req.body);
+
+      const mtg = await pool.query(
+        `SELECT id, customer_phone, scheduled_at, token_expires_at
+         FROM meetings WHERE meeting_token=$1 LIMIT 1`,
+        [token]
+      );
+      if (mtg.rows.length === 0) return res.status(404).json({ message: 'Invalid booking link.' });
+      const meeting = mtg.rows[0];
+      if (new Date(meeting.token_expires_at) < new Date()) {
+        return res.status(410).json({ message: 'This booking link has expired.' });
+      }
+      if (meeting.scheduled_at) {
+        return res.status(409).json({ message: 'This meeting is already booked.' });
+      }
+
+      // Convert KSA date+time to UTC
+      const [yr, mo, dy] = date.split('-').map(Number);
+      const [h] = time.split(':').map(Number);
+      const scheduledUtc = new Date(Date.UTC(yr, mo - 1, dy, h - 3, 0, 0, 0));
+
+      // Check slot still available
+      const takenRes = await pool.query(
+        `SELECT 1 FROM meetings
+         WHERE scheduled_at >= $1 AND scheduled_at < $2
+           AND status != 'completed' AND id != $3`,
+        [scheduledUtc, new Date(scheduledUtc.getTime() + 3600000), meeting.id]
+      );
+      if (takenRes.rows.length > 0) {
+        return res.status(409).json({ message: 'This time slot was just taken. Please choose another.' });
+      }
+      const blockedRes = await pool.query(
+        'SELECT 1 FROM blocked_slots WHERE date=$1::date AND time=$2',
+        [date, time]
+      );
+      if (blockedRes.rows.length > 0) {
+        return res.status(409).json({ message: 'This slot is not available. Please choose another.' });
+      }
+
+      // Generate Jitsi link
+      const jitsiSuffix = crypto.randomBytes(8).toString('base64url').slice(0, 10);
+      const meetingLink = `https://meet.jit.si/WAK-${jitsiSuffix}`;
+
+      await pool.query(
+        `UPDATE meetings SET meeting_link=$1, scheduled_at=$2, link_sent=FALSE WHERE id=$3`,
+        [meetingLink, scheduledUtc, meeting.id]
+      );
+
+      // Send WhatsApp confirmation
+      const ksaDt = new Date(scheduledUtc.getTime() + KSA_OFFSET_MS);
+      const confirmMsg = `Your meeting is confirmed for ${formatKsaDateTime(ksaDt)} KSA time. Your meeting link will be sent to you 15 minutes before the meeting.`;
+      if (process.env.N8N_SEND_WEBHOOK) {
+        fetch(process.env.N8N_SEND_WEBHOOK, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'x-webhook-secret': process.env.WEBHOOK_SECRET || '' },
+          body: JSON.stringify({ customer_phone: meeting.customer_phone, message: confirmMsg }),
+        }).catch(e => console.error('WhatsApp confirmation error:', e));
+      }
+
+      res.json({ success: true, ksa_label: formatKsaDateTime(ksaDt) });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   // Push Notification Routes
   app.get(api.push.vapidPublicKey.path, requireAuth, (req, res) => {
     res.json({ publicKey: VAPID_PUBLIC_KEY });
@@ -507,4 +688,23 @@ Rules:
   });
 
   return httpServer;
+}
+
+// ── Timezone helpers (KSA = UTC+3, no DST) ───────────────────────────────────
+
+function formatKsaDate(d: Date): string {
+  return d.toLocaleDateString("en-GB", {
+    weekday: "short", day: "numeric", month: "short", year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
+function formatKsaDateTime(d: Date): string {
+  const days = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+  const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+  const day = days[d.getUTCDay()];
+  const month = months[d.getUTCMonth()];
+  const hh = String(d.getUTCHours()).padStart(2, "0");
+  const mm = String(d.getUTCMinutes()).padStart(2, "0");
+  return `${day}, ${d.getUTCDate()} ${month} ${d.getUTCFullYear()} at ${hh}:${mm}`;
 }
