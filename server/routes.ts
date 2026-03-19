@@ -77,6 +77,11 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
 
+  // Ensure index exists for fast token lookups on the booking page
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS idx_meetings_meeting_token ON meetings(meeting_token)`
+  );
+
   // Auth Routes
   app.post(api.auth.login.path, (req, res) => {
     const { password } = req.body;
@@ -593,6 +598,31 @@ Never send the booking link unless the customer explicitly agrees to schedule a 
       // Compute available slots for next 30 days (in KSA dates)
       const now = new Date();
       const ksaNow = new Date(now.getTime() + KSA_OFFSET_MS);
+
+      // Build the window boundaries (UTC) for the full 30-day range
+      const windowStart = new Date(now);
+      windowStart.setUTCHours(0, 0, 0, 0);
+      const windowEnd = new Date(windowStart.getTime() + 31 * 24 * 3600 * 1000);
+
+      // Fetch ALL blocked slots for the window in one query
+      const ksaWindowStart = ksaNow.toISOString().slice(0, 10);
+      const [byr, bmo, bdy] = ksaWindowStart.split('-').map(Number);
+      const blockedRes = await pool.query(
+        `SELECT date::text, time FROM blocked_slots
+         WHERE date >= $1::date AND date < $1::date + INTERVAL '31 days'`,
+        [ksaWindowStart]
+      );
+      const blockedSet = new Set(blockedRes.rows.map((r: any) => `${r.date}T${r.time}`));
+
+      // Fetch ALL taken slots for the window in one query
+      const takenRes = await pool.query(
+        `SELECT scheduled_at FROM meetings
+         WHERE scheduled_at >= $1 AND scheduled_at < $2
+           AND status != 'completed' AND id != $3`,
+        [windowStart, windowEnd, meeting.id]
+      );
+      const takenMs = new Set(takenRes.rows.map((r: any) => new Date(r.scheduled_at).getTime()));
+
       const days: { date: string; label: string; slots: string[] }[] = [];
 
       for (let i = 1; i <= 30; i++) {
@@ -600,26 +630,15 @@ Never send the booking link unless the customer explicitly agrees to schedule a 
         d.setUTCDate(d.getUTCDate() + i);
         const ksaDate = d.toISOString().slice(0, 10);
 
-        const blockedRes = await pool.query(
-          'SELECT time FROM blocked_slots WHERE date=$1::date',
-          [ksaDate]
-        );
-        const blockedTimes = new Set(blockedRes.rows.map((r: any) => r.time));
-
         const availableSlots: string[] = [];
         for (const slot of SLOT_HOURS) {
-          if (blockedTimes.has(slot)) continue;
+          if (blockedSet.has(`${ksaDate}T${slot}`)) continue;
           const [h] = slot.split(':').map(Number);
           const [yr, mo, dy] = ksaDate.split('-').map(Number);
           const slotUtc = new Date(Date.UTC(yr, mo - 1, dy, h - 3, 0, 0, 0));
-          if (slotUtc <= now) continue; // skip past slots
-          const takenRes = await pool.query(
-            `SELECT 1 FROM meetings
-             WHERE scheduled_at >= $1 AND scheduled_at < $2
-               AND status != 'completed' AND id != $3`,
-            [slotUtc, new Date(slotUtc.getTime() + 3600000), meeting.id]
-          );
-          if (takenRes.rows.length === 0) availableSlots.push(slot);
+          if (slotUtc <= now) continue;
+          if (takenMs.has(slotUtc.getTime())) continue;
+          availableSlots.push(slot);
         }
 
         if (availableSlots.length > 0) {

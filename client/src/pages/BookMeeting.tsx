@@ -102,7 +102,7 @@ export default function BookMeeting() {
           <div className="bg-card border border-border rounded-xl p-6 text-center space-y-3">
             <Clock className="w-10 h-10 text-amber-500 mx-auto" />
             <p className="font-semibold text-foreground">Booking link expired</p>
-            <p className="text-sm text-muted-foreground">This link was valid for 7 days and has now expired. Please contact WAK Solutions for a new link.</p>
+            <p className="text-sm text-muted-foreground">This link was valid for 24 hours and has now expired. Please contact WAK Solutions for a new link.</p>
           </div>
         )}
 
