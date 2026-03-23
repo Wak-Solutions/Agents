@@ -7,6 +7,8 @@ import { api } from "@shared/routes";
 import { z } from "zod";
 import { notifyManagerNewBooking } from "./email";
 import { ensureSurveyTables, registerSurveyRoutes, sendSurveyToCustomer } from "./surveys";
+import { ensureAgentsTable, registerAgentRoutes } from "./agents";
+import bcrypt from 'bcrypt';
 import webpush from "web-push";
 import {
   generateRegistrationOptions,
@@ -56,6 +58,17 @@ const requireAuth = (req: any, res: any, next: any) => {
   next();
 };
 
+// Admin-only middleware
+const requireAdmin = (req: any, res: any, next: any) => {
+  if (!req.session.authenticated) {
+    return res.status(401).json({ message: "Unauthorized" });
+  }
+  if (req.session.role !== 'admin') {
+    return res.status(403).json({ message: "Admin access required" });
+  }
+  next();
+};
+
 // Webhook secret check middleware
 const requireWebhookSecret = (req: any, res: any, next: any) => {
   const secret = req.headers['x-webhook-secret'];
@@ -83,20 +96,65 @@ export async function registerRoutes(
     `CREATE INDEX IF NOT EXISTS idx_meetings_meeting_token ON meetings(meeting_token)`
   );
 
+  // Ensure agents table exists and seed default admin
+  await ensureAgentsTable();
+  await ensureSurveyTables();
+
   // Auth Routes
-  app.post(api.auth.login.path, (req, res) => {
-    const { password } = req.body;
-    if (password === process.env.DASHBOARD_PASSWORD) {
-      req.session.authenticated = true;
-      req.session.save((err) => {
-        if (err) {
-          return res.status(500).json({ message: "Session save error" });
+  app.post(api.auth.login.path, async (req, res) => {
+    const { email, password } = req.body;
+
+    // Email + password login (multi-agent)
+    if (email) {
+      try {
+        const agentRes = await pool.query(
+          `SELECT * FROM agents WHERE email=$1 LIMIT 1`,
+          [email]
+        );
+        if (agentRes.rows.length === 0) {
+          return res.status(401).json({ message: "Invalid credentials" });
         }
-        res.json({ success: true });
-      });
-    } else {
-      res.status(401).json({ message: "Invalid password" });
+        const agent = agentRes.rows[0];
+        if (!agent.is_active) {
+          return res.status(403).json({ error: "Your account has been deactivated. Please contact your administrator." });
+        }
+        const valid = await bcrypt.compare(password, agent.password_hash);
+        if (!valid) return res.status(401).json({ message: "Invalid credentials" });
+        await pool.query(`UPDATE agents SET last_login=NOW() WHERE id=$1`, [agent.id]);
+        req.session.authenticated = true;
+        req.session.agentId = agent.id;
+        req.session.role = agent.role;
+        req.session.agentName = agent.name;
+        return req.session.save((err) => {
+          if (err) return res.status(500).json({ message: "Session save error" });
+          res.json({ success: true, role: agent.role, name: agent.name });
+        });
+      } catch (err: any) {
+        return res.status(500).json({ message: err.message });
+      }
     }
+
+    // Legacy password-only login (backward compat + WebAuthn flow)
+    if (password === process.env.DASHBOARD_PASSWORD) {
+      try {
+        const adminRes = await pool.query(
+          `SELECT * FROM agents WHERE role='admin' AND is_active=true ORDER BY id LIMIT 1`
+        );
+        const admin = adminRes.rows[0];
+        req.session.authenticated = true;
+        req.session.agentId = admin?.id ?? null;
+        req.session.role = 'admin';
+        req.session.agentName = admin?.name ?? 'Admin';
+        return req.session.save((err) => {
+          if (err) return res.status(500).json({ message: "Session save error" });
+          res.json({ success: true });
+        });
+      } catch (err: any) {
+        return res.status(500).json({ message: err.message });
+      }
+    }
+
+    res.status(401).json({ message: "Invalid password" });
   });
 
   app.post(api.auth.logout.path, (req, res) => {
@@ -110,7 +168,12 @@ export async function registerRoutes(
 
   app.get(api.auth.me.path, (req, res) => {
     if (req.session.authenticated) {
-      res.json({ authenticated: true });
+      res.json({
+        authenticated: true,
+        role: req.session.role || 'admin',
+        agentId: req.session.agentId || null,
+        agentName: req.session.agentName || 'Admin',
+      });
     } else {
       res.status(401).json({ message: "Unauthorized" });
     }
@@ -181,7 +244,18 @@ export async function registerRoutes(
         credential: webAuthnCredential,
       });
       if (verified) {
+        // Load the default admin for the session
+        const adminRes = await pool.query(
+          `SELECT * FROM agents WHERE role='admin' AND is_active=true ORDER BY id LIMIT 1`
+        );
+        const admin = adminRes.rows[0];
+        if (!admin) {
+          return res.status(403).json({ message: "No active admin account found." });
+        }
         req.session.authenticated = true;
+        req.session.agentId = admin.id;
+        req.session.role = 'admin';
+        req.session.agentName = admin.name;
         req.session.save((err) => {
           if (err) return res.status(500).json({ message: "Session error" });
           currentChallenge = undefined;
@@ -200,10 +274,36 @@ export async function registerRoutes(
     res.json({ registered: !!webAuthnCredential });
   });
 
-  // Conversations Route (all chats from messages table, joined with escalation status)
+  // Conversations Route — filtered by agent visibility rules
   app.get(api.conversations.list.path, requireAuth, async (req, res) => {
-    const conversations = await storage.getConversations();
-    res.json(conversations);
+    try {
+      const role = req.session.role || 'admin';
+      const agentId = req.session.agentId || null;
+
+      // Admin sees all; agents see only their assigned + unassigned chats
+      const visibilityFilter = (role === 'admin')
+        ? ''
+        : `AND (e.assigned_agent_id = ${agentId} OR e.assigned_agent_id IS NULL OR e.customer_phone IS NULL)`;
+
+      const result = await pool.query(`
+        SELECT
+          m.customer_phone,
+          (SELECT message_text FROM messages WHERE customer_phone = m.customer_phone ORDER BY created_at DESC LIMIT 1) AS last_message,
+          (SELECT created_at  FROM messages WHERE customer_phone = m.customer_phone ORDER BY created_at DESC LIMIT 1) AS last_message_at,
+          e.status             AS escalation_status,
+          e.escalation_reason,
+          e.assigned_agent_id,
+          a.name               AS assigned_agent_name
+        FROM (SELECT DISTINCT customer_phone FROM messages) m
+        LEFT JOIN escalations e ON e.customer_phone = m.customer_phone
+        LEFT JOIN agents a ON a.id = e.assigned_agent_id
+        WHERE 1=1 ${visibilityFilter}
+        ORDER BY last_message_at DESC NULLS LAST
+      `);
+      res.json(result.rows);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
   });
 
   // Escalation Routes
@@ -254,6 +354,64 @@ export async function registerRoutes(
       res.json({ success: true });
     } catch (err: any) {
       res.status(400).json({ message: err.message });
+    }
+  });
+
+  // ── Escalation Assignment Routes ──────────────────────────────────────────
+
+  // GET /api/escalations/unassigned — any agent
+  app.get('/api/escalations/unassigned', requireAuth, async (_req, res) => {
+    try {
+      const result = await pool.query(`
+        SELECT e.*, a.name AS assigned_agent_name
+        FROM escalations e
+        LEFT JOIN agents a ON a.id = e.assigned_agent_id
+        WHERE e.status = 'open' AND e.assigned_agent_id IS NULL
+        ORDER BY e.created_at ASC
+      `);
+      res.json(result.rows);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // PATCH /api/escalations/:phone/claim — claim for current agent
+  app.patch('/api/escalations/:phone/claim', requireAuth, async (req, res) => {
+    try {
+      const phone = decodeURIComponent(req.params.phone);
+      const agentId = req.session.agentId;
+      if (!agentId) return res.status(400).json({ message: 'No agent session found.' });
+      // Block if already assigned to someone else
+      const current = await pool.query(
+        `SELECT assigned_agent_id FROM escalations WHERE customer_phone=$1`,
+        [phone]
+      );
+      if (current.rows.length === 0) return res.status(404).json({ message: 'Escalation not found.' });
+      if (current.rows[0].assigned_agent_id && current.rows[0].assigned_agent_id !== agentId) {
+        return res.status(409).json({ message: 'This chat is already assigned to another agent.' });
+      }
+      await pool.query(
+        `UPDATE escalations SET assigned_agent_id=$1 WHERE customer_phone=$2`,
+        [agentId, phone]
+      );
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // PATCH /api/escalations/:phone/assign — admin only, can force-assign or unassign
+  app.patch('/api/escalations/:phone/assign', requireAdmin, async (req, res) => {
+    try {
+      const phone = decodeURIComponent(req.params.phone);
+      const { agent_id } = z.object({ agent_id: z.number().nullable() }).parse(req.body);
+      await pool.query(
+        `UPDATE escalations SET assigned_agent_id=$1 WHERE customer_phone=$2`,
+        [agent_id, phone]
+      );
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
     }
   });
 
@@ -832,8 +990,10 @@ Never send the booking link unless the customer explicitly agrees to schedule a 
   });
 
   // ── Survey Routes ─────────────────────────────────────────────────────────
-  await ensureSurveyTables();
   registerSurveyRoutes(app, requireAuth);
+
+  // ── Agent Routes ───────────────────────────────────────────────────────────
+  registerAgentRoutes(app, requireAdmin);
 
   return httpServer;
 }

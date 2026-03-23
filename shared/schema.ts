@@ -33,4 +33,6 @@ export interface Conversation {
   last_message_at: string | null;
   escalation_status: string | null; // 'open' | 'closed' | null (no escalation record)
   escalation_reason: string | null;
+  assigned_agent_id: number | null;
+  assigned_agent_name: string | null;
 }

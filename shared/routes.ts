@@ -40,7 +40,12 @@ export const api = {
       method: 'GET' as const,
       path: '/api/me' as const,
       responses: {
-        200: z.object({ authenticated: z.boolean() }),
+        200: z.object({
+          authenticated: z.boolean(),
+          role: z.string().optional(),
+          agentId: z.number().nullable().optional(),
+          agentName: z.string().optional(),
+        }),
         401: errorSchemas.unauthorized,
       }
     }

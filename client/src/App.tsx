@@ -14,6 +14,8 @@ import BookMeeting from "./pages/BookMeeting";
 import SurveyPage from "./pages/SurveyPage";
 import SurveysTab from "./pages/SurveysTab";
 import MeetingPage from "./pages/MeetingPage";
+import InboxPage from "./pages/InboxPage";
+import AgentsTab from "./pages/AgentsTab";
 
 function Router() {
   return (
@@ -28,6 +30,8 @@ function Router() {
       <Route path="/chatbot-config" component={ChatbotConfig} />
       <Route path="/meetings" component={Meetings} />
       <Route path="/surveys" component={SurveysTab} />
+      <Route path="/inbox" component={InboxPage} />
+      <Route path="/agents" component={AgentsTab} />
       <Route path="/" component={Dashboard} />
       <Route component={NotFound} />
     </Switch>

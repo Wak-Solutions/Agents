@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { MessageSquareQuote, Lock, Fingerprint } from "lucide-react";
+import { MessageSquareQuote, Lock, Fingerprint, Mail } from "lucide-react";
 import { useAuth, useLogin } from "@/hooks/use-auth";
 import { Card, Input, Button } from "@/components/ui-elements";
 import {
@@ -9,6 +9,7 @@ import {
 } from "@simplewebauthn/browser";
 
 export default function Login() {
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [, setLocation] = useLocation();
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
@@ -64,7 +65,7 @@ export default function Login() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!password) return;
-    login(password, {
+    login({ email: email || undefined, password }, {
       onSuccess: () => setLocation("/")
     });
   };
@@ -136,8 +137,22 @@ export default function Login() {
           <form onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-foreground flex items-center gap-2">
+                <Mail className="w-3.5 h-3.5 text-muted-foreground" />
+                Email <span className="text-xs text-muted-foreground font-normal">(leave blank for admin)</span>
+              </label>
+              <Input
+                type="email"
+                placeholder="agent@wak-solutions.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                disabled={isPending}
+                autoComplete="email"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium text-foreground flex items-center gap-2">
                 <Lock className="w-3.5 h-3.5 text-muted-foreground" />
-                Access Password
+                Password
               </label>
               <Input
                 data-testid="input-password"
@@ -146,14 +161,14 @@ export default function Login() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isPending}
-                autoFocus
+                autoFocus={!email}
               />
               {error && (
                 <p
                   data-testid="text-error"
                   className="text-sm text-destructive animate-in fade-in slide-in-from-top-1 pt-1"
                 >
-                  {error.message || "Invalid password. Please try again."}
+                  {error.message || "Invalid credentials. Please try again."}
                 </p>
               )}
             </div>

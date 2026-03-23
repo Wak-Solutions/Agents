@@ -1,11 +1,12 @@
 import { useState, useRef, useEffect } from "react";
 import { format } from "date-fns";
-import { Send, CheckCircle2, User, Bot, HeadphonesIcon, Info, ArrowLeft } from "lucide-react";
+import { Send, CheckCircle2, User, Bot, HeadphonesIcon, Info, ArrowLeft, UserCheck } from "lucide-react";
 import { Button } from "./ui-elements";
 import { cn } from "@/lib/utils";
 import type { Message, Conversation } from "@shared/schema";
 import { useSendMessage, useMessages } from "@/hooks/use-messages";
 import { useCloseEscalation } from "@/hooks/use-escalations";
+import { useAuth } from "@/hooks/use-auth";
 
 export function ChatArea({
   conversation,
@@ -29,14 +30,42 @@ export function ChatArea({
   return <ActiveChat conversation={conversation} onClose={onClose} />;
 }
 
+interface Agent { id: number; name: string; email: string; is_active: boolean; }
+
 function ActiveChat({ conversation, onClose }: { conversation: Conversation; onClose: () => void }) {
   const { data: messages = [], isLoading } = useMessages(conversation.customer_phone);
   const { mutate: sendMessage, isPending: isSending } = useSendMessage();
   const { mutate: closeEscalation, isPending: isClosing } = useCloseEscalation();
+  const { isAdmin } = useAuth();
 
   const [text, setText] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [reassigning, setReassigning] = useState(false);
+
+  useEffect(() => {
+    if (isAdmin) {
+      fetch("/api/agents", { credentials: "include" })
+        .then(r => r.ok ? r.json() : [])
+        .then(data => setAgents(data.filter((a: Agent) => a.is_active)))
+        .catch(() => {});
+    }
+  }, [isAdmin]);
+
+  const handleReassign = async (agentId: string) => {
+    setReassigning(true);
+    try {
+      await fetch(`/api/escalations/${encodeURIComponent(conversation.customer_phone)}/assign`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ agentId: agentId === "unassign" ? null : Number(agentId) }),
+      });
+    } finally {
+      setReassigning(false);
+    }
+  };
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -86,18 +115,36 @@ function ActiveChat({ conversation, onClose }: { conversation: Conversation; onC
           </div>
         </div>
 
-        {isOpen && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleClose}
-            isLoading={isClosing}
-            className="text-primary hover:text-primary hover:bg-primary/5 border-primary/20"
-          >
-            <CheckCircle2 className="w-4 h-4 mr-1.5" />
-            Resolve Issue
-          </Button>
-        )}
+        <div className="flex items-center gap-2">
+          {isAdmin && agents.length > 0 && (
+            <div className="flex items-center gap-1.5">
+              <UserCheck className="w-3.5 h-3.5 text-muted-foreground" />
+              <select
+                disabled={reassigning}
+                value={conversation.assigned_agent_id ?? "unassign"}
+                onChange={e => handleReassign(e.target.value)}
+                className="text-xs border border-border rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-50"
+              >
+                <option value="unassign">Unassigned</option>
+                {agents.map(a => (
+                  <option key={a.id} value={a.id}>{a.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {isOpen && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleClose}
+              isLoading={isClosing}
+              className="text-primary hover:text-primary hover:bg-primary/5 border-primary/20"
+            >
+              <CheckCircle2 className="w-4 h-4 mr-1.5" />
+              Resolve Issue
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Escalation Reason Banner (only shown when there is an escalation record) */}

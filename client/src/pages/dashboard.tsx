@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
-import { LogOut, Wifi, WifiOff, Fingerprint, Bell, Share, X, BookOpen, BarChart2, Bot, Video, ClipboardList } from "lucide-react";
+import { LogOut, Wifi, WifiOff, Fingerprint, Bell, Share, X, BookOpen, BarChart2, Bot, Video, ClipboardList, Inbox, Users } from "lucide-react";
 import { startRegistration } from "@simplewebauthn/browser";
 import { useAuth, useLogout } from "@/hooks/use-auth";
 import { useConversations } from "@/hooks/use-conversations";
@@ -10,7 +10,7 @@ import { ChatArea } from "@/components/chat-area";
 
 export default function Dashboard() {
   const [, setLocation] = useLocation();
-  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  const { isAuthenticated, isLoading: isAuthLoading, isAdmin } = useAuth();
   const { mutate: logout } = useLogout();
   const { data: conversations = [], isLoading: isEscalationsLoading, isFetching } = useConversations();
   const [selectedPhone, setSelectedPhone] = useState<string | null>(null);
@@ -107,6 +107,22 @@ export default function Dashboard() {
               </>
             )}
           </div>
+
+          <Link href="/inbox">
+            <a className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white transition-colors px-3 py-1.5 rounded-md hover:bg-white/10">
+              <Inbox className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Inbox</span>
+            </a>
+          </Link>
+
+          {isAdmin && (
+            <Link href="/agents">
+              <a className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white transition-colors px-3 py-1.5 rounded-md hover:bg-white/10">
+                <Users className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Agents</span>
+              </a>
+            </Link>
+          )}
 
           <Link href="/statistics">
             <a className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white transition-colors px-3 py-1.5 rounded-md hover:bg-white/10">

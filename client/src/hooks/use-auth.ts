@@ -7,12 +7,12 @@ export function useAuth() {
     queryKey: [api.auth.me.path],
     queryFn: async () => {
       const res = await fetch(api.auth.me.path, { credentials: "include" });
-      if (res.status === 401) return { authenticated: false };
+      if (res.status === 401) return { authenticated: false, role: undefined, agentId: null, agentName: undefined };
       if (!res.ok) throw new Error("Failed to fetch auth state");
       return api.auth.me.responses[200].parse(await res.json());
     },
     retry: false,
-    staleTime: 5 * 60 * 1000,   // treat auth as fresh for 5 minutes — no refetch on focus
+    staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
   });
 
@@ -20,26 +20,31 @@ export function useAuth() {
     isAuthenticated: data?.authenticated ?? false,
     isLoading,
     error,
+    role: data?.role ?? 'admin',
+    agentId: data?.agentId ?? null,
+    agentName: data?.agentName ?? 'Admin',
+    isAdmin: (data?.role ?? 'admin') === 'admin',
   };
 }
 
 export function useLogin() {
   const queryClient = useQueryClient();
-  
+
   return useMutation({
-    mutationFn: async (password: string) => {
+    mutationFn: async ({ email, password }: { email?: string; password: string }) => {
       const res = await fetch(api.auth.login.path, {
         method: api.auth.login.method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify(email ? { email, password } : { password }),
         credentials: "include",
       });
-      
+
       if (!res.ok) {
-        if (res.status === 401) throw new Error("Invalid password");
-        throw new Error("Failed to login");
+        const body = await res.json().catch(() => ({}));
+        if (res.status === 403) throw new Error(body.error || "Account deactivated");
+        throw new Error(body.message || "Invalid credentials");
       }
-      return api.auth.login.responses[200].parse(await res.json());
+      return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [api.auth.me.path] });
