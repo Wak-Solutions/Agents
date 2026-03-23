@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS survey_responses (
   customer_phone TEXT NOT NULL,
   agent_id       INTEGER,
   escalation_id  INTEGER,
+  meeting_id     INTEGER REFERENCES meetings(id),
   submitted      BOOLEAN DEFAULT false,
   submitted_at   TIMESTAMPTZ,
   expires_at     TIMESTAMPTZ NOT NULL,

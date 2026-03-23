@@ -30,6 +30,7 @@ export async function ensureSurveyTables(): Promise<void> {
       customer_phone TEXT NOT NULL,
       agent_id       INTEGER,
       escalation_id  INTEGER,
+      meeting_id     INTEGER REFERENCES meetings(id),
       submitted      BOOLEAN DEFAULT false,
       submitted_at   TIMESTAMPTZ,
       expires_at     TIMESTAMPTZ NOT NULL,
@@ -49,6 +50,7 @@ export async function ensureSurveyTables(): Promise<void> {
     `ALTER TABLE surveys          ADD COLUMN IF NOT EXISTS is_default    BOOLEAN DEFAULT false`,
     `ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS agent_id      INTEGER`,
     `ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS escalation_id INTEGER`,
+    `ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS meeting_id    INTEGER REFERENCES meetings(id)`,
     `ALTER TABLE survey_answers   ADD COLUMN IF NOT EXISTS answer_yes_no BOOLEAN`,
     // Seed default survey — skipped if one already exists
     `WITH new_survey AS (
@@ -77,6 +79,7 @@ export async function sendSurveyToCustomer(
   customerPhone: string,
   agentId: number | null,
   escalationId: number | null,
+  meetingId: number | null = null,
 ): Promise<void> {
   try {
     const surveyRes = await pool.query(
@@ -88,9 +91,9 @@ export async function sendSurveyToCustomer(
     const token = crypto.randomUUID();
 
     await pool.query(
-      `INSERT INTO survey_responses (survey_id, token, customer_phone, agent_id, escalation_id, expires_at)
-       VALUES ($1, $2, $3, $4, $5, NOW() + INTERVAL '24 hours')`,
-      [surveyId, token, customerPhone, agentId, escalationId]
+      `INSERT INTO survey_responses (survey_id, token, customer_phone, agent_id, escalation_id, meeting_id, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, NOW() + INTERVAL '24 hours')`,
+      [surveyId, token, customerPhone, agentId, escalationId, meetingId]
     );
 
     const baseUrl = process.env.RAILWAY_PUBLIC_URL || process.env.DASHBOARD_URL || '';

@@ -146,6 +146,7 @@ export default function Meetings() {
   }, [isAuthenticated, fetchMeetings]);
 
   const markComplete = async (id: number) => {
+    if (!window.confirm("Mark this meeting as done and send the customer a survey?")) return;
     setCompleting(id);
     try {
       const res = await fetch(`/api/meetings/${id}/complete`, {
