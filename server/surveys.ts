@@ -96,7 +96,11 @@ export async function sendSurveyToCustomer(
       [surveyId, token, customerPhone, agentId, escalationId, meetingId]
     );
 
-    const baseUrl = process.env.RAILWAY_PUBLIC_URL || process.env.DASHBOARD_URL || '';
+    if (!process.env.RAILWAY_PUBLIC_URL) {
+      console.error('[survey] RAILWAY_PUBLIC_URL is not set — survey links will be broken');
+    }
+    const rawBase = (process.env.RAILWAY_PUBLIC_URL || process.env.DASHBOARD_URL || '').replace(/\/$/, '');
+    const baseUrl = rawBase.startsWith('http') ? rawBase : `https://${rawBase}`;
     const surveyLink = `${baseUrl}/survey/${token}`;
     const message =
       `Thank you for contacting WAK Solutions! 😊\n` +
