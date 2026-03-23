@@ -249,7 +249,7 @@ export async function registerRoutes(
       }
 
       // Send post-chat survey (fire-and-forget)
-      sendSurveyToCustomer(customer_phone, null, customer_phone);
+      sendSurveyToCustomer(customer_phone, null, null);
 
       res.json({ success: true });
     } catch (err: any) {
@@ -528,7 +528,7 @@ Never send the booking link unless the customer explicitly agrees to schedule a 
       const meeting = result.rows[0];
 
       // Send post-chat survey (fire-and-forget)
-      sendSurveyToCustomer(meeting.customer_phone, meeting.agent ?? null, null);
+      sendSurveyToCustomer(meeting.customer_phone, null, null);
 
       res.json(meeting);
     } catch (err: any) {

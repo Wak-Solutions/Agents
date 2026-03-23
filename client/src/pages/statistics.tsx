@@ -92,15 +92,16 @@ export default function Statistics() {
   const { mutate: generateSummary, data: summaryData, isPending: isSummaryLoading, error: summaryError, reset: resetSummary } = useAiSummary();
 
   const [surveyOverview, setSurveyOverview] = useState<{
-    activeSurvey: { id: number; title: string } | null;
-    weekResponses: number;
-    weekSubmitted: number;
-    weekAvgRating: number | null;
+    survey_id: number | null;
+    title?: string;
+    weekly_sent?: number;
+    weekly_submitted?: number;
+    avg_rating_this_week?: number | null;
   } | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    fetch("/api/surveys/overview", { credentials: "include" })
+    fetch("/api/surveys/active-summary", { credentials: "include" })
       .then((r) => r.ok ? r.json() : null)
       .then((d) => d && setSurveyOverview(d))
       .catch(() => {});
@@ -344,29 +345,31 @@ export default function Statistics() {
                   <div>
                     <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Active Survey</p>
                     <p className="text-sm font-semibold text-foreground">
-                      {surveyOverview.activeSurvey ? surveyOverview.activeSurvey.title : "No active survey"}
+                      {surveyOverview.survey_id ? surveyOverview.title : "No active survey"}
                     </p>
                   </div>
-                  {surveyOverview.activeSurvey && (
+                  {surveyOverview.survey_id && (
                     <Link href="/surveys">
-                      <a className="text-xs text-[#0F510F] hover:underline font-medium">View full results →</a>
+                      <a className="text-xs text-[#0F510F] hover:underline font-medium">View Full Results →</a>
                     </Link>
                   )}
                 </div>
 
-                {surveyOverview.activeSurvey && (
-                  <div className="grid grid-cols-3 gap-3 pt-1 border-t border-border">
+                {surveyOverview.survey_id && (
+                  <div className="grid grid-cols-3 gap-3 pt-2 border-t border-border">
                     <div className="text-center">
-                      <p className="text-xl font-bold text-foreground">{surveyOverview.weekResponses}</p>
+                      <p className="text-xl font-bold text-foreground">{surveyOverview.weekly_sent ?? 0}</p>
                       <p className="text-xs text-muted-foreground">Sent this week</p>
                     </div>
                     <div className="text-center">
-                      <p className="text-xl font-bold text-foreground">{surveyOverview.weekSubmitted}</p>
+                      <p className="text-xl font-bold text-foreground">{surveyOverview.weekly_submitted ?? 0}</p>
                       <p className="text-xs text-muted-foreground">Submitted</p>
                     </div>
                     <div className="text-center">
                       <p className="text-xl font-bold text-foreground">
-                        {surveyOverview.weekAvgRating !== null ? surveyOverview.weekAvgRating : "—"}
+                        {surveyOverview.avg_rating_this_week != null
+                          ? `${surveyOverview.avg_rating_this_week} / 5`
+                          : "—"}
                       </p>
                       <p className="text-xs text-muted-foreground">Avg rating</p>
                     </div>
