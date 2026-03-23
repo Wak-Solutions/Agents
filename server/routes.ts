@@ -774,8 +774,12 @@ Never send the booking link unless the customer explicitly agrees to schedule a 
       const jitsiSuffix = crypto.randomBytes(8).toString('base64url').slice(0, 10);
       const jitsiLink = `https://meet.jit.si/WAK-${jitsiSuffix}`;
       // Branded meeting link sent to customers
-      const rawBase = (process.env.RAILWAY_PUBLIC_URL || '').replace(/\/$/, '');
-      const baseUrl = rawBase.startsWith('http') ? rawBase : `https://${rawBase}`;
+      const rawBase = (
+        process.env.RAILWAY_PUBLIC_URL ||
+        process.env.RAILWAY_PUBLIC_DOMAIN ||
+        ''
+      ).replace(/\/$/, '');
+      const baseUrl = rawBase.startsWith('http') ? rawBase : (rawBase ? `https://${rawBase}` : '');
       const brandedLink = `${baseUrl}/meeting/${meeting.meeting_token}`;
 
       await pool.query(
