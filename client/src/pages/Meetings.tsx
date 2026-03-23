@@ -11,6 +11,7 @@ interface Meeting {
   customer_phone: string;
   agent: string | null;
   meeting_link: string;
+  meeting_token: string | null;
   agreed_time: string | null;
   scheduled_at: string | null;
   status: MeetingStatus;
@@ -277,14 +278,14 @@ export default function Meetings() {
                         {m.customer_phone}
                       </td>
                       <td className="px-4 py-3">
-                        {m.meeting_link ? (
+                        {m.meeting_token && m.meeting_link ? (
                           <a
-                            href={m.meeting_link}
+                            href={`/meeting/${m.meeting_token}`}
                             target="_blank"
                             rel="noopener noreferrer"
                             className="flex items-center gap-1 text-[#0F510F] hover:underline font-mono text-xs"
                           >
-                            {m.meeting_link.replace("https://meet.jit.si/", "jit.si/")}
+                            {`/meeting/${m.meeting_token.slice(0, 8)}…`}
                             <ExternalLink className="w-3 h-3 flex-shrink-0" />
                           </a>
                         ) : (

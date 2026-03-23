@@ -13,12 +13,14 @@ import Meetings from "./pages/Meetings";
 import BookMeeting from "./pages/BookMeeting";
 import SurveyPage from "./pages/SurveyPage";
 import SurveysTab from "./pages/SurveysTab";
+import MeetingPage from "./pages/MeetingPage";
 
 function Router() {
   return (
     <Switch>
       {/* Public routes — must come before any auth-guarded routes */}
       <Route path="/survey/:token" component={SurveyPage} />
+      <Route path="/meeting/:token" component={MeetingPage} />
       <Route path="/book/:token" component={BookMeeting} />
       <Route path="/login" component={Login} />
       <Route path="/guide" component={Guide} />
