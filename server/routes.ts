@@ -649,12 +649,14 @@ Never send the booking link unless the customer explicitly agrees to schedule a 
       const windowEnd = new Date(windowStart.getTime() + 31 * 24 * 3600 * 1000);
 
       // Fetch ALL blocked slots for the window in one query
+      // blocked_slots stores dates as "UTC date of KSA midnight" (1 day behind KSA calendar)
       const ksaWindowStart = ksaNow.toISOString().slice(0, 10);
-      const [byr, bmo, bdy] = ksaWindowStart.split('-').map(Number);
+      const [ksaYr, ksaMo, ksaDy] = ksaWindowStart.split('-').map(Number);
+      const blockedWindowStart = new Date(Date.UTC(ksaYr, ksaMo - 1, ksaDy) - KSA_OFFSET_MS).toISOString().slice(0, 10);
       const blockedRes = await pool.query(
         `SELECT date::text, time FROM blocked_slots
-         WHERE date >= $1::date AND date < $1::date + INTERVAL '31 days'`,
-        [ksaWindowStart]
+         WHERE date >= $1::date AND date < $1::date + INTERVAL '32 days'`,
+        [blockedWindowStart]
       );
       const blockedSet = new Set(blockedRes.rows.map((r: any) => `${r.date}T${r.time}`));
 
@@ -669,16 +671,18 @@ Never send the booking link unless the customer explicitly agrees to schedule a 
 
       const days: { date: string; label: string; slots: string[] }[] = [];
 
-      for (let i = 1; i <= 30; i++) {
+      for (let i = 0; i <= 30; i++) {
         const d = new Date(ksaNow);
         d.setUTCDate(d.getUTCDate() + i);
         const ksaDate = d.toISOString().slice(0, 10);
+        const [yr, mo, dy] = ksaDate.split('-').map(Number);
+        // blocked_slots uses UTC-date-of-KSA-midnight as key
+        const blockedDate = new Date(Date.UTC(yr, mo - 1, dy) - KSA_OFFSET_MS).toISOString().slice(0, 10);
 
         const availableSlots: string[] = [];
         for (const slot of SLOT_HOURS) {
-          if (blockedSet.has(`${ksaDate}T${slot}`)) continue;
+          if (blockedSet.has(`${blockedDate}T${slot}`)) continue;
           const [h] = slot.split(':').map(Number);
-          const [yr, mo, dy] = ksaDate.split('-').map(Number);
           const slotUtc = new Date(Date.UTC(yr, mo - 1, dy, h - 3, 0, 0, 0));
           if (slotUtc <= now) continue;
           if (takenMs.has(slotUtc.getTime())) continue;
@@ -731,9 +735,11 @@ Never send the booking link unless the customer explicitly agrees to schedule a 
       if (takenRes.rows.length > 0) {
         return res.status(409).json({ message: 'This time slot was just taken. Please choose another.' });
       }
+      const [bYr, bMo, bDy] = date.split('-').map(Number);
+      const blockedDateKey = new Date(Date.UTC(bYr, bMo - 1, bDy) - KSA_OFFSET_MS).toISOString().slice(0, 10);
       const blockedRes = await pool.query(
         'SELECT 1 FROM blocked_slots WHERE date=$1::date AND time=$2',
-        [date, time]
+        [blockedDateKey, time]
       );
       if (blockedRes.rows.length > 0) {
         return res.status(409).json({ message: 'This slot is not available. Please choose another.' });
