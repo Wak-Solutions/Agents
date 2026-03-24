@@ -818,7 +818,20 @@ Never send the booking link unless the customer explicitly agrees to schedule a 
   // ── Public Booking Routes (no auth) ───────────────────────────────────────
 
   const KSA_OFFSET_MS = 3 * 60 * 60 * 1000; // UTC+3
-  const SLOT_HOURS = ["09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00"];
+
+  // Returns the bookable slot strings for a given KSA day of week.
+  // Friday (5): 17:00–00:00. All other days: 07:00–00:00.
+  // "00:00" is the midnight slot — last slot of the booking day, stored as
+  // next-calendar-day 00:00 KSA (h=24 in UTC conversion).
+  function getSlotsForDay(ksaDayOfWeek: number): string[] {
+    const start = ksaDayOfWeek === 5 ? 17 : 7; // 5 = Friday
+    const slots: string[] = [];
+    for (let h = start; h <= 23; h++) {
+      slots.push(`${String(h).padStart(2, '0')}:00`);
+    }
+    slots.push('00:00'); // midnight — treated as h=24 in UTC math
+    return slots;
+  }
 
   // GET /api/book/:token — returns available slots for the next 30 days
   app.get('/api/book/:token', async (req, res) => {
@@ -881,9 +894,11 @@ Never send the booking link unless the customer explicitly agrees to schedule a 
         const blockedDate = new Date(Date.UTC(yr, mo - 1, dy) - KSA_OFFSET_MS).toISOString().slice(0, 10);
 
         const availableSlots: string[] = [];
-        for (const slot of SLOT_HOURS) {
+        const daySlots = getSlotsForDay(d.getUTCDay()); // d's UTC day == KSA day-of-week
+        for (const slot of daySlots) {
           if (blockedSet.has(`${blockedDate}T${slot}`)) continue;
-          const [h] = slot.split(':').map(Number);
+          // "00:00" is midnight = next calendar day 00:00 KSA, so treat as h=24
+          const h = slot === '00:00' ? 24 : parseInt(slot.split(':')[0]);
           const slotUtc = new Date(Date.UTC(yr, mo - 1, dy, h - 3, 0, 0, 0));
           if (slotUtc <= now) continue;
           if (takenMs.has(slotUtc.getTime())) continue;
@@ -922,8 +937,9 @@ Never send the booking link unless the customer explicitly agrees to schedule a 
       }
 
       // Convert KSA date+time to UTC
+      // "00:00" is the midnight slot = next calendar day 00:00 KSA, so treat as h=24
       const [yr, mo, dy] = date.split('-').map(Number);
-      const [h] = time.split(':').map(Number);
+      const h = time === '00:00' ? 24 : parseInt(time.split(':')[0]);
       const scheduledUtc = new Date(Date.UTC(yr, mo - 1, dy, h - 3, 0, 0, 0));
 
       // Check slot still available
