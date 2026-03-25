@@ -75,7 +75,13 @@ export function registerAgentRoutes(app: any, requireAdmin: any): void {
       const result = await pool.query(`
         SELECT
           a.id, a.name, a.email, a.role, a.is_active, a.last_login,
-          COUNT(e.customer_phone) FILTER (WHERE e.status = 'open')::int AS active_chat_count
+          COUNT(e.customer_phone) FILTER (WHERE e.status = 'open')::int AS active_chat_count,
+          (SELECT COUNT(*)::int FROM meetings m
+           WHERE m.agent_id = a.id AND m.status = 'completed') AS meetings_completed,
+          (SELECT ROUND(AVG(sa.answer_rating)::numeric, 1)
+           FROM survey_answers sa
+           JOIN survey_responses sr ON sr.id = sa.response_id
+           WHERE sr.agent_id = a.id AND sa.answer_rating IS NOT NULL) AS avg_survey_rating
         FROM agents a
         LEFT JOIN escalations e ON e.assigned_agent_id = a.id
         GROUP BY a.id

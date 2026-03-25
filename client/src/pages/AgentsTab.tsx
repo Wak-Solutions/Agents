@@ -11,6 +11,8 @@ interface Agent {
   is_active: boolean;
   last_login: string | null;
   active_chat_count: number;
+  meetings_completed: number;
+  avg_survey_rating: number | null;
 }
 
 interface WorkloadRow {
@@ -230,64 +232,103 @@ export default function AgentsTab() {
                 <div className="w-6 h-6 border-4 border-[#0F510F]/20 border-t-[#0F510F] rounded-full animate-spin" />
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border bg-muted/50">
-                      {["Name", "Email", "Role", "Status", "Active Chats", "Last Login", "Actions"].map(h => (
-                        <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-border">
-                    {agents.map(agent => (
-                      <tr key={agent.id} className="hover:bg-muted/30 transition-colors">
-                        <td className="px-4 py-3 font-medium text-foreground">{agent.name}</td>
-                        <td className="px-4 py-3 text-muted-foreground font-mono text-xs">{agent.email}</td>
-                        <td className="px-4 py-3">
+              <table className="w-full text-sm table-fixed">
+                <thead>
+                  <tr className="border-b border-border bg-muted/50">
+                    <th className="text-left px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-[30%]">Agent</th>
+                    <th className="text-left px-2 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-[18%]">Role / Status</th>
+                    <th className="text-center px-1 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-[10%]">Chats</th>
+                    <th className="text-center px-1 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-[12%]">Meetings</th>
+                    <th className="text-center px-1 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-[11%]">Rating</th>
+                    <th className="hidden md:table-cell text-left px-2 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-[14%]">Last Login</th>
+                    <th className="text-right px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {agents.map(agent => (
+                    <tr key={agent.id} className="hover:bg-muted/30 transition-colors">
+                      {/* Agent: name always, email on md+ */}
+                      <td className="px-3 py-3">
+                        <p className="font-medium text-foreground truncate">{agent.name}</p>
+                        <p className="hidden md:block text-xs text-muted-foreground font-mono truncate">{agent.email}</p>
+                      </td>
+                      {/* Role + Status stacked */}
+                      <td className="px-2 py-3">
+                        <div className="flex flex-col gap-1 items-start">
                           <Badge color={agent.role === "admin" ? "bg-purple-100 text-purple-700" : "bg-blue-100 text-blue-700"}>
                             {agent.role}
                           </Badge>
-                        </td>
-                        <td className="px-4 py-3">
                           <Badge color={agent.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}>
                             {agent.is_active ? "Active" : "Inactive"}
                           </Badge>
-                        </td>
-                        <td className="px-4 py-3 text-center text-foreground font-medium">{agent.active_chat_count}</td>
-                        <td className="px-4 py-3 text-muted-foreground text-xs">
-                          {agent.last_login ? new Date(agent.last_login).toLocaleDateString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "Never"}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-1">
-                            <button
-                              onClick={() => { setEditForm({ name: agent.name, email: agent.email, role: agent.role }); setEditAgent(agent); setEditError(""); }}
-                              title="Edit"
-                              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => { setResetAgent(agent); setNewPw(""); setResetError(""); }}
-                              title="Reset password"
-                              className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                            >
-                              <KeyRound className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              onClick={() => toggleActive(agent)}
-                              title={agent.is_active ? "Deactivate" : "Activate"}
-                              className={`p-1.5 rounded-lg transition-colors ${agent.is_active ? "text-red-500 hover:bg-red-50" : "text-green-600 hover:bg-green-50"}`}
-                            >
-                              {agent.is_active ? <UserX className="w-3.5 h-3.5" /> : <UserCheck className="w-3.5 h-3.5" />}
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                        </div>
+                      </td>
+                      {/* Active Chats */}
+                      <td className="px-1 py-3 text-center font-semibold text-foreground">
+                        {agent.active_chat_count}
+                      </td>
+                      {/* Meetings Done */}
+                      <td className="px-1 py-3 text-center">
+                        <span className={agent.meetings_completed > 0 ? "font-medium text-foreground" : "text-muted-foreground"}>
+                          {agent.meetings_completed}
+                        </span>
+                      </td>
+                      {/* Avg Rating — colour coded */}
+                      <td className="px-1 py-3 text-center">
+                        {agent.avg_survey_rating == null ? (
+                          <span className="text-muted-foreground">—</span>
+                        ) : (
+                          <span className={`font-medium ${
+                            agent.avg_survey_rating >= 4 ? "text-[#0F510F]"
+                            : agent.avg_survey_rating >= 2 ? "text-amber-600"
+                            : "text-red-600"
+                          }`}>
+                            {agent.avg_survey_rating} ★
+                          </span>
+                        )}
+                      </td>
+                      {/* Last Login — hidden on mobile */}
+                      <td className="hidden md:table-cell px-2 py-3 text-muted-foreground text-xs whitespace-nowrap">
+                        {agent.last_login
+                          ? new Date(agent.last_login).toLocaleDateString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
+                          : "Never"}
+                      </td>
+                      {/* Actions: labels on xl+, icons only on smaller */}
+                      <td className="px-3 py-3 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button
+                            onClick={() => { setEditForm({ name: agent.name, email: agent.email, role: agent.role }); setEditAgent(agent); setEditError(""); }}
+                            title="Edit"
+                            className="flex items-center gap-1 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                          >
+                            <Edit2 className="w-3.5 h-3.5 flex-shrink-0" />
+                            <span className="hidden xl:inline text-xs">Edit</span>
+                          </button>
+                          <button
+                            onClick={() => { setResetAgent(agent); setNewPw(""); setResetError(""); }}
+                            title="Reset password"
+                            className="flex items-center gap-1 p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                          >
+                            <KeyRound className="w-3.5 h-3.5 flex-shrink-0" />
+                            <span className="hidden xl:inline text-xs">Reset</span>
+                          </button>
+                          <button
+                            onClick={() => toggleActive(agent)}
+                            title={agent.is_active ? "Deactivate" : "Activate"}
+                            className={`flex items-center gap-1 p-1.5 rounded-lg transition-colors ${agent.is_active ? "text-red-500 hover:bg-red-50" : "text-green-600 hover:bg-green-50"}`}
+                          >
+                            {agent.is_active ? <UserX className="w-3.5 h-3.5 flex-shrink-0" /> : <UserCheck className="w-3.5 h-3.5 flex-shrink-0" />}
+                            <span className="hidden xl:inline text-xs">{agent.is_active ? "Deactivate" : "Activate"}</span>
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                  {agents.length === 0 && (
+                    <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground text-sm">No agents yet</td></tr>
+                  )}
+                </tbody>
+              </table>
             )}
           </div>
         </section>
