@@ -34,8 +34,13 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
   webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 }
 
-// In-memory store for push subscriptions
-const pushSubscriptions = new Map<string, any>();
+// In-memory push subscriptions — keyed by endpoint, stores agentId alongside subscription
+const pushSubscriptions = new Map<string, { subscription: any; agentId: number }>();
+
+// Track which chats have already triggered a notification to avoid re-firing on every message.
+// Key format: "agentId:phone" for assigned chats, "all:phone" for unassigned chats.
+// Cleared when the agent opens that chat (POST /api/notifications/mark-read/:phone).
+const notifiedChats = new Set<string>();
 
 // WebAuthn state
 const RP_NAME = "WAK Solutions Agent";
@@ -82,12 +87,38 @@ const requireWebhookSecret = (req: any, res: any, next: any) => {
   next();
 };
 
-// Helper to send push to all agents
-const notifyAgents = async (payload: any) => {
-  const promises = Array.from(pushSubscriptions.values()).map(sub =>
-    webpush.sendNotification(sub, JSON.stringify(payload)).catch(e => console.error("Push error", e))
+// Send push to every connected agent (unassigned chats, fallback)
+const notifyAll = async (payload: any) => {
+  const promises = Array.from(pushSubscriptions.values()).map(({ subscription }) =>
+    webpush.sendNotification(subscription, JSON.stringify(payload)).catch(e => console.error("Push error", e))
   );
   await Promise.all(promises);
+};
+
+// Send push only to a specific agent's subscriptions
+const notifyAgent = async (agentId: number, payload: any) => {
+  const promises: Promise<any>[] = [];
+  for (const { subscription, agentId: aid } of pushSubscriptions.values()) {
+    if (aid === agentId) {
+      promises.push(webpush.sendNotification(subscription, JSON.stringify(payload)).catch(e => console.error("Push error", e)));
+    }
+  }
+  await Promise.all(promises);
+};
+
+// Send push only to admin agents (for escalations)
+const notifyAdmins = async (payload: any) => {
+  try {
+    const adminRes = await pool.query("SELECT id FROM agents WHERE role='admin' AND is_active=true");
+    const adminIds = new Set<number>(adminRes.rows.map((r: any) => r.id as number));
+    const promises: Promise<any>[] = [];
+    for (const { subscription, agentId } of pushSubscriptions.values()) {
+      if (adminIds.has(agentId)) {
+        promises.push(webpush.sendNotification(subscription, JSON.stringify(payload)).catch(e => console.error("Push error", e)));
+      }
+    }
+    await Promise.all(promises);
+  } catch (e) { console.error("notifyAdmins error", e); }
 };
 
 export async function registerRoutes(
@@ -324,10 +355,11 @@ export async function registerRoutes(
         escalation_reason: data.escalation_reason,
         status: 'open'
       });
-      await notifyAgents({
-        title: "New Escalation — WAK Solutions",
-        body: `${data.customer_phone}: ${data.escalation_reason}`,
-        url: `/?phone=${data.customer_phone}`
+      // Escalations → notify admins only
+      await notifyAdmins({
+        title: "Customer requesting agent — WAK",
+        body: `${data.customer_phone} wants to speak to a human`,
+        url: `/inbox`,
       });
       res.json(escalation);
     } catch (err: any) {
@@ -462,11 +494,40 @@ export async function registerRoutes(
     try {
       const data = api.messages.incoming.input.parse(req.body);
 
-      await notifyAgents({
-        title: "New Customer Message",
-        body: `${data.customer_phone}: ${data.message_text.substring(0, 60)}`,
-        url: `/?phone=${data.customer_phone}`
-      });
+      // Look up whether this chat is assigned to a specific agent
+      const escRow = await pool.query(
+        `SELECT assigned_agent_id FROM escalations
+         WHERE customer_phone=$1 AND status IN ('open','in_progress')
+         ORDER BY created_at DESC LIMIT 1`,
+        [data.customer_phone]
+      );
+      const assignedAgentId: number | null = escRow.rows[0]?.assigned_agent_id ?? null;
+
+      if (assignedAgentId) {
+        // Notify only the assigned agent, once per unread conversation
+        const key = `${assignedAgentId}:${data.customer_phone}`;
+        if (!notifiedChats.has(key)) {
+          notifiedChats.add(key);
+          await notifyAgent(assignedAgentId, {
+            title: "New message",
+            body: `${data.customer_phone}: ${data.message_text.substring(0, 60)}`,
+            url: `/inbox`,
+            data: { phone: data.customer_phone },
+          });
+        }
+      } else {
+        // Unassigned — notify all agents, once per unread conversation
+        const key = `all:${data.customer_phone}`;
+        if (!notifiedChats.has(key)) {
+          notifiedChats.add(key);
+          await notifyAll({
+            title: "New customer waiting",
+            body: `${data.customer_phone} is waiting — tap to claim`,
+            url: `/inbox`,
+            data: { phone: data.customer_phone },
+          });
+        }
+      }
 
       res.json({ success: true });
     } catch (err: any) {
@@ -1064,6 +1125,18 @@ export async function registerRoutes(
         scheduledUtc,
       }).catch(e => console.error('Manager notification email error:', e));
 
+      // Push notification — assigned agent only, or all if unassigned
+      const meetingPush = {
+        title: "Meeting booked",
+        body: `${meeting.customer_phone} — ${ksaLabel}`,
+        url: `/meetings`,
+      };
+      if (meeting.agent_id) {
+        notifyAgent(meeting.agent_id, meetingPush).catch(e => console.error('Push error', e));
+      } else {
+        notifyAll(meetingPush).catch(e => console.error('Push error', e));
+      }
+
       res.json({ success: true, ksa_label: ksaLabel });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
@@ -1077,13 +1150,24 @@ export async function registerRoutes(
 
   app.post(api.push.subscribe.path, requireAuth, (req, res) => {
     const subscription = req.body;
-    pushSubscriptions.set(subscription.endpoint, subscription);
+    const agentId = (req as any).session.agentId as number;
+    pushSubscriptions.set(subscription.endpoint, { subscription, agentId });
     res.json({ success: true });
   });
 
   app.post(api.push.unsubscribe.path, requireAuth, (req, res) => {
     const subscription = req.body;
     pushSubscriptions.delete(subscription.endpoint);
+    res.json({ success: true });
+  });
+
+  // Mark a chat as read — clears the "already notified" flag so the agent
+  // gets a new notification next time a message arrives on that chat.
+  app.post('/api/notifications/mark-read/:phone', requireAuth, (req, res) => {
+    const agentId = (req as any).session.agentId as number;
+    const phone = decodeURIComponent(req.params.phone);
+    notifiedChats.delete(`${agentId}:${phone}`);
+    notifiedChats.delete(`all:${phone}`);
     res.json({ success: true });
   });
 

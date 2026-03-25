@@ -40,6 +40,16 @@ export default function Dashboard() {
 
   const selectedConversation = conversations.find(c => c.customer_phone === selectedPhone) ?? null;
 
+  // When an agent opens a chat, clear the push-notification "already notified" flag
+  // so they'll be notified again if new messages arrive after they leave.
+  useEffect(() => {
+    if (!selectedPhone || !isAuthenticated) return;
+    fetch(`/api/notifications/mark-read/${encodeURIComponent(selectedPhone)}`, {
+      method: 'POST',
+      credentials: 'include',
+    }).catch(() => {});
+  }, [selectedPhone, isAuthenticated]);
+
   const handleLogout = () => {
     logout(undefined, { onSuccess: () => setLocation("/login") });
   };
