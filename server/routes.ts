@@ -535,6 +535,81 @@ export async function registerRoutes(
     }
   });
 
+  // ── Unified Inbox ─────────────────────────────────────────────────────────
+  // Returns active chats + upcoming meetings as a single sorted feed.
+  // Dedup rule: if a customer has both an active chat AND a booked meeting,
+  // they appear as one item (chat type) with meeting fields attached.
+  // Meetings with no active chat appear as standalone meeting items.
+  app.get('/api/inbox', requireAuth, async (_req, res) => {
+    try {
+      const [escRes, meetRes] = await Promise.all([
+        // Active chats — attach the soonest upcoming meeting for that customer if any
+        pool.query(`
+          SELECT
+            'chat'::text          AS item_type,
+            e.customer_phone,
+            e.escalation_reason,
+            e.status              AS chat_status,
+            e.created_at,
+            e.assigned_agent_id,
+            a.name                AS assigned_agent_name,
+            m.id                  AS meeting_id,
+            m.scheduled_at        AS meeting_scheduled_at,
+            m.status              AS meeting_status,
+            m.meeting_link,
+            m.agent_id            AS meeting_agent_id,
+            ma.name               AS meeting_agent_name
+          FROM escalations e
+          LEFT JOIN agents a  ON a.id  = e.assigned_agent_id
+          LEFT JOIN LATERAL (
+            SELECT * FROM meetings
+            WHERE customer_phone = e.customer_phone
+              AND scheduled_at IS NOT NULL
+              AND status IN ('pending','in_progress')
+            ORDER BY scheduled_at ASC LIMIT 1
+          ) m ON true
+          LEFT JOIN agents ma ON ma.id = m.agent_id
+          WHERE e.status IN ('open','in_progress')
+          ORDER BY e.created_at DESC
+        `),
+        // Booked upcoming meetings that have no active chat
+        pool.query(`
+          SELECT
+            'meeting'::text       AS item_type,
+            m.customer_phone,
+            NULL::text            AS escalation_reason,
+            NULL::text            AS chat_status,
+            m.created_at,
+            m.agent_id            AS assigned_agent_id,
+            a.name                AS assigned_agent_name,
+            m.id                  AS meeting_id,
+            m.scheduled_at        AS meeting_scheduled_at,
+            m.status              AS meeting_status,
+            m.meeting_link,
+            m.agent_id            AS meeting_agent_id,
+            a.name                AS meeting_agent_name
+          FROM meetings m
+          LEFT JOIN agents a ON a.id = m.agent_id
+          WHERE m.scheduled_at IS NOT NULL
+            AND m.status IN ('pending','in_progress')
+            AND NOT EXISTS (
+              SELECT 1 FROM escalations e
+              WHERE e.customer_phone = m.customer_phone
+                AND e.status IN ('open','in_progress')
+            )
+          ORDER BY m.scheduled_at ASC
+        `),
+      ]);
+
+      const items = [...escRes.rows, ...meetRes.rows].sort(
+        (a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+      res.json(items);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   // Statistics Routes
   app.get('/api/statistics', requireAuth, async (req, res) => {
     try {
