@@ -212,7 +212,7 @@ function UserGuide() {
           ["Customer", "The customer's WhatsApp number"],
           ["Meeting Link", "Click to open the video room"],
           ["Scheduled (AST)", "Booked date and time in KSA / Arabian Standard Time"],
-          ["Agent", "Which agent is handling this meeting, or "Unassigned""],
+          ["Agent", "Which agent is handling this meeting, or \"Unassigned\""],
           ["Status", "Pending → In Progress → Completed"],
         ]}
       />
