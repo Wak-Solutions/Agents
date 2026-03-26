@@ -145,8 +145,26 @@ export default function Meetings() {
   }, [filter]);
 
   useEffect(() => {
-    if (isAuthenticated) fetchMeetings();
+    if (!isAuthenticated) return;
+    fetchMeetings();
+    // Poll every 20 s so meeting status changes (start / complete) are visible
+    // to all agents without requiring a manual refresh.
+    const interval = setInterval(fetchMeetings, 20000);
+    return () => clearInterval(interval);
   }, [isAuthenticated, fetchMeetings]);
+
+  // Re-fetch immediately on foreground return — the interval is frozen by iOS
+  // when the PWA is backgrounded.
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible" && isAuthenticated) {
+        fetchMeetings();
+        fetchSlots();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [fetchMeetings, fetchSlots, isAuthenticated]);
 
   const startMeeting = async (id: number) => {
     setStarting(id);

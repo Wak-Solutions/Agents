@@ -117,6 +117,16 @@ export default function AgentsTab() {
     }
   }, [isAuthenticated, isAdmin, period]);
 
+  // Re-fetch immediately on foreground — the 60-second interval is too long
+  // to rely on after the iOS PWA resumes from background.
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible" && isAuthenticated && isAdmin) fetchAll(period);
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [fetchAll, period, isAuthenticated, isAdmin]);
+
   const toggleActive = async (agent: Agent) => {
     const endpoint = agent.is_active ? "deactivate" : "activate";
     const res = await fetch(`/api/agents/${agent.id}/${endpoint}`, {

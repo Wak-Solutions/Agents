@@ -269,6 +269,17 @@ export default function InboxPage() {
     }
   }, [isAuthenticated, fetchData]);
 
+  // Re-fetch immediately when the PWA/tab returns to the foreground so both
+  // agents always see each other's claim/reassign actions without waiting for
+  // the next 15-second poll tick.
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible" && isAuthenticated) fetchData();
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [fetchData, isAuthenticated]);
+
   const claim = async (phone: string) => {
     setClaiming(phone);
     setError("");

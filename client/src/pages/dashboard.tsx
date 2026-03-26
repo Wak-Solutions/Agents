@@ -5,6 +5,7 @@ import { startRegistration } from "@simplewebauthn/browser";
 import { useAuth, useLogout } from "@/hooks/use-auth";
 import { useConversations } from "@/hooks/use-conversations";
 import { usePushNotifications } from "@/hooks/use-push";
+import { useVisibilityRefetch } from "@/hooks/use-visibility-refetch";
 import { Sidebar } from "@/components/sidebar";
 import { ChatArea } from "@/components/chat-area";
 
@@ -18,6 +19,11 @@ export default function Dashboard() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const { showBanner, showInstallPrompt, enableNotifications, dismissInstallPrompt } = usePushNotifications(isAuthenticated);
+
+  // Immediately re-fetch all data when the PWA/tab returns to the foreground.
+  // Fixes iOS timer throttling: polls freeze in the background so stale data
+  // would otherwise linger until the next interval fires.
+  useVisibilityRefetch();
 
   useEffect(() => {
     if (!isAuthLoading && !isAuthenticated) {
