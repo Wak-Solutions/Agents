@@ -12,6 +12,7 @@ import {
 } from "recharts";
 import { useAuth } from "@/hooks/use-auth";
 import { useStatistics, useAiSummary } from "@/hooks/use-statistics";
+import { useLanguage } from "@/lib/language-context";
 
 // ── Date range helpers ──────────────────────────────────────────────────────
 
@@ -75,6 +76,7 @@ function fillDays(perDay: { date: string; count: number }[], from: Date, to: Dat
 export default function Statistics() {
   const [, setLocation] = useLocation();
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  const { t } = useLanguage();
 
   const [preset, setPreset] = useState<Preset>("week");
   const [customFrom, setCustomFrom] = useState(toDateInput(new Date()));
@@ -134,10 +136,10 @@ export default function Statistics() {
   const showBarChart = chartData.length <= 60; // avoid cramped charts for very long ranges
 
   const presets: { key: Preset; label: string }[] = [
-    { key: "today", label: "Today" },
-    { key: "week", label: "This Week" },
-    { key: "month", label: "This Month" },
-    { key: "custom", label: "Custom" },
+    { key: "today",  label: t("periodToday") },
+    { key: "week",   label: t("periodThisWeek") },
+    { key: "month",  label: t("periodThisMonth") },
+    { key: "custom", label: t("periodCustom") },
   ];
 
   return (
@@ -149,20 +151,20 @@ export default function Statistics() {
           <div className="hidden sm:block">
             <span className="font-semibold text-sm text-white/90">WAK Solutions</span>
             <span className="text-white/40 mx-2">—</span>
-            <span className="text-sm text-white/70">Statistics</span>
+            <span className="text-sm text-white/70">{t("statisticsTitle")}</span>
           </div>
         </div>
         <Link href="/">
           <a className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white transition-colors px-3 py-1.5 rounded-md hover:bg-white/10">
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Back to Inbox</span>
-            <span className="sm:hidden">Back</span>
+            <span className="hidden sm:inline">{t("backToInbox")}</span>
+            <span className="sm:hidden">{t("back")}</span>
           </a>
         </Link>
       </header>
 
       <main className="flex-1 w-full max-w-3xl mx-auto px-4 py-6 space-y-6">
-        <h1 className="text-xl font-bold text-foreground">Statistics</h1>
+        <h1 className="text-xl font-bold text-foreground">{t("statisticsTitle")}</h1>
 
         {/* ── Date Range Filter ── */}
         <div className="bg-card border border-border rounded-xl p-4 space-y-3">
@@ -185,7 +187,7 @@ export default function Statistics() {
           {preset === "custom" && (
             <div className="flex flex-wrap items-center gap-3 pt-1">
               <div className="flex items-center gap-2">
-                <label className="text-xs text-muted-foreground whitespace-nowrap">From</label>
+                <label className="text-xs text-muted-foreground whitespace-nowrap">{t("statisticsFrom")}</label>
                 <input
                   type="date"
                   value={customFrom}
@@ -195,7 +197,7 @@ export default function Statistics() {
                 />
               </div>
               <div className="flex items-center gap-2">
-                <label className="text-xs text-muted-foreground whitespace-nowrap">To</label>
+                <label className="text-xs text-muted-foreground whitespace-nowrap">{t("statisticsTo")}</label>
                 <input
                   type="date"
                   value={customTo}
@@ -211,7 +213,7 @@ export default function Statistics() {
 
         {/* ── Section 1: Customers Contacted ── */}
         <section className="space-y-4">
-          <h2 className="text-base font-semibold text-foreground">Customers Contacted</h2>
+          <h2 className="text-base font-semibold text-foreground">{t("statisticsCustomersContacted")}</h2>
 
           {/* Total count card */}
           <div className="bg-card border border-border rounded-xl p-5 flex items-center gap-4">
@@ -219,7 +221,7 @@ export default function Statistics() {
               <Users className="w-6 h-6 text-[#0F510F]" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide">Unique customers</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide">{t("statisticsUniqueCustomers")}</p>
               {isStatsLoading ? (
                 <div className="h-8 w-16 bg-muted rounded animate-pulse mt-1" />
               ) : (
@@ -230,14 +232,14 @@ export default function Statistics() {
 
           {/* Bar chart */}
           <div className="bg-card border border-border rounded-xl p-5">
-            <p className="text-xs text-muted-foreground mb-4">Customers contacted per day</p>
+            <p className="text-xs text-muted-foreground mb-4">{t("statisticsPerDay")}</p>
             {isStatsLoading ? (
               <div className="h-48 flex items-center justify-center">
                 <div className="w-6 h-6 border-4 border-[#0F510F]/20 border-t-[#0F510F] rounded-full animate-spin" />
               </div>
             ) : chartData.length === 0 ? (
               <div className="h-48 flex items-center justify-center text-sm text-muted-foreground">
-                No data for this period
+                {t("statisticsNoData")}
               </div>
             ) : showBarChart ? (
               <ResponsiveContainer width="100%" height={200}>
@@ -265,14 +267,14 @@ export default function Statistics() {
                     }}
                     labelStyle={{ color: "hsl(var(--foreground))", fontWeight: 600 }}
                     itemStyle={{ color: "#0F510F" }}
-                    formatter={(v: any) => [v, "Customers"]}
+                    formatter={(v: any) => [v, t("statisticsCustomersTooltip")]}
                   />
                   <Bar dataKey="count" fill="#0F510F" radius={[4, 4, 0, 0]} maxBarSize={40} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
               <div className="h-48 flex items-center justify-center text-sm text-muted-foreground">
-                Range too large to display as a bar chart — showing totals only
+                {t("statisticsRangeTooLarge")}
               </div>
             )}
           </div>
@@ -281,7 +283,7 @@ export default function Statistics() {
         {/* ── Section 2: AI Summary ── */}
         <section className="space-y-4 pb-8">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-foreground">AI Conversation Summary</h2>
+            <h2 className="text-base font-semibold text-foreground">{t("statisticsAiSummary")}</h2>
             <button
               onClick={() => generateSummary({ from: fromISO, to: toISO })}
               disabled={isSummaryLoading}
@@ -290,12 +292,12 @@ export default function Statistics() {
               {isSummaryLoading ? (
                 <>
                   <div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Generating…
+                  {t("statisticsGenerating")}
                 </>
               ) : (
                 <>
                   {hasSummary ? <RefreshCw className="w-3 h-3" /> : <Sparkles className="w-3 h-3" />}
-                  {hasSummary ? "Regenerate" : "Generate Summary"}
+                  {hasSummary ? t("statisticsRegenerate") : t("statisticsGenerate")}
                 </>
               )}
             </button>
@@ -321,7 +323,7 @@ export default function Statistics() {
               </p>
             ) : (
               <p className="text-sm text-muted-foreground text-center">
-                Click "Generate Summary" to get an AI-powered analysis of conversations in this period.
+                {t("statisticsClickToGenerate")}
               </p>
             )}
           </div>
@@ -331,7 +333,7 @@ export default function Statistics() {
         <section className="space-y-4 pb-8">
           <div className="flex items-center gap-2">
             <ClipboardList className="w-4 h-4 text-[#0F510F]" />
-            <h2 className="text-base font-semibold text-foreground">Survey Overview</h2>
+            <h2 className="text-base font-semibold text-foreground">{t("statisticsSurveyOverview")}</h2>
           </div>
 
           <div className="bg-card border border-border rounded-xl p-5 space-y-4">
@@ -343,14 +345,14 @@ export default function Statistics() {
               <>
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Active Survey</p>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">{t("statisticsActiveSurvey")}</p>
                     <p className="text-sm font-semibold text-foreground">
-                      {surveyOverview.survey_id ? surveyOverview.title : "No active survey"}
+                      {surveyOverview.survey_id ? surveyOverview.title : t("statisticsNoActiveSurvey")}
                     </p>
                   </div>
                   {surveyOverview.survey_id && (
                     <Link href="/surveys">
-                      <a className="text-xs text-[#0F510F] hover:underline font-medium">View Full Results →</a>
+                      <a className="text-xs text-[#0F510F] hover:underline font-medium">{t("statisticsViewResults")}</a>
                     </Link>
                   )}
                 </div>
@@ -359,11 +361,11 @@ export default function Statistics() {
                   <div className="grid grid-cols-3 gap-3 pt-2 border-t border-border">
                     <div className="text-center">
                       <p className="text-xl font-bold text-foreground">{surveyOverview.weekly_sent ?? 0}</p>
-                      <p className="text-xs text-muted-foreground">Sent this week</p>
+                      <p className="text-xs text-muted-foreground">{t("statisticsSentThisWeek")}</p>
                     </div>
                     <div className="text-center">
                       <p className="text-xl font-bold text-foreground">{surveyOverview.weekly_submitted ?? 0}</p>
-                      <p className="text-xs text-muted-foreground">Submitted</p>
+                      <p className="text-xs text-muted-foreground">{t("statisticsSubmitted")}</p>
                     </div>
                     <div className="text-center">
                       <p className="text-xl font-bold text-foreground">
@@ -371,7 +373,7 @@ export default function Statistics() {
                           ? `${surveyOverview.avg_rating_this_week} / 5`
                           : "—"}
                       </p>
-                      <p className="text-xs text-muted-foreground">Avg rating</p>
+                      <p className="text-xs text-muted-foreground">{t("statisticsAvgRating")}</p>
                     </div>
                   </div>
                 )}

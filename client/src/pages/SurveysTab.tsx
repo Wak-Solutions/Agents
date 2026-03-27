@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useLocation, Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { useLanguage } from "@/lib/language-context";
 import {
   ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown,
   BarChart2, Edit2, CheckCircle2, XCircle, ClipboardList, AlertTriangle,
@@ -73,6 +74,7 @@ type View = "list" | "editor" | "results";
 export default function SurveysTab() {
   const [, setLocation] = useLocation();
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  const { t } = useLanguage();
 
   const [view, setView] = useState<View>("list");
   const [surveys, setSurveys] = useState<Survey[]>([]);
@@ -99,7 +101,7 @@ export default function SurveysTab() {
     setLoading(true); setListError("");
     try {
       const res = await fetch("/api/surveys", { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to load surveys");
+      if (!res.ok) throw new Error(t("statisticsFailedLoad"));
       setSurveys(await res.json());
     } catch (e: any) {
       setListError(e.message);
@@ -139,7 +141,7 @@ export default function SurveysTab() {
       });
       setView("editor");
     } catch {
-      setListError("Failed to load survey for editing.");
+      setListError(t("statisticsFailedLoad"));
     }
   };
 
@@ -151,7 +153,7 @@ export default function SurveysTab() {
       const res = await fetch(`/api/surveys/${id}/results`, { credentials: "include" });
       setResults(await res.json());
     } catch {
-      setListError("Failed to load results.");
+      setListError(t("statisticsFailedLoad"));
     } finally {
       setResultsLoading(false);
     }
@@ -168,11 +170,11 @@ export default function SurveysTab() {
   };
 
   const deleteSurvey = async (id: number, title: string) => {
-    if (!confirm(`Delete "${title}"? This cannot be undone.`)) return;
+    if (!confirm(`Delete "${title}"${t("surveysDeleteConfirmSuffix")}`)) return;
     const res = await fetch(`/api/surveys/${id}`, { method: "DELETE", credentials: "include" });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      alert(body.message || "Failed to delete.");
+      alert(body.message || t("surveysDeleteFailed"));
       return;
     }
     fetchSurveys();
@@ -250,7 +252,7 @@ export default function SurveysTab() {
       }
       setView("list"); fetchSurveys();
     } catch (e: any) {
-      setSaveError(e.message || "Failed to save.");
+      setSaveError(e.message || t("surveysDeleteFailed"));
     } finally {
       setSaving(false);
     }
@@ -261,9 +263,9 @@ export default function SurveysTab() {
   const renderList = () => (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-foreground">Surveys</h1>
+        <h1 className="text-xl font-bold text-foreground">{t("surveysTitle")}</h1>
         <button onClick={openNew} className="flex items-center gap-1.5 bg-[#0F510F] text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-[#0d4510] transition-colors">
-          <Plus className="w-4 h-4" /> New Survey
+          <Plus className="w-4 h-4" /> {t("surveysNewSurvey")}
         </button>
       </div>
 
@@ -276,20 +278,20 @@ export default function SurveysTab() {
       ) : surveys.length === 0 ? (
         <div className="bg-card border border-border rounded-xl p-12 text-center">
           <ClipboardList className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-          <p className="text-sm text-muted-foreground">No surveys yet.</p>
+          <p className="text-sm text-muted-foreground">{t("surveysEmpty")}</p>
         </div>
       ) : (
         <div className="bg-card border border-border rounded-xl overflow-hidden">
           <table className="w-full text-sm">
             <thead className="bg-muted/50">
               <tr className="border-b border-border">
-                <th className="text-left px-4 py-3 text-muted-foreground font-medium">Title</th>
-                <th className="text-center px-3 py-3 text-muted-foreground font-medium">Qs</th>
-                <th className="text-center px-3 py-3 text-muted-foreground font-medium">Sent</th>
-                <th className="text-center px-3 py-3 text-muted-foreground font-medium">Submitted</th>
-                <th className="text-center px-3 py-3 text-muted-foreground font-medium">Rate</th>
-                <th className="text-center px-3 py-3 text-muted-foreground font-medium">Status</th>
-                <th className="text-right px-4 py-3 text-muted-foreground font-medium">Actions</th>
+                <th className="text-left px-4 py-3 text-muted-foreground font-medium">{t("surveysColTitle")}</th>
+                <th className="text-center px-3 py-3 text-muted-foreground font-medium">{t("surveysColQs")}</th>
+                <th className="text-center px-3 py-3 text-muted-foreground font-medium">{t("surveysColSent")}</th>
+                <th className="text-center px-3 py-3 text-muted-foreground font-medium">{t("surveysColSubmitted")}</th>
+                <th className="text-center px-3 py-3 text-muted-foreground font-medium">{t("surveysColRate")}</th>
+                <th className="text-center px-3 py-3 text-muted-foreground font-medium">{t("surveysColStatus")}</th>
+                <th className="text-right px-4 py-3 text-muted-foreground font-medium">{t("surveysColActions")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -301,7 +303,7 @@ export default function SurveysTab() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-medium text-foreground">{s.title}</span>
                         {s.is_default && (
-                          <span className="px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium">Default</span>
+                          <span className="px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs font-medium">{t("surveysStatusDefault")}</span>
                         )}
                       </div>
                     </td>
@@ -312,10 +314,10 @@ export default function SurveysTab() {
                     <td className="px-3 py-3 text-center">
                       {s.is_active ? (
                         <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-green-100 text-green-700 text-xs font-medium">
-                          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> Active
+                          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" /> {t("surveysStatusActive")}
                         </span>
                       ) : (
-                        <span className="text-xs text-muted-foreground">Inactive</span>
+                        <span className="text-xs text-muted-foreground">{t("surveysStatusInactive")}</span>
                       )}
                     </td>
                     <td className="px-4 py-3">
@@ -336,7 +338,7 @@ export default function SurveysTab() {
                           </button>
                         )}
                         {s.is_default ? (
-                          <span title="The default survey cannot be deleted" className="p-1.5 rounded cursor-not-allowed opacity-30">
+                          <span title={t("surveysDefaultCannotDelete")} className="p-1.5 rounded cursor-not-allowed opacity-30">
                             <Trash2 className="w-3.5 h-3.5 text-muted-foreground" />
                           </span>
                         ) : (
@@ -359,9 +361,9 @@ export default function SurveysTab() {
   // ── Render: Editor ───────────────────────────────────────────────────────────
 
   const TYPE_LABELS: Record<QuestionType, string> = {
-    rating: "Rating (1–5)",
-    yes_no: "Yes / No",
-    free_text: "Free Text",
+    rating:    t("surveysQuestionTypeRating"),
+    yes_no:    t("surveysQuestionTypeYesNo"),
+    free_text: t("surveysQuestionTypeFreeText"),
   };
 
   const renderEditor = () => {
@@ -372,36 +374,36 @@ export default function SurveysTab() {
           <button onClick={() => setView("list")} className="p-1.5 rounded-lg border border-border hover:bg-muted transition-colors">
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <h1 className="text-xl font-bold text-foreground">{draft.id ? "Edit Survey" : "New Survey"}</h1>
+          <h1 className="text-xl font-bold text-foreground">{draft.id ? t("surveysEditSurvey") : t("surveysNewSurvey")}</h1>
         </div>
 
         {/* Default survey warning */}
         {draft.is_default && (
           <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
             <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-            <span>You are editing the default survey. It cannot be deleted.</span>
+            <span>{t("surveysDefaultWarning")}</span>
           </div>
         )}
 
         {/* Survey details */}
         <div className="bg-card border border-border rounded-xl p-5 space-y-4">
           <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Title *</label>
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t("surveysFormTitle")}</label>
             <input
               type="text"
               value={draft.title}
               onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-              placeholder="Survey title"
+              placeholder={t("surveysFormTitlePlaceholder")}
               className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-[#0F510F]"
             />
           </div>
           <div className="space-y-1">
-            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Description (optional)</label>
+            <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t("surveysFormDescription")}</label>
             <textarea
               rows={2}
               value={draft.description}
               onChange={(e) => setDraft({ ...draft, description: e.target.value })}
-              placeholder="Brief description shown to customers"
+              placeholder={t("surveysFormDescPlaceholder")}
               className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-[#0F510F] resize-none"
             />
           </div>
@@ -409,11 +411,11 @@ export default function SurveysTab() {
 
         {/* Questions */}
         <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-foreground">Questions ({draft.questions.length})</h2>
+          <h2 className="text-sm font-semibold text-foreground">{t("surveysFormQuestions")} ({draft.questions.length})</h2>
 
           {draft.questions.length === 0 && (
             <div className="bg-card border border-dashed border-border rounded-xl p-8 text-center text-sm text-muted-foreground">
-              No questions yet. Click "Add Question" below.
+              {t("surveysFormNoQuestions")}
             </div>
           )}
 
@@ -426,11 +428,11 @@ export default function SurveysTab() {
                     type="text"
                     value={q.question_text}
                     onChange={(e) => updateQ(q._key, { question_text: e.target.value })}
-                    placeholder="Question text"
+                    placeholder={t("surveysQuestionPlaceholder")}
                     className="w-full border border-border rounded-lg px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-[#0F510F]"
                   />
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs text-muted-foreground">Type:</span>
+                    <span className="text-xs text-muted-foreground">{t("surveysQuestionTypeLabel")}</span>
                     {(Object.keys(TYPE_LABELS) as QuestionType[]).map((t) => (
                       <button
                         key={t}
@@ -465,7 +467,7 @@ export default function SurveysTab() {
             onClick={addQuestion}
             className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-[#0F510F]/30 text-[#0F510F] rounded-xl py-3 text-sm font-medium hover:border-[#0F510F]/60 hover:bg-[#0F510F]/5 transition-colors"
           >
-            <Plus className="w-4 h-4" /> Add Question
+            <Plus className="w-4 h-4" /> {t("surveysBtnAddQuestion")}
           </button>
         </div>
 
@@ -473,14 +475,14 @@ export default function SurveysTab() {
 
         <div className="flex gap-3 pb-8">
           <button onClick={() => setView("list")} className="px-5 py-2.5 rounded-lg border border-border text-sm font-medium text-muted-foreground hover:bg-muted transition-colors">
-            Cancel
+            {t("surveysBtnCancel")}
           </button>
           <button
             onClick={saveDraft}
             disabled={saving || !draft.title.trim()}
             className="flex-1 bg-[#0F510F] text-white px-5 py-2.5 rounded-lg text-sm font-medium hover:bg-[#0d4510] disabled:opacity-60 transition-colors"
           >
-            {saving ? "Saving…" : "Save Survey"}
+            {saving ? t("saving") : t("surveysBtnSave")}
           </button>
         </div>
       </div>
@@ -496,7 +498,7 @@ export default function SurveysTab() {
           <ArrowLeft className="w-4 h-4" />
         </button>
         <h1 className="text-xl font-bold text-foreground">
-          Results: {resultSurveyTitle}
+          {t("surveysResults")} {resultSurveyTitle}
         </h1>
       </div>
 
@@ -511,9 +513,9 @@ export default function SurveysTab() {
           {/* Summary cards */}
           <div className="grid grid-cols-3 gap-3">
             {[
-              { label: "Total Sent", value: results.total_sent },
-              { label: "Total Submitted", value: results.total_submitted },
-              { label: "Response Rate", value: `${results.response_rate}%` },
+              { label: t("surveysResultsTotalSent"), value: results.total_sent },
+              { label: t("surveysResultsTotalSubmitted"), value: results.total_submitted },
+              { label: t("surveysResultsResponseRate"), value: `${results.response_rate}%` },
             ].map((c) => (
               <div key={c.label} className="bg-card border border-border rounded-xl p-4 text-center">
                 <p className="text-2xl font-bold text-foreground">{c.value}</p>
@@ -533,7 +535,7 @@ export default function SurveysTab() {
               {q.question_type === "rating" && (
                 <div className="space-y-2">
                   <p className="text-xs text-muted-foreground">
-                    Average: <span className="text-foreground font-bold text-lg">{q.avg_score ?? "—"}</span>
+                    {t("surveysResultsAverage")} <span className="text-foreground font-bold text-lg">{q.avg_score ?? "—"}</span>
                     <span className="text-muted-foreground"> / 5</span>
                   </p>
                   {[5, 4, 3, 2, 1].map((n) => {
@@ -582,7 +584,7 @@ export default function SurveysTab() {
               {q.question_type === "free_text" && (
                 <div className="max-h-52 overflow-y-auto space-y-2">
                   {(q.answers ?? []).length === 0 ? (
-                    <p className="text-xs text-muted-foreground">No responses yet.</p>
+                    <p className="text-xs text-muted-foreground">{t("surveysResultsNoResponses")}</p>
                   ) : (
                     (q.answers as string[]).map((a, i) => (
                       <p key={i} className="text-sm text-foreground bg-muted/40 rounded-lg px-3 py-2 leading-snug">"{a}"</p>
@@ -597,14 +599,14 @@ export default function SurveysTab() {
           {results.per_agent.length > 0 && (
             <div className="bg-card border border-border rounded-xl overflow-hidden">
               <div className="px-5 py-3 border-b border-border bg-muted/40">
-                <h3 className="text-sm font-semibold text-foreground">Agent Satisfaction Breakdown</h3>
+                <h3 className="text-sm font-semibold text-foreground">{t("surveysResultsAgentSatisfaction")}</h3>
               </div>
               <table className="w-full text-sm">
                 <thead className="bg-muted/30">
                   <tr className="border-b border-border">
-                    <th className="text-left px-5 py-2.5 text-muted-foreground font-medium">Agent Name</th>
-                    <th className="text-center px-4 py-2.5 text-muted-foreground font-medium">Chats Handled</th>
-                    <th className="text-center px-4 py-2.5 text-muted-foreground font-medium">Avg Rating</th>
+                    <th className="text-left px-5 py-2.5 text-muted-foreground font-medium">{t("agentsColAgentName")}</th>
+                    <th className="text-center px-4 py-2.5 text-muted-foreground font-medium">{t("surveysResultsChatsHandled")}</th>
+                    <th className="text-center px-4 py-2.5 text-muted-foreground font-medium">{t("surveysResultsAvgRating")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -634,14 +636,14 @@ export default function SurveysTab() {
           <div className="hidden sm:block">
             <span className="font-semibold text-sm text-white/90">WAK Solutions</span>
             <span className="text-white/40 mx-2">—</span>
-            <span className="text-sm text-white/70">Surveys</span>
+            <span className="text-sm text-white/70">{t("surveys")}</span>
           </div>
         </div>
         <Link href="/">
           <a className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white transition-colors px-3 py-1.5 rounded-md hover:bg-white/10">
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Back to Inbox</span>
-            <span className="sm:hidden">Back</span>
+            <span className="hidden sm:inline">{t("backToInbox")}</span>
+            <span className="sm:hidden">{t("back")}</span>
           </a>
         </Link>
       </header>

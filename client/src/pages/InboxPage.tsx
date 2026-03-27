@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useLocation, Link } from "wouter";
 import { ArrowLeft, Inbox, User, Users, Clock, RefreshCw, Calendar, Video, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { useLanguage } from "@/lib/language-context";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -41,38 +42,40 @@ function formatKsa(iso: string): string {
 }
 
 function ChatStatusBadge({ status, agentName }: { status: string; agentName?: string | null }) {
+  const { t } = useLanguage();
   if (status === "in_progress") return (
     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
       <Clock className="w-2.5 h-2.5" />
-      In Progress{agentName ? ` · ${agentName}` : ""}
+      {t("statusInProgress")}{agentName ? ` · ${agentName}` : ""}
     </span>
   );
   if (status === "closed" || status === "resolved") return (
     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-[#0F510F]/10 text-[#0F510F]">
-      Resolved
+      {t("statusResolved")}
     </span>
   );
   return (
     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground">
-      Open
+      {t("statusOpen")}
     </span>
   );
 }
 
 function MeetingStatusBadge({ status }: { status: string }) {
+  const { t } = useLanguage();
   if (status === "in_progress") return (
     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-      <Clock className="w-2.5 h-2.5" /> In Progress
+      <Clock className="w-2.5 h-2.5" /> {t("statusInProgress")}
     </span>
   );
   if (status === "completed") return (
     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-[#0F510F]/10 text-[#0F510F]">
-      Completed
+      {t("statusCompleted")}
     </span>
   );
   return (
     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-      <Calendar className="w-2.5 h-2.5" /> Upcoming
+      <Calendar className="w-2.5 h-2.5" /> {t("statusUpcoming")}
     </span>
   );
 }
@@ -80,6 +83,7 @@ function MeetingStatusBadge({ status }: { status: string }) {
 // ── Meeting detail modal ──────────────────────────────────────────────────────
 
 function MeetingModal({ item, onClose }: { item: InboxItem; onClose: () => void }) {
+  const { t } = useLanguage();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
       <div
@@ -89,7 +93,7 @@ function MeetingModal({ item, onClose }: { item: InboxItem; onClose: () => void 
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
             <Calendar className="w-5 h-5 text-blue-600" />
-            <h3 className="text-base font-semibold text-foreground">Meeting Details</h3>
+            <h3 className="text-base font-semibold text-foreground">{t("inboxMeetingDetails")}</h3>
           </div>
           <button
             onClick={onClose}
@@ -102,24 +106,24 @@ function MeetingModal({ item, onClose }: { item: InboxItem; onClose: () => void 
         <div className="space-y-4">
           <div className="bg-muted/50 rounded-xl p-4 space-y-3">
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">Customer</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">{t("inboxCustomer")}</p>
               <p className="text-sm font-semibold font-mono text-foreground">{item.customer_phone}</p>
             </div>
             {item.meeting_scheduled_at && (
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">Date & Time (KSA)</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">{t("inboxDateTime")}</p>
                 <p className="text-sm font-semibold text-foreground">{formatKsa(item.meeting_scheduled_at)}</p>
               </div>
             )}
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">Status</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">{t("inboxStatus")}</p>
               <MeetingStatusBadge status={item.meeting_status ?? "pending"} />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">Assigned Agent</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">{t("inboxAssignedAgent")}</p>
               {item.meeting_agent_name
                 ? <p className="text-sm text-foreground">{item.meeting_agent_name}</p>
-                : <p className="text-sm text-muted-foreground italic">Unassigned</p>}
+                : <p className="text-sm text-muted-foreground italic">{t("inboxUnassigned")}</p>}
             </div>
           </div>
 
@@ -131,7 +135,7 @@ function MeetingModal({ item, onClose }: { item: InboxItem; onClose: () => void 
               className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition-colors"
             >
               <Video className="w-4 h-4" />
-              Join Meeting
+              {t("inboxJoinMeeting")}
             </a>
           )}
         </div>
@@ -153,6 +157,7 @@ function ChatCard({
   action: React.ReactNode;
   onMeetingClick?: () => void;
 }) {
+  const { t } = useLanguage();
   return (
     <div className="bg-white border border-border rounded-xl px-4 py-3 hover:bg-muted/30 transition-colors">
       <div className="flex items-center gap-3">
@@ -171,7 +176,7 @@ function ChatCard({
             <Clock className="w-3 h-3 text-muted-foreground" />
             <span className="text-xs text-muted-foreground">{timeAgo(item.created_at)}</span>
             {showAgent && !item.assigned_agent_name && (
-              <span className="text-xs text-muted-foreground italic">Unassigned</span>
+              <span className="text-xs text-muted-foreground italic">{t("inboxUnassigned")}</span>
             )}
           </div>
         </div>
@@ -185,7 +190,7 @@ function ChatCard({
           className="mt-2 ml-12 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-700 font-medium hover:bg-blue-100 transition-colors"
         >
           <Calendar className="w-3 h-3" />
-          Meeting · {formatKsa(item.meeting_scheduled_at)}
+          {t("inboxMeeting")} · {formatKsa(item.meeting_scheduled_at)}
         </button>
       )}
     </div>
@@ -203,6 +208,7 @@ function MeetingCard({
   showAgent?: boolean;
   onView: () => void;
 }) {
+  const { t } = useLanguage();
   return (
     <div className="bg-white border border-blue-200 rounded-xl px-4 py-3 flex items-center gap-3 hover:bg-blue-50/40 transition-colors">
       <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
@@ -212,7 +218,7 @@ function MeetingCard({
         <div className="flex items-center gap-2 flex-wrap">
           <p className="text-sm font-semibold text-foreground font-mono">{item.customer_phone}</p>
           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-            <Calendar className="w-2.5 h-2.5" /> Meeting
+            <Calendar className="w-2.5 h-2.5" /> {t("inboxMeeting")}
           </span>
           <MeetingStatusBadge status={item.meeting_status ?? "pending"} />
         </div>
@@ -221,7 +227,7 @@ function MeetingCard({
         )}
         {showAgent && (
           <p className="text-xs text-muted-foreground mt-0.5">
-            {item.meeting_agent_name ?? <span className="italic">Unassigned</span>}
+            {item.meeting_agent_name ?? <span className="italic">{t("inboxUnassigned")}</span>}
           </p>
         )}
       </div>
@@ -230,7 +236,7 @@ function MeetingCard({
           onClick={onView}
           className="px-3 py-1.5 text-xs font-semibold border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors"
         >
-          View
+          {t("inboxView")}
         </button>
       </div>
     </div>
@@ -249,6 +255,7 @@ export default function InboxPage() {
   const [claiming, setClaiming] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [meetingModal, setMeetingModal] = useState<InboxItem | null>(null);
+  const { t } = useLanguage();
 
   useEffect(() => {
     if (!isAuthLoading && !isAuthenticated) setLocation("/login");
@@ -290,12 +297,12 @@ export default function InboxPage() {
       });
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        setError(body.message || "Failed to claim chat");
+        setError(body.message || t("inboxClaimError"));
       } else {
         await fetchData();
       }
     } catch (_) {
-      setError("Network error");
+      setError(t("inboxNetworkError"));
     } finally {
       setClaiming(null);
     }
@@ -318,9 +325,9 @@ export default function InboxPage() {
   );
 
   const tabs: { key: Tab; label: string; count: number; show: boolean }[] = [
-    { key: "shared", label: "Shared Inbox", count: sharedItems.length, show: true },
-    { key: "mine",   label: "My Chats",     count: myItems.length,    show: true },
-    { key: "all",    label: "All",           count: items.length,      show: isAdmin },
+    { key: "shared", label: t("inboxTabShared"), count: sharedItems.length, show: true },
+    { key: "mine",   label: t("inboxTabMy"),     count: myItems.length,    show: true },
+    { key: "all",    label: t("inboxTabAll"),     count: items.length,      show: isAdmin },
   ];
 
   const activeItems =
@@ -335,7 +342,7 @@ export default function InboxPage() {
           <img src="/logo.png" alt="WAK Solutions" className="h-[36px] shrink-0" />
           <span className="hidden sm:block font-semibold text-sm text-white/90">WAK Solutions</span>
           <span className="hidden sm:block text-white/40">—</span>
-          <span className="hidden sm:block text-sm text-white/70">Inbox</span>
+          <span className="hidden sm:block text-sm text-white/70">{t("inboxTitle")}</span>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -348,7 +355,7 @@ export default function InboxPage() {
           <Link href="/">
             <a className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white transition-colors px-3 py-1.5 rounded-md hover:bg-white/10">
               <ArrowLeft className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Dashboard</span>
+              <span className="hidden sm:inline">{t("dashboard")}</span>
             </a>
           </Link>
         </div>
@@ -357,27 +364,27 @@ export default function InboxPage() {
       <main className="flex-1 w-full max-w-3xl mx-auto px-4 py-6 space-y-4">
         <div className="flex items-center gap-2">
           <Inbox className="w-5 h-5 text-[#0F510F]" />
-          <h1 className="text-xl font-bold text-foreground">Inbox</h1>
+          <h1 className="text-xl font-bold text-foreground">{t("inboxTitle")}</h1>
         </div>
 
         {/* Tabs */}
         <div className="flex gap-1 bg-muted p-1 rounded-xl w-fit">
-          {tabs.filter(t => t.show).map(t => (
+          {tabs.filter(tb => tb.show).map(tb => (
             <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
+              key={tb.key}
+              onClick={() => setTab(tb.key)}
               className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                tab === t.key
+                tab === tb.key
                   ? "bg-white shadow-sm text-foreground"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {t.key === "all" ? <Users className="w-3.5 h-3.5" /> : <Inbox className="w-3.5 h-3.5" />}
-              {t.label}
+              {tb.key === "all" ? <Users className="w-3.5 h-3.5" /> : <Inbox className="w-3.5 h-3.5" />}
+              {tb.label}
               <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${
-                tab === t.key ? "bg-[#0F510F] text-white" : "bg-muted-foreground/20 text-muted-foreground"
+                tab === tb.key ? "bg-[#0F510F] text-white" : "bg-muted-foreground/20 text-muted-foreground"
               }`}>
-                {t.count}
+                {tb.count}
               </span>
             </button>
           ))}
@@ -393,9 +400,9 @@ export default function InboxPage() {
             <div className="bg-card border border-border rounded-xl flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
               <Inbox className="w-10 h-10 opacity-30" />
               <p className="text-sm">
-                {tab === "shared" ? "Nothing in the shared inbox" :
-                 tab === "mine"   ? "Nothing assigned to you" :
-                 "No items"}
+                {tab === "shared" ? t("inboxEmptyShared") :
+                 tab === "mine"   ? t("inboxEmptyMy") :
+                 t("inboxEmptyAll")}
               </p>
             </div>
           ) : (
@@ -420,12 +427,12 @@ export default function InboxPage() {
                         disabled={claiming === item.customer_phone}
                         className="px-3 py-1.5 text-xs font-semibold bg-[#0F510F] text-white rounded-lg hover:bg-[#0d4510] disabled:opacity-50 transition-colors"
                       >
-                        {claiming === item.customer_phone ? "Claiming…" : "Claim"}
+                        {claiming === item.customer_phone ? t("inboxClaiming") : t("inboxClaim")}
                       </button>
                     ) : (
                       <Link href={`/?phone=${encodeURIComponent(item.customer_phone)}`}>
                         <a className="px-3 py-1.5 text-xs font-semibold border border-[#0F510F]/30 text-[#0F510F] rounded-lg hover:bg-[#0F510F]/5 transition-colors">
-                          Open
+                          {t("inboxOpen")}
                         </a>
                       </Link>
                     )

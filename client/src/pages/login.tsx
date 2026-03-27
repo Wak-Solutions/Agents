@@ -3,6 +3,7 @@ import { useLocation } from "wouter";
 import { MessageSquareQuote, Lock, Fingerprint, Mail } from "lucide-react";
 import { useAuth, useLogin } from "@/hooks/use-auth";
 import { Card, Input, Button } from "@/components/ui-elements";
+import { useLanguage } from "@/lib/language-context";
 import {
   startRegistration,
   startAuthentication,
@@ -18,6 +19,7 @@ export default function Login() {
   const [biometricRegistered, setBiometricRegistered] = useState(false);
   const [biometricError, setBiometricError] = useState("");
   const [biometricPending, setBiometricPending] = useState(false);
+  const { t } = useLanguage();
 
   useEffect(() => {
     if (isAuthenticated && !isAuthLoading) {
@@ -44,7 +46,7 @@ export default function Login() {
     setBiometricPending(true);
     try {
       const optRes = await fetch('/api/auth/webauthn/login/options', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-      if (!optRes.ok) throw new Error("No biometric registered on this device");
+      if (!optRes.ok) throw new Error(t("loginErrorNoBiometric"));
       const options = await optRes.json();
       const assertion = await startAuthentication({ optionsJSON: options });
       const verifyRes = await fetch('/api/auth/webauthn/login/verify', {
@@ -53,10 +55,10 @@ export default function Login() {
         body: JSON.stringify(assertion),
         credentials: 'include',
       });
-      if (!verifyRes.ok) throw new Error("Biometric verification failed");
+      if (!verifyRes.ok) throw new Error(t("loginErrorBiometricFailed"));
       setLocation("/");
     } catch (e: any) {
-      setBiometricError(e.message || "Biometric login failed");
+      setBiometricError(e.message || t("loginErrorBiometricLogin"));
     } finally {
       setBiometricPending(false);
     }
@@ -96,7 +98,7 @@ export default function Login() {
             className="w-[180px] mb-4"
           />
           <h1 className="text-xl font-bold text-foreground tracking-tight">WAK Solutions</h1>
-          <p className="text-sm text-muted-foreground mt-1">Your Strategic AI Partner</p>
+          <p className="text-sm text-muted-foreground mt-1">{t("loginTagline")}</p>
         </div>
 
         <Card className="p-8 shadow-lg">
@@ -107,8 +109,8 @@ export default function Login() {
             >
               <MessageSquareQuote className="w-7 h-7 text-white" />
             </div>
-            <h2 className="text-lg font-semibold text-foreground">Agent Dashboard</h2>
-            <p className="text-sm text-muted-foreground mt-1">Sign in to manage escalations</p>
+            <h2 className="text-lg font-semibold text-foreground">{t("loginTitle")}</h2>
+            <p className="text-sm text-muted-foreground mt-1">{t("loginSubtitle")}</p>
           </div>
 
           {/* Biometric login button */}
@@ -121,14 +123,14 @@ export default function Login() {
                 className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl border-2 border-primary/20 bg-primary/5 hover:bg-primary/10 transition-all text-sm font-medium text-primary disabled:opacity-50"
               >
                 <Fingerprint className="w-5 h-5" />
-                {biometricPending ? "Verifying..." : "Sign in with Face ID / Fingerprint"}
+                {biometricPending ? t("loginVerifying") : t("loginSignInBiometric")}
               </button>
               {biometricError && (
                 <p className="text-sm text-destructive mt-2 text-center">{biometricError}</p>
               )}
               <div className="flex items-center gap-3 mt-5 mb-1">
                 <div className="flex-1 h-px bg-border" />
-                <span className="text-xs text-muted-foreground">or use password</span>
+                <span className="text-xs text-muted-foreground">{t("loginDivider")}</span>
                 <div className="flex-1 h-px bg-border" />
               </div>
             </div>
@@ -138,11 +140,11 @@ export default function Login() {
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-foreground flex items-center gap-2">
                 <Mail className="w-3.5 h-3.5 text-muted-foreground" />
-                Email <span className="text-xs text-muted-foreground font-normal">(leave blank for admin)</span>
+                {t("loginEmail")} <span className="text-xs text-muted-foreground font-normal">{t("loginEmailHint")}</span>
               </label>
               <Input
                 type="email"
-                placeholder="agent@wak-solutions.com"
+                placeholder={t("loginEmailPlaceholder")}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 disabled={isPending}
@@ -152,12 +154,12 @@ export default function Login() {
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-foreground flex items-center gap-2">
                 <Lock className="w-3.5 h-3.5 text-muted-foreground" />
-                Password
+                {t("loginPassword")}
               </label>
               <Input
                 data-testid="input-password"
                 type="password"
-                placeholder="Enter your password..."
+                placeholder={t("loginPasswordPlaceholder")}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={isPending}
@@ -168,7 +170,7 @@ export default function Login() {
                   data-testid="text-error"
                   className="text-sm text-destructive animate-in fade-in slide-in-from-top-1 pt-1"
                 >
-                  {error.message || "Invalid credentials. Please try again."}
+                  {error.message || t("loginErrorCredentials")}
                 </p>
               )}
             </div>
@@ -181,13 +183,13 @@ export default function Login() {
               isLoading={isPending}
               disabled={!password || isPending}
             >
-              Sign In
+              {t("loginSignIn")}
             </Button>
           </form>
         </Card>
 
         <p className="text-center text-xs text-muted-foreground mt-6">
-          WAK Solutions Agent Portal &copy; {new Date().getFullYear()}
+          {t("loginCopyright")} &copy; {new Date().getFullYear()}
         </p>
       </div>
     </div>

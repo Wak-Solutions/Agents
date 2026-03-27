@@ -2,6 +2,7 @@ import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { MessageSquare, Inbox } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/lib/language-context";
 import type { Conversation } from "@shared/schema";
 
 type Filter = 'all' | 'open' | 'closed';
@@ -14,6 +15,7 @@ interface SidebarProps {
 
 export function Sidebar({ conversations, selectedPhone, onSelect }: SidebarProps) {
   const [filter, setFilter] = useState<Filter>('all');
+  const { t } = useLanguage();
 
   const activeConversations = conversations.filter(c => c.escalation_status !== 'closed');
   const visible = filter === 'all' ? conversations
@@ -21,9 +23,9 @@ export function Sidebar({ conversations, selectedPhone, onSelect }: SidebarProps
     : conversations.filter(c => c.escalation_status === 'closed');
 
   const tabs: { key: Filter; label: string }[] = [
-    { key: 'all', label: 'All' },
-    { key: 'open', label: 'Active' },
-    { key: 'closed', label: 'Resolved' },
+    { key: 'all', label: t('sidebarFilterAll') },
+    { key: 'open', label: t('sidebarFilterActive') },
+    { key: 'closed', label: t('sidebarFilterResolved') },
   ];
 
   return (
@@ -33,8 +35,8 @@ export function Sidebar({ conversations, selectedPhone, onSelect }: SidebarProps
           <Inbox className="w-5 h-5" />
         </div>
         <div>
-          <h2 className="font-semibold text-foreground">Inbox</h2>
-          <p className="text-xs text-muted-foreground">{activeConversations.length} active conversations</p>
+          <h2 className="font-semibold text-foreground">{t('sidebarInbox')}</h2>
+          <p className="text-xs text-muted-foreground">{activeConversations.length} {t('sidebarActiveConversations')}</p>
         </div>
       </div>
 
@@ -60,7 +62,7 @@ export function Sidebar({ conversations, selectedPhone, onSelect }: SidebarProps
         {visible.length === 0 ? (
           <div className="p-4 text-center text-muted-foreground text-sm mt-10">
             <MessageSquare className="w-8 h-8 mx-auto mb-3 opacity-20" />
-            No conversations
+            {t('sidebarNoConversations')}
           </div>
         ) : (
           visible.map(conv => (

@@ -2,15 +2,9 @@ import { useState, useEffect, useCallback } from "react";
 import { useLocation, Link } from "wouter";
 import { ArrowLeft, Plus, UserCheck, UserX, KeyRound, Edit2, Users, RefreshCw, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { useLanguage } from "@/lib/language-context";
 
 type Period = "today" | "week" | "month" | "all";
-
-const PERIODS: { key: Period; label: string; sub: string }[] = [
-  { key: "today", label: "Today",      sub: "Today" },
-  { key: "week",  label: "This Week",  sub: "This Week" },
-  { key: "month", label: "This Month", sub: "This Month" },
-  { key: "all",   label: "All Time",   sub: "All Time" },
-];
 
 interface Agent {
   id: number;
@@ -62,6 +56,14 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 export default function AgentsTab() {
   const [, setLocation] = useLocation();
   const { isAuthenticated, isLoading: isAuthLoading, isAdmin } = useAuth();
+  const { t } = useLanguage();
+
+  const PERIODS: { key: Period; label: string; sub: string }[] = [
+    { key: "today", label: t("periodToday"),     sub: t("periodToday") },
+    { key: "week",  label: t("periodThisWeek"),  sub: t("periodThisWeek") },
+    { key: "month", label: t("periodThisMonth"), sub: t("periodThisMonth") },
+    { key: "all",   label: t("periodAllTime"),   sub: t("periodAllTime") },
+  ];
 
   const [period, setPeriod] = useState<Period>("all");
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -103,7 +105,7 @@ export default function AgentsTab() {
       if (aRes.ok) setAgents(await aRes.json());
       if (wRes.ok) setWorkload(await wRes.json());
     } catch (_) {
-      setError("Failed to load agents");
+      setError(t("agentsErrorLoad"));
     } finally {
       setLoading(false);
     }
@@ -136,7 +138,7 @@ export default function AgentsTab() {
       fetchAll();
     } else {
       const b = await res.json().catch(() => ({}));
-      setError(b.message || "Failed to update agent");
+      setError(b.message || t("agentsErrorUpdate"));
     }
   };
 
@@ -150,12 +152,12 @@ export default function AgentsTab() {
         body: JSON.stringify(newAgent),
       });
       const body = await res.json();
-      if (!res.ok) { setNewError(body.message || "Failed to create agent"); return; }
+      if (!res.ok) { setNewError(body.message || t("agentsErrorCreate")); return; }
       setCreatedPassword(newAgent.password);
       setNewAgent({ name: "", email: "", password: "", role: "agent" });
       fetchAll();
     } catch (_) {
-      setNewError("Network error");
+      setNewError(t("agentsErrorNetwork"));
     } finally {
       setNewSaving(false);
     }
@@ -171,11 +173,11 @@ export default function AgentsTab() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editForm),
       });
-      if (!res.ok) { const b = await res.json(); setEditError(b.message || "Failed"); return; }
+      if (!res.ok) { const b = await res.json(); setEditError(b.message || t("agentsErrorUpdate")); return; }
       setEditAgent(null);
       fetchAll();
     } catch (_) {
-      setEditError("Network error");
+      setEditError(t("agentsErrorNetwork"));
     } finally {
       setEditSaving(false);
     }
@@ -191,10 +193,10 @@ export default function AgentsTab() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ new_password: newPw }),
       });
-      if (!res.ok) { const b = await res.json(); setResetError(b.message || "Failed"); return; }
+      if (!res.ok) { const b = await res.json(); setResetError(b.message || t("agentsErrorUpdate")); return; }
       setResetAgent(null); setNewPw("");
     } catch (_) {
-      setResetError("Network error");
+      setResetError(t("agentsErrorNetwork"));
     } finally {
       setResetSaving(false);
     }
@@ -213,7 +215,7 @@ export default function AgentsTab() {
           <img src="/logo.png" alt="WAK Solutions" className="h-[36px] shrink-0" />
           <span className="hidden sm:block font-semibold text-sm text-white/90">WAK Solutions</span>
           <span className="hidden sm:block text-white/40">—</span>
-          <span className="hidden sm:block text-sm text-white/70">Agents</span>
+          <span className="hidden sm:block text-sm text-white/70">{t("agentsTitle")}</span>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={() => fetchAll(period)} title="Refresh" className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white px-3 py-1.5 rounded-md hover:bg-white/10 transition-colors">
@@ -221,7 +223,7 @@ export default function AgentsTab() {
           </button>
           <Link href="/"><a className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white transition-colors px-3 py-1.5 rounded-md hover:bg-white/10">
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Dashboard</span>
+            <span className="hidden sm:inline">{t("dashboard")}</span>
           </a></Link>
         </div>
       </header>
@@ -233,14 +235,14 @@ export default function AgentsTab() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Users className="w-5 h-5 text-[#0F510F]" />
-              <h1 className="text-xl font-bold text-foreground">Agents</h1>
+              <h1 className="text-xl font-bold text-foreground">{t("agentsTitle")}</h1>
             </div>
             <button
               onClick={() => { setCreatedPassword(null); setNewError(""); setShowNewModal(true); }}
               className="flex items-center gap-1.5 px-4 py-2 bg-[#0F510F] text-white rounded-xl text-sm font-semibold hover:bg-[#0d4510] transition-colors"
             >
               <Plus className="w-4 h-4" />
-              New Agent
+              {t("agentsNewAgent")}
             </button>
           </div>
 
@@ -272,18 +274,18 @@ export default function AgentsTab() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/50">
-                    <th className="text-left px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Agent</th>
-                    <th className="text-left px-2 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-28">Role / Status</th>
+                    <th className="text-left px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t("agentsColAgent")}</th>
+                    <th className="text-left px-2 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-28">{t("agentsColRoleStatus")}</th>
                     <th className="text-center px-2 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-20">
-                      <span className="block">Chats Resolved</span>
+                      <span className="block">{t("agentsColChatsResolved")}</span>
                       {period !== "all" && (
                         <span className="block normal-case font-normal text-muted-foreground/60">{PERIODS.find(p => p.key === period)!.sub}</span>
                       )}
                     </th>
-                    <th className="text-center px-2 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-20">Meetings</th>
-                    <th className="text-center px-2 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-16">Rating</th>
-                    <th className="hidden md:table-cell text-left px-2 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-28">Last Login</th>
-                    <th className="text-right px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-24 xl:w-32">Actions</th>
+                    <th className="text-center px-2 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-20">{t("agentsColMeetings")}</th>
+                    <th className="text-center px-2 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-16">{t("agentsColRating")}</th>
+                    <th className="hidden md:table-cell text-left px-2 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-28">{t("agentsColLastLogin")}</th>
+                    <th className="text-right px-3 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide w-24 xl:w-32">{t("agentsColActions")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -301,7 +303,7 @@ export default function AgentsTab() {
                             {agent.role}
                           </Badge>
                           <Badge color={agent.is_active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}>
-                            {agent.is_active ? "Active" : "Inactive"}
+                            {agent.is_active ? t("statusActive") : t("statusInactive")}
                           </Badge>
                         </div>
                       </td>
@@ -333,7 +335,7 @@ export default function AgentsTab() {
                       <td className="hidden md:table-cell px-2 py-3 text-muted-foreground text-xs whitespace-nowrap">
                         {agent.last_login
                           ? new Date(agent.last_login).toLocaleDateString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
-                          : "Never"}
+                          : t("agentsNever")}
                       </td>
                       {/* Actions: icon-only on <xl, stacked with labels on xl+ */}
                       <td className="px-3 py-3">
@@ -344,30 +346,30 @@ export default function AgentsTab() {
                             className="flex items-center gap-1 px-1.5 py-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                           >
                             <Edit2 className="w-3.5 h-3.5 flex-shrink-0" />
-                            <span className="hidden xl:inline text-xs">Edit</span>
+                            <span className="hidden xl:inline text-xs">{t("agentsBtnEdit")}</span>
                           </button>
                           <button
                             onClick={() => { setResetAgent(agent); setNewPw(""); setResetError(""); }}
-                            title="Reset password"
+                            title={t("agentsBtnReset")}
                             className="flex items-center gap-1 px-1.5 py-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                           >
                             <KeyRound className="w-3.5 h-3.5 flex-shrink-0" />
-                            <span className="hidden xl:inline text-xs">Reset</span>
+                            <span className="hidden xl:inline text-xs">{t("agentsBtnReset")}</span>
                           </button>
                           <button
                             onClick={() => toggleActive(agent)}
-                            title={agent.is_active ? "Deactivate" : "Activate"}
+                            title={agent.is_active ? t("agentsBtnDeactivate") : t("agentsBtnActivate")}
                             className={`flex items-center gap-1 px-1.5 py-1 rounded-lg transition-colors ${agent.is_active ? "text-red-500 hover:bg-red-50" : "text-green-600 hover:bg-green-50"}`}
                           >
                             {agent.is_active ? <UserX className="w-3.5 h-3.5 flex-shrink-0" /> : <UserCheck className="w-3.5 h-3.5 flex-shrink-0" />}
-                            <span className="hidden xl:inline text-xs">{agent.is_active ? "Deactivate" : "Activate"}</span>
+                            <span className="hidden xl:inline text-xs">{agent.is_active ? t("agentsBtnDeactivate") : t("agentsBtnActivate")}</span>
                           </button>
                         </div>
                       </td>
                     </tr>
                   ))}
                   {agents.length === 0 && (
-                    <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground text-sm">No agents yet</td></tr>
+                    <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground text-sm">{t("agentsNoAgents")}</td></tr>
                   )}
                 </tbody>
               </table>
@@ -377,13 +379,13 @@ export default function AgentsTab() {
 
         {/* Section B — Workload */}
         <section className="space-y-3 pb-8">
-          <h2 className="text-base font-semibold text-foreground">Workload Overview</h2>
+          <h2 className="text-base font-semibold text-foreground">{t("agentsWorkloadOverview")}</h2>
           <div className="bg-card border border-border rounded-xl overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/50">
-                    {["Agent", "Active Chats", "Resolved Today", "Resolved This Week", "Total Resolved", "Meetings Done"].map(h => (
+                    {[t("agentsColAgentName"), t("agentsColActiveChats"), t("agentsColResolvedToday"), t("agentsColResolvedWeek"), t("agentsColTotalResolved"), t("agentsColMeetingsDone")].map(h => (
                       <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">{h}</th>
                     ))}
                   </tr>
@@ -393,7 +395,7 @@ export default function AgentsTab() {
                     <tr key={row.agent_id} className="hover:bg-muted/30 transition-colors">
                       <td className="px-4 py-3 font-medium text-foreground flex items-center gap-2">
                         {row.name}
-                        {!row.is_active && <Badge color="bg-gray-100 text-gray-400">inactive</Badge>}
+                        {!row.is_active && <Badge color="bg-gray-100 text-gray-400">{t("agentsStatusInactive")}</Badge>}
                       </td>
                       <td className="px-4 py-3 text-center font-semibold text-foreground">{row.active_chats}</td>
                       <td className="px-4 py-3 text-center text-foreground">{row.resolved_today}</td>
@@ -403,7 +405,7 @@ export default function AgentsTab() {
                     </tr>
                   ))}
                   {workload.length === 0 && (
-                    <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground text-sm">No agents yet</td></tr>
+                    <tr><td colSpan={6} className="px-4 py-8 text-center text-muted-foreground text-sm">{t("agentsNoAgents")}</td></tr>
                   )}
                 </tbody>
               </table>
@@ -414,26 +416,26 @@ export default function AgentsTab() {
 
       {/* New Agent Modal */}
       {showNewModal && (
-        <Modal title="New Agent" onClose={() => setShowNewModal(false)}>
+        <Modal title={t("agentsModalNewTitle")} onClose={() => setShowNewModal(false)}>
           {createdPassword ? (
             <div className="space-y-4">
               <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-                <p className="text-sm font-semibold text-green-800 mb-1">Agent created successfully!</p>
-                <p className="text-xs text-green-700 mb-3">Share these credentials with the agent:</p>
+                <p className="text-sm font-semibold text-green-800 mb-1">{t("agentsCreatedSuccess")}</p>
+                <p className="text-xs text-green-700 mb-3">{t("agentsShareCredentials")}</p>
                 <p className="text-xs text-green-900 font-mono bg-green-100 rounded-lg px-3 py-2 break-all">
-                  Password: <strong>{createdPassword}</strong>
+                  {t("agentsPasswordLabel")} <strong>{createdPassword}</strong>
                 </p>
               </div>
               <button onClick={() => setShowNewModal(false)} className="w-full py-2.5 bg-[#0F510F] text-white rounded-xl text-sm font-semibold hover:bg-[#0d4510] transition-colors">
-                Done
+                {t("agentsBtnDone")}
               </button>
             </div>
           ) : (
             <form onSubmit={handleCreateAgent} className="space-y-4">
               {[
-                { label: "Full Name", key: "name", type: "text", placeholder: "Jane Smith" },
-                { label: "Email", key: "email", type: "email", placeholder: "jane@wak-solutions.com" },
-                { label: "Password", key: "password", type: "password", placeholder: "Min. 6 characters" },
+                { label: t("agentsFormFullName"), key: "name", type: "text", placeholder: t("agentsFormNamePlaceholder") },
+                { label: t("agentsFormEmail"), key: "email", type: "email", placeholder: t("agentsFormEmailPlaceholder") },
+                { label: t("agentsFormPassword"), key: "password", type: "password", placeholder: t("agentsFormPasswordPlaceholder") },
               ].map(f => (
                 <div key={f.key} className="space-y-1">
                   <label className="text-sm font-medium text-foreground">{f.label}</label>
@@ -449,19 +451,19 @@ export default function AgentsTab() {
                 </div>
               ))}
               <div className="space-y-1">
-                <label className="text-sm font-medium text-foreground">Role</label>
+                <label className="text-sm font-medium text-foreground">{t("agentsFormRole")}</label>
                 <select
                   value={newAgent.role}
                   onChange={e => setNewAgent(p => ({ ...p, role: e.target.value as "agent" | "admin" }))}
                   className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#0F510F]"
                 >
-                  <option value="agent">Agent</option>
-                  <option value="admin">Admin</option>
+                  <option value="agent">{t("agentsRoleOptionAgent")}</option>
+                  <option value="admin">{t("agentsRoleOptionAdmin")}</option>
                 </select>
               </div>
               {newError && <p className="text-sm text-destructive">{newError}</p>}
               <button type="submit" disabled={newSaving} className="w-full py-2.5 bg-[#0F510F] text-white rounded-xl text-sm font-semibold hover:bg-[#0d4510] disabled:opacity-60 transition-colors">
-                {newSaving ? "Creating…" : "Create Agent"}
+                {newSaving ? t("creating") : t("agentsBtnCreate")}
               </button>
             </form>
           )}
@@ -470,11 +472,11 @@ export default function AgentsTab() {
 
       {/* Edit Agent Modal */}
       {editAgent && (
-        <Modal title="Edit Agent" onClose={() => setEditAgent(null)}>
+        <Modal title={t("agentsModalEditTitle")} onClose={() => setEditAgent(null)}>
           <form onSubmit={handleEditSave} className="space-y-4">
             {[
-              { label: "Full Name", key: "name", type: "text" },
-              { label: "Email", key: "email", type: "email" },
+              { label: t("agentsFormFullName"), key: "name", type: "text" },
+              { label: t("agentsFormEmail"), key: "email", type: "email" },
             ].map(f => (
               <div key={f.key} className="space-y-1">
                 <label className="text-sm font-medium text-foreground">{f.label}</label>
@@ -487,19 +489,19 @@ export default function AgentsTab() {
               </div>
             ))}
             <div className="space-y-1">
-              <label className="text-sm font-medium text-foreground">Role</label>
+              <label className="text-sm font-medium text-foreground">{t("agentsFormRole")}</label>
               <select
                 value={editForm.role}
                 onChange={e => setEditForm(p => ({ ...p, role: e.target.value as "agent" | "admin" }))}
                 className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#0F510F]"
               >
-                <option value="agent">Agent</option>
-                <option value="admin">Admin</option>
+                <option value="agent">{t("agentsRoleOptionAgent")}</option>
+                <option value="admin">{t("agentsRoleOptionAdmin")}</option>
               </select>
             </div>
             {editError && <p className="text-sm text-destructive">{editError}</p>}
             <button type="submit" disabled={editSaving} className="w-full py-2.5 bg-[#0F510F] text-white rounded-xl text-sm font-semibold hover:bg-[#0d4510] disabled:opacity-60 transition-colors">
-              {editSaving ? "Saving…" : "Save Changes"}
+              {editSaving ? t("saving") : t("agentsBtnSave")}
             </button>
           </form>
         </Modal>
@@ -507,13 +509,13 @@ export default function AgentsTab() {
 
       {/* Reset Password Modal */}
       {resetAgent && (
-        <Modal title={`Reset Password — ${resetAgent.name}`} onClose={() => setResetAgent(null)}>
+        <Modal title={`${t("agentsModalResetTitle")} — ${resetAgent.name}`} onClose={() => setResetAgent(null)}>
           <form onSubmit={handleResetPassword} className="space-y-4">
             <div className="space-y-1">
-              <label className="text-sm font-medium text-foreground">New Password</label>
+              <label className="text-sm font-medium text-foreground">{t("agentsFormNewPassword")}</label>
               <input
                 type="password" required minLength={6}
-                placeholder="Min. 6 characters"
+                placeholder={t("agentsFormPasswordPlaceholder")}
                 value={newPw}
                 onChange={e => setNewPw(e.target.value)}
                 className="w-full border border-border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#0F510F]"
@@ -522,7 +524,7 @@ export default function AgentsTab() {
             </div>
             {resetError && <p className="text-sm text-destructive">{resetError}</p>}
             <button type="submit" disabled={resetSaving} className="w-full py-2.5 bg-[#0F510F] text-white rounded-xl text-sm font-semibold hover:bg-[#0d4510] disabled:opacity-60 transition-colors">
-              {resetSaving ? "Saving…" : "Set New Password"}
+              {resetSaving ? t("saving") : t("agentsBtnSetPassword")}
             </button>
           </form>
         </Modal>

@@ -3,6 +3,7 @@ import { format } from "date-fns";
 import { Send, CheckCircle2, User, Bot, HeadphonesIcon, Info, ArrowLeft, UserCheck } from "lucide-react";
 import { Button } from "./ui-elements";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/lib/language-context";
 import type { Message, Conversation } from "@shared/schema";
 import { useSendMessage, useMessages } from "@/hooks/use-messages";
 import { useCloseEscalation } from "@/hooks/use-escalations";
@@ -15,14 +16,16 @@ export function ChatArea({
   conversation: Conversation | null;
   onClose: () => void
 }) {
+  const { t } = useLanguage();
+
   if (!conversation) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center bg-background text-muted-foreground">
         <div className="w-16 h-16 bg-white rounded-2xl shadow-sm border border-border flex items-center justify-center mb-4">
           <HeadphonesIcon className="w-8 h-8 text-primary/40" />
         </div>
-        <h3 className="text-xl font-medium text-foreground mb-2">Select a conversation</h3>
-        <p className="text-sm">Choose a conversation from the sidebar to view messages and reply.</p>
+        <h3 className="text-xl font-medium text-foreground mb-2">{t("chatSelectConversation")}</h3>
+        <p className="text-sm">{t("chatSelectPrompt")}</p>
       </div>
     );
   }
@@ -43,6 +46,7 @@ function ActiveChat({ conversation, onClose }: { conversation: Conversation; onC
   const inputRef = useRef<HTMLInputElement>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [reassigning, setReassigning] = useState(false);
+  const { t } = useLanguage();
 
   useEffect(() => {
     if (isAdmin) {
@@ -83,7 +87,7 @@ function ActiveChat({ conversation, onClose }: { conversation: Conversation; onC
   };
 
   const handleClose = () => {
-    if (confirm("Are you sure you want to close this conversation?")) {
+    if (confirm(t("chatConfirmResolve"))) {
       closeEscalation(conversation.customer_phone, {
         onSuccess: onClose
       });
@@ -110,7 +114,7 @@ function ActiveChat({ conversation, onClose }: { conversation: Conversation; onC
             <h2 className="font-semibold text-foreground text-sm">{conversation.customer_phone}</h2>
             <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
               <span className={cn("w-2 h-2 rounded-full", isOpen ? "bg-green-500" : "bg-gray-400")} />
-              {isOpen ? 'Active' : 'Resolved'}
+              {isOpen ? t("chatStatusActive") : t("chatStatusResolved")}
             </div>
           </div>
         </div>
@@ -125,7 +129,7 @@ function ActiveChat({ conversation, onClose }: { conversation: Conversation; onC
                 onChange={e => handleReassign(e.target.value)}
                 className="text-xs border border-border rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-primary/30 disabled:opacity-50"
               >
-                <option value="unassign">Unassigned</option>
+                <option value="unassign">{t("chatUnassigned")}</option>
                 {agents.map(a => (
                   <option key={a.id} value={a.id}>{a.name}</option>
                 ))}
@@ -141,7 +145,7 @@ function ActiveChat({ conversation, onClose }: { conversation: Conversation; onC
               className="text-primary hover:text-primary hover:bg-primary/5 border-primary/20"
             >
               <CheckCircle2 className="w-4 h-4 mr-1.5" />
-              Resolve Issue
+              {t("chatResolveIssue")}
             </Button>
           )}
         </div>
@@ -152,7 +156,7 @@ function ActiveChat({ conversation, onClose }: { conversation: Conversation; onC
         <div className="bg-orange-50 border-b border-orange-100 px-6 py-3 flex gap-3 text-sm">
           <Info className="w-5 h-5 text-orange-400 shrink-0" />
           <div>
-            <span className="font-semibold text-orange-800">Escalation Reason: </span>
+            <span className="font-semibold text-orange-800">{t("chatEscalationReason")} </span>
             <span className="text-orange-700">{conversation.escalation_reason}</span>
           </div>
         </div>
@@ -204,7 +208,7 @@ function ActiveChat({ conversation, onClose }: { conversation: Conversation; onC
               inputMode="text"
               value={text}
               onChange={(e) => setText(e.target.value)}
-              placeholder="Reply to customer..."
+              placeholder={t("chatReplyPlaceholder")}
               className="flex-1 bg-transparent border-none focus:ring-0 px-4 text-sm"
               disabled={isSending}
             />
@@ -218,7 +222,7 @@ function ActiveChat({ conversation, onClose }: { conversation: Conversation; onC
             </Button>
           </form>
           <div className="text-center mt-2 text-[10px] text-muted-foreground">
-            Sending as Agent • <span className="font-medium text-primary">SMS Message</span>
+            {t("chatSendingAs")} • <span className="font-medium text-primary">{t("chatSendingAsSMS")}</span>
           </div>
         </div>
     </div>
@@ -226,6 +230,7 @@ function ActiveChat({ conversation, onClose }: { conversation: Conversation; onC
 }
 
 function MessageBubble({ message }: { message: Message }) {
+  const { t } = useLanguage();
   const isCustomer = message.sender === 'customer';
   const isAI = message.sender === 'ai';
   const isAgent = message.sender === 'agent';
@@ -243,7 +248,7 @@ function MessageBubble({ message }: { message: Message }) {
           {isAI && <Bot className="w-3 h-3 text-secondary" />}
           {isAgent && <HeadphonesIcon className="w-3 h-3 text-primary" />}
           <span className="text-[11px] font-medium text-muted-foreground">
-            {isCustomer ? 'Customer' : isAI ? 'AI Assistant' : 'You'}
+            {isCustomer ? t("chatSenderCustomer") : isAI ? t("chatSenderAI") : t("chatSenderYou")}
           </span>
         </div>
 

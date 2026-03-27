@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useLocation, Link } from "wouter";
 import { ArrowLeft, Video, ExternalLink, CheckCircle2, Clock, Filter, CalendarDays, ChevronLeft, ChevronRight, Ban } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { useLanguage } from "@/lib/language-context";
 
 type MeetingStatus = "pending" | "in_progress" | "completed";
 type FilterType = "all" | "upcoming" | "completed";
@@ -58,6 +59,7 @@ function addDays(d: Date, n: number): Date {
 export default function Meetings() {
   const [, setLocation] = useLocation();
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  const { t } = useLanguage();
 
   const [filter, setFilter] = useState<FilterType>("all");
   const [meetings, setMeetings] = useState<Meeting[]>([]);
@@ -135,7 +137,7 @@ export default function Meetings() {
     setError(null);
     try {
       const res = await fetch(`/api/meetings?filter=${filter}`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to load meetings");
+      if (!res.ok) throw new Error(t("meetingsErrorLoad"));
       setMeetings(await res.json());
     } catch (e: any) {
       setError(e.message);
@@ -173,7 +175,7 @@ export default function Meetings() {
         method: "PATCH",
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to start meeting");
+      if (!res.ok) throw new Error(t("meetingsErrorLoad"));
       const updated = await res.json();
       setMeetings((prev) =>
         prev.map((m) => (m.id === id ? { ...m, status: "in_progress", agent_name: updated.agent_name ?? m.agent_name } : m))
@@ -186,14 +188,14 @@ export default function Meetings() {
   };
 
   const markComplete = async (id: number) => {
-    if (!window.confirm("Mark this meeting as done and send the customer a survey?")) return;
+    if (!window.confirm(t("meetingsBtnMarkCompleteConfirm"))) return;
     setCompleting(id);
     try {
       const res = await fetch(`/api/meetings/${id}/complete`, {
         method: "PATCH",
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to update meeting");
+      if (!res.ok) throw new Error(t("meetingsErrorLoad"));
       setMeetings((prev) =>
         prev.map((m) => (m.id === id ? { ...m, status: "completed" } : m))
       );
@@ -213,9 +215,9 @@ export default function Meetings() {
   }
 
   const filters: { key: FilterType; label: string }[] = [
-    { key: "all", label: "All" },
-    { key: "upcoming", label: "Upcoming" },
-    { key: "completed", label: "Completed" },
+    { key: "all",       label: t("meetingsFilterAll") },
+    { key: "upcoming",  label: t("meetingsFilterUpcoming") },
+    { key: "completed", label: t("meetingsFilterCompleted") },
   ];
 
   // Build the 7 dates for the current week
@@ -231,14 +233,14 @@ export default function Meetings() {
           <div className="hidden sm:block">
             <span className="font-semibold text-sm text-white/90">WAK Solutions</span>
             <span className="text-white/40 mx-2">—</span>
-            <span className="text-sm text-white/70">Meetings</span>
+            <span className="text-sm text-white/70">{t("meetingsTitle")}</span>
           </div>
         </div>
         <Link href="/">
           <a className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white transition-colors px-3 py-1.5 rounded-md hover:bg-white/10">
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Back to Inbox</span>
-            <span className="sm:hidden">Back</span>
+            <span className="hidden sm:inline">{t("backToInbox")}</span>
+            <span className="sm:hidden">{t("back")}</span>
           </a>
         </Link>
       </header>
@@ -246,7 +248,7 @@ export default function Meetings() {
       <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-6 space-y-6">
         <div className="flex items-center gap-2">
           <Video className="w-5 h-5 text-[#0F510F]" />
-          <h1 className="text-xl font-bold text-foreground">Meetings</h1>
+          <h1 className="text-xl font-bold text-foreground">{t("meetingsTitle")}</h1>
         </div>
 
         {/* Filter bar */}
@@ -285,7 +287,7 @@ export default function Meetings() {
           ) : meetings.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
               <Video className="w-10 h-10 opacity-30" />
-              <p className="text-sm">No meetings found</p>
+              <p className="text-sm">{t("meetingsEmpty")}</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -293,19 +295,19 @@ export default function Meetings() {
                 <thead>
                   <tr className="border-b border-border bg-muted/50">
                     <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      Customer
+                      {t("meetingsColCustomer")}
                     </th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      Meeting Link
+                      {t("meetingsColLink")}
                     </th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      Scheduled (AST)
+                      {t("meetingsColScheduled")}
                     </th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      Agent
+                      {t("meetingsColAgent")}
                     </th>
                     <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">
-                      Status
+                      {t("meetingsColStatus")}
                     </th>
                     <th className="px-4 py-3" />
                   </tr>
@@ -328,7 +330,7 @@ export default function Meetings() {
                             <ExternalLink className="w-3 h-3 flex-shrink-0" />
                           </a>
                         ) : (
-                          <span className="text-muted-foreground text-xs italic">Pending booking</span>
+                          <span className="text-muted-foreground text-xs italic">{t("meetingsPendingBooking")}</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-foreground text-xs whitespace-nowrap">
@@ -338,13 +340,13 @@ export default function Meetings() {
                             {formatScheduledAt(m.scheduled_at)}
                           </span>
                         ) : (
-                          <span className="text-muted-foreground italic">Not booked yet</span>
+                          <span className="text-muted-foreground italic">{t("meetingsNotBooked")}</span>
                         )}
                       </td>
                       <td className="px-4 py-3 text-xs">
                         {m.agent_name
                           ? <span className="text-foreground">{m.agent_name}</span>
-                          : <span className="text-muted-foreground italic">Unassigned</span>}
+                          : <span className="text-muted-foreground italic">{t("meetingsUnassigned")}</span>}
                       </td>
                       <td className="px-4 py-3">
                         <span
@@ -361,9 +363,9 @@ export default function Meetings() {
                           ) : (
                             <Clock className="w-3 h-3" />
                           )}
-                          {m.status === "completed" ? "Completed"
-                            : m.status === "in_progress" ? "In Progress"
-                            : "Pending"}
+                          {m.status === "completed" ? t("statusCompleted")
+                            : m.status === "in_progress" ? t("statusInProgress")
+                            : t("statusPending")}
                         </span>
                       </td>
                       <td className="px-4 py-3 text-right">
@@ -378,7 +380,7 @@ export default function Meetings() {
                             ) : (
                               <Clock className="w-3.5 h-3.5" />
                             )}
-                            Start
+                            {t("meetingsBtnStart")}
                           </button>
                         )}
                         {m.status === "in_progress" && (
@@ -392,7 +394,7 @@ export default function Meetings() {
                             ) : (
                               <CheckCircle2 className="w-3.5 h-3.5" />
                             )}
-                            Mark Complete
+                            {t("meetingsBtnMarkComplete")}
                           </button>
                         )}
                       </td>
@@ -407,10 +409,10 @@ export default function Meetings() {
         <section className="space-y-4 pb-8">
           <div className="flex items-center gap-2">
             <CalendarDays className="w-5 h-5 text-[#0F510F]" />
-            <h2 className="text-base font-semibold text-foreground">Manage Availability</h2>
+            <h2 className="text-base font-semibold text-foreground">{t("meetingsManageAvailability")}</h2>
           </div>
           <p className="text-xs text-muted-foreground">
-            Click a slot to block or unblock it. Blocked slots (red) cannot be booked by customers. Booked slots (blue) are already taken by a customer. All times are KSA (UTC+3).
+            {t("meetingsAvailabilityHint")}
           </p>
 
           {/* Week navigation */}
@@ -441,7 +443,7 @@ export default function Meetings() {
                 <table className="w-full text-xs border-collapse">
                   <thead>
                     <tr className="bg-muted/50">
-                      <th className="px-3 py-2 text-left text-muted-foreground font-medium w-16">Time</th>
+                      <th className="px-3 py-2 text-left text-muted-foreground font-medium w-16">{t("meetingsColTime")}</th>
                       {weekDates.map((d, i) => (
                         <th key={i} className="px-2 py-2 text-center text-muted-foreground font-medium min-w-[80px]">
                           <div>{DAY_LABELS[i]}</div>
@@ -464,10 +466,10 @@ export default function Meetings() {
                             return (
                               <td key={di} className="px-2 py-1 text-center">
                                 <div
-                                  title="This slot has been booked by a customer"
+                                  title={t("meetingsSlotBookedTitle")}
                                   className="w-full h-8 rounded-md text-xs font-medium flex items-center justify-center gap-1 bg-blue-100 text-blue-700 border border-blue-200 cursor-default"
                                 >
-                                  <span className="hidden sm:inline">Booked</span>
+                                  <span className="hidden sm:inline">{t("meetingsSlotBooked")}</span>
                                   <span className="sm:hidden">●</span>
                                 </div>
                               </td>
@@ -478,7 +480,7 @@ export default function Meetings() {
                               <button
                                 onClick={() => toggleSlot(dateStr, hour)}
                                 disabled={isToggling}
-                                title={isBlocked ? "Click to unblock" : "Click to block"}
+                                title={isBlocked ? t("meetingsSlotClickUnblock") : t("meetingsSlotClickBlock")}
                                 className={`w-full h-8 rounded-md text-xs font-medium transition-colors disabled:opacity-50 flex items-center justify-center gap-1 ${
                                   isBlocked
                                     ? "bg-red-100 text-red-700 hover:bg-red-200 border border-red-200"
@@ -488,9 +490,9 @@ export default function Meetings() {
                                 {isToggling ? (
                                   <div className="w-3 h-3 border-2 border-current/30 border-t-current rounded-full animate-spin" />
                                 ) : isBlocked ? (
-                                  <><Ban className="w-3 h-3" /><span className="hidden sm:inline">Blocked</span></>
+                                  <><Ban className="w-3 h-3" /><span className="hidden sm:inline">{t("meetingsSlotBlocked")}</span></>
                                 ) : (
-                                  <span className="hidden sm:inline">Open</span>
+                                  <span className="hidden sm:inline">{t("meetingsSlotOpen")}</span>
                                 )}
                               </button>
                             </td>

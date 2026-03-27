@@ -6,6 +6,7 @@ import {
 } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "@/hooks/use-auth";
+import { useLanguage } from "@/lib/language-context";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -115,6 +116,7 @@ function QuestionsEditor({
   questions: Question[];
   onChange: (v: Question[]) => void;
 }) {
+  const { t } = useLanguage();
   const drag = useDraggableList(questions, onChange);
 
   const add = () =>
@@ -161,7 +163,7 @@ function QuestionsEditor({
               <span className="text-xs font-semibold text-muted-foreground w-5 flex-shrink-0">#{i + 1}</span>
               <input
                 className={inputCls}
-                placeholder="Question text…"
+                placeholder={t("chatbotPlaceholderQuestion")}
                 value={q.text}
                 onChange={e => update(q.id, { text: e.target.value })}
               />
@@ -170,9 +172,9 @@ function QuestionsEditor({
                 value={q.answerType}
                 onChange={e => update(q.id, { answerType: e.target.value as AnswerType, choices: [] })}
               >
-                <option value="free">Free text</option>
-                <option value="yesno">Yes / No</option>
-                <option value="multiple">Multiple choice</option>
+                <option value="free">{t("chatbotQuestionTypeFree")}</option>
+                <option value="yesno">{t("chatbotQuestionTypeYesNo")}</option>
+                <option value="multiple">{t("chatbotQuestionTypeMultiple")}</option>
               </select>
               <button
                 onClick={() => remove(q.id)}
@@ -183,7 +185,7 @@ function QuestionsEditor({
             </div>
             {q.answerType === "multiple" && (
               <div className="ml-11 space-y-1.5">
-                <p className="text-xs text-muted-foreground font-medium">Answer choices:</p>
+                <p className="text-xs text-muted-foreground font-medium">{t("chatbotAnswerChoices")}</p>
                 {q.choices.map((c, ci) => (
                   <div key={ci} className="flex items-center gap-1.5">
                     <input
@@ -204,7 +206,7 @@ function QuestionsEditor({
                   onClick={() => addChoice(q.id)}
                   className="flex items-center gap-1 text-xs text-[#0F510F] font-medium hover:underline"
                 >
-                  <Plus className="w-3 h-3" /> Add choice
+                  <Plus className="w-3 h-3" /> {t("chatbotBtnAddChoice")}
                 </button>
               </div>
             )}
@@ -215,7 +217,7 @@ function QuestionsEditor({
         onClick={add}
         className="flex items-center gap-1.5 text-sm font-medium text-[#0F510F] border border-[#0F510F]/30 px-3 py-1.5 rounded-lg hover:bg-[#0F510F]/5 transition-colors"
       >
-        <Plus className="w-4 h-4" /> Add Question
+        <Plus className="w-4 h-4" /> {t("chatbotBtnAddQuestion")}
       </button>
     </div>
   );
@@ -224,6 +226,7 @@ function QuestionsEditor({
 // ── FAQ editor ────────────────────────────────────────────────────────────────
 
 function FaqEditor({ items, onChange }: { items: FaqItem[]; onChange: (v: FaqItem[]) => void }) {
+  const { t } = useLanguage();
   const add    = () => onChange([...items, { id: uid(), question: "", answer: "" }]);
   const update = (id: string, patch: Partial<FaqItem>) =>
     onChange(items.map(f => f.id === id ? { ...f, ...patch } : f));
@@ -245,14 +248,14 @@ function FaqEditor({ items, onChange }: { items: FaqItem[]; onChange: (v: FaqIte
               <div className="flex-1 space-y-2">
                 <input
                   className={inputCls}
-                  placeholder="Question"
+                  placeholder={t("chatbotPlaceholderFaqQuestion")}
                   value={f.question}
                   onChange={e => update(f.id, { question: e.target.value })}
                 />
                 <textarea
                   className={textareaCls}
                   rows={2}
-                  placeholder="Answer"
+                  placeholder={t("chatbotPlaceholderFaqAnswer")}
                   value={f.answer}
                   onChange={e => update(f.id, { answer: e.target.value })}
                 />
@@ -271,7 +274,7 @@ function FaqEditor({ items, onChange }: { items: FaqItem[]; onChange: (v: FaqIte
         onClick={add}
         className="flex items-center gap-1.5 text-sm font-medium text-[#0F510F] border border-[#0F510F]/30 px-3 py-1.5 rounded-lg hover:bg-[#0F510F]/5 transition-colors"
       >
-        <Plus className="w-4 h-4" /> Add Q&amp;A Pair
+        <Plus className="w-4 h-4" /> {t("chatbotBtnAddQA")}
       </button>
     </div>
   );
@@ -286,6 +289,7 @@ function EscalationEditor({
   rules: EscalationRule[];
   onChange: (v: EscalationRule[]) => void;
 }) {
+  const { t } = useLanguage();
   const add    = () => onChange([...rules, { id: uid(), rule: "" }]);
   const update = (id: string, rule: string) =>
     onChange(rules.map(r => r.id === id ? { ...r, rule } : r));
@@ -305,7 +309,7 @@ function EscalationEditor({
           >
             <input
               className={inputCls}
-              placeholder="e.g. Customer asks for a refund"
+              placeholder={t("chatbotPlaceholderEscalation")}
               value={r.rule}
               onChange={e => update(r.id, e.target.value)}
             />
@@ -322,7 +326,7 @@ function EscalationEditor({
         onClick={add}
         className="flex items-center gap-1.5 text-sm font-medium text-[#0F510F] border border-[#0F510F]/30 px-3 py-1.5 rounded-lg hover:bg-[#0F510F]/5 transition-colors"
       >
-        <Plus className="w-4 h-4" /> Add Rule
+        <Plus className="w-4 h-4" /> {t("chatbotBtnAddRule")}
       </button>
     </div>
   );
@@ -333,6 +337,7 @@ function EscalationEditor({
 export default function ChatbotConfig() {
   const [, setLocation] = useLocation();
   const { isAuthenticated, isLoading } = useAuth();
+  const { t } = useLanguage();
 
   const [config, setConfig]               = useState<StructuredConfig>(DEFAULT_STRUCTURED);
   const [overrideActive, setOverrideActive] = useState(true);
@@ -424,7 +429,7 @@ export default function ChatbotConfig() {
       }
       const saved = await res.json();
       setSavedAt(saved.updated_at ?? new Date().toISOString());
-      setSuccess("Saved and applied successfully. The bot will pick up the new config within 60 seconds.");
+      setSuccess(t("chatbotSavedSuccess"));
     } catch (e: any) {
       setError(e.message || "An error occurred");
     } finally {
@@ -453,14 +458,14 @@ export default function ChatbotConfig() {
           <div className="hidden sm:block">
             <span className="font-semibold text-sm text-white/90">WAK Solutions</span>
             <span className="text-white/40 mx-2">—</span>
-            <span className="text-sm text-white/70">Chatbot Config</span>
+            <span className="text-sm text-white/70">{t("chatbotTitle")}</span>
           </div>
         </div>
         <Link href="/">
           <a className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white transition-colors px-3 py-1.5 rounded-md hover:bg-white/10">
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Back to Dashboard</span>
-            <span className="sm:hidden">Back</span>
+            <span className="hidden sm:inline">{t("backToDashboard")}</span>
+            <span className="sm:hidden">{t("back")}</span>
           </a>
         </Link>
       </header>
@@ -468,49 +473,54 @@ export default function ChatbotConfig() {
       <main className="flex-1 w-full max-w-3xl mx-auto px-4 py-6 space-y-5 pb-12">
         <div className="flex items-center gap-2">
           <Bot className="w-5 h-5 text-[#0F510F]" />
-          <h1 className="text-xl font-bold text-foreground">Chatbot Config</h1>
+          <h1 className="text-xl font-bold text-foreground">{t("chatbotTitle")}</h1>
         </div>
 
         {/* ── Business Identity ─────────────────────────────────────── */}
-        <SectionCard title="Business Identity">
+        <SectionCard title={t("chatbotSectionIdentity")}>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Field label="Business Name">
+            <Field label={t("chatbotFieldBusinessName")}>
               <input
                 className={inputCls}
-                placeholder="WAK Solutions"
+                placeholder={t("chatbotPlaceholderBusinessName")}
                 value={config.businessName}
                 onChange={e => set("businessName", e.target.value)}
               />
             </Field>
-            <Field label="Industry / Description" hint="one line">
+            <Field label={t("chatbotFieldIndustry")} hint={t("chatbotFieldIndustryHint")}>
               <input
                 className={inputCls}
-                placeholder="AI and robotics solutions"
+                placeholder={t("chatbotPlaceholderIndustry")}
                 value={config.industry}
                 onChange={e => set("industry", e.target.value)}
               />
             </Field>
           </div>
-          <Field label="Tone">
+          <Field label={t("chatbotFieldTone")}>
             <div className="flex gap-2 flex-wrap">
-              {["Professional", "Friendly", "Formal", "Custom"].map(t => (
+              {[
+                { val: "Professional", label: t("chatbotToneProfessional") },
+                { val: "Friendly",     label: t("chatbotToneFriendly") },
+                { val: "Formal",       label: t("chatbotToneFormal") },
+                { val: "Custom",       label: t("chatbotToneCustom") },
+              ].map(({ val, label }) => (
                 <button
-                  key={t}
-                  onClick={() => set("tone", t)}
+                  key={val}
+                  onClick={() => set("tone", val)}
                   className={`px-4 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
-                    config.tone === t
+                    config.tone === val
                       ? "bg-[#0F510F] border-[#0F510F] text-white"
                       : "border-border text-muted-foreground hover:text-foreground hover:border-[#0F510F]/40"
                   }`}
                 >
-                  {t}
+                  {label}
                 </button>
               ))}
             </div>
             {config.tone === "Custom" && (
               <input
                 className={`${inputCls} mt-2`}
-                placeholder="Describe the tone (e.g. warm and concise)"
+                placeholder={t("chatbotPlaceholderToneCustom")}
                 value={config.customTone}
                 onChange={e => set("customTone", e.target.value)}
               />
@@ -519,29 +529,29 @@ export default function ChatbotConfig() {
         </SectionCard>
 
         {/* ── Conversation Flow ─────────────────────────────────────── */}
-        <SectionCard title="Conversation Flow">
-          <Field label="Opening / Greeting Message" hint="sent at the start of every new conversation">
+        <SectionCard title={t("chatbotSectionFlow")}>
+          <Field label={t("chatbotFieldGreeting")} hint={t("chatbotFieldGreetingHint")}>
             <textarea
               className={textareaCls}
               rows={3}
-              placeholder="Welcome! How can I help you today?"
+              placeholder={t("chatbotPlaceholderGreeting")}
               value={config.greeting}
               onChange={e => set("greeting", e.target.value)}
             />
           </Field>
 
-          <Field label="Qualification Questions" hint="bot walks through these in order">
+          <Field label={t("chatbotFieldQualification")} hint={t("chatbotFieldQualificationHint")}>
             <QuestionsEditor
               questions={config.questions}
               onChange={v => set("questions", v)}
             />
           </Field>
 
-          <Field label="Closing Message" hint="used when wrapping up a conversation">
+          <Field label={t("chatbotFieldClosing")} hint={t("chatbotFieldClosingHint")}>
             <textarea
               className={textareaCls}
               rows={2}
-              placeholder="Thank you for contacting us. A member of our team will be in touch shortly."
+              placeholder={t("chatbotPlaceholderClosing")}
               value={config.closingMessage}
               onChange={e => set("closingMessage", e.target.value)}
             />
@@ -549,7 +559,7 @@ export default function ChatbotConfig() {
         </SectionCard>
 
         {/* ── Knowledge Base ────────────────────────────────────────── */}
-        <SectionCard title="Knowledge Base (FAQ)">
+        <SectionCard title={t("chatbotSectionKnowledge")}>
           <FaqEditor
             items={config.faq}
             onChange={v => set("faq", v)}
@@ -557,9 +567,9 @@ export default function ChatbotConfig() {
         </SectionCard>
 
         {/* ── Escalation Rules ──────────────────────────────────────── */}
-        <SectionCard title="Escalation Rules">
+        <SectionCard title={t("chatbotSectionEscalation")}>
           <p className="text-xs text-muted-foreground -mt-2">
-            The bot will trigger human handover immediately when any of these conditions are detected.
+            {t("chatbotEscalationHint")}
           </p>
           <EscalationEditor
             rules={config.escalationRules}
@@ -573,7 +583,7 @@ export default function ChatbotConfig() {
             onClick={() => { setAdvancedOpen(o => !o); if (!advancedOpen) fetchPreview(); }}
             className="w-full flex items-center justify-between px-5 py-4 text-sm font-semibold text-foreground hover:bg-muted/30 transition-colors"
           >
-            <span>Advanced: Raw Prompt</span>
+            <span>{t("chatbotSectionAdvanced")}</span>
             {advancedOpen ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
           </button>
 
@@ -590,8 +600,8 @@ export default function ChatbotConfig() {
                   {/* Override toggle */}
                   <div className="flex items-center justify-between pt-4">
                     <div>
-                      <p className="text-sm font-medium text-foreground">Raw Override</p>
-                      <p className="text-xs text-muted-foreground">When on, the bot uses the raw text below instead of the structured fields above.</p>
+                      <p className="text-sm font-medium text-foreground">{t("chatbotRawOverrideLabel")}</p>
+                      <p className="text-xs text-muted-foreground">{t("chatbotRawOverrideHint")}</p>
                     </div>
                     <button
                       onClick={() => setOverrideActive(o => !o)}
@@ -606,7 +616,7 @@ export default function ChatbotConfig() {
                     <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
                       <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
                       <p className="text-sm text-amber-800">
-                        <strong>Raw override is active</strong> — structured fields above are being ignored. The bot uses the text below.
+                        {t("chatbotRawActiveWarning")}
                       </p>
                     </div>
                   )}
@@ -616,8 +626,8 @@ export default function ChatbotConfig() {
                     <div className="space-y-1.5">
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <Eye className="w-3.5 h-3.5" />
-                        <span>Compiled preview (read-only — generated from your structured fields)</span>
-                        {previewLoading && <span className="animate-pulse">Updating…</span>}
+                        <span>{t("chatbotCompiledPreview")}</span>
+                        {previewLoading && <span className="animate-pulse">{t("chatbotUpdating")}</span>}
                       </div>
                       <textarea
                         readOnly
@@ -633,7 +643,7 @@ export default function ChatbotConfig() {
                     <div className="space-y-1.5">
                       <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         <EyeOff className="w-3.5 h-3.5" />
-                        <span>Raw system prompt</span>
+                        <span>{t("chatbotRawPromptLabel")}</span>
                       </div>
                       <textarea
                         rows={14}
@@ -665,9 +675,9 @@ export default function ChatbotConfig() {
               className="flex items-center gap-1.5 text-sm font-medium bg-[#0F510F] text-white px-5 py-2.5 rounded-lg hover:bg-[#0d4510] disabled:opacity-60 transition-colors"
             >
               {saving ? (
-                <><div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />Saving…</>
+                <><div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />{t("saving")}</>
               ) : (
-                <><Save className="w-3.5 h-3.5" />Save &amp; Apply</>
+                <><Save className="w-3.5 h-3.5" />{t("chatbotBtnSave")}</>
               )}
             </button>
 
@@ -676,7 +686,7 @@ export default function ChatbotConfig() {
               className="flex items-center gap-1.5 text-sm font-medium border border-border text-muted-foreground px-5 py-2.5 rounded-lg hover:bg-muted hover:text-foreground transition-colors"
             >
               <RotateCcw className="w-3.5 h-3.5" />
-              Reset to Default
+              {t("chatbotBtnReset")}
             </button>
           </div>
 
