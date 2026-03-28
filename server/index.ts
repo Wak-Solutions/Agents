@@ -135,6 +135,15 @@ app.use((req, res, next) => {
         mime_type  TEXT        NOT NULL DEFAULT 'audio/ogg',
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
+
+      CREATE TABLE IF NOT EXISTS contacts (
+        id           SERIAL      PRIMARY KEY,
+        phone_number TEXT        NOT NULL UNIQUE,
+        name         TEXT,
+        source       TEXT        NOT NULL DEFAULT 'manual',
+        created_at   TIMESTAMPTZ DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS contacts_phone_idx ON contacts (phone_number);
     `);
     log("Migrations applied successfully", "db");
   } catch (err) {

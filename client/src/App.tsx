@@ -17,6 +17,7 @@ import SurveysTab from "./pages/SurveysTab";
 import MeetingPage from "./pages/MeetingPage";
 import InboxPage from "./pages/InboxPage";
 import AgentsTab from "./pages/AgentsTab";
+import ContactsPage from "./pages/ContactsPage";
 
 function Router() {
   return (
@@ -33,6 +34,7 @@ function Router() {
       <Route path="/surveys" component={SurveysTab} />
       <Route path="/inbox" component={InboxPage} />
       <Route path="/agents" component={AgentsTab} />
+      <Route path="/contacts" component={ContactsPage} />
       <Route path="/" component={Dashboard} />
       <Route component={NotFound} />
     </Switch>

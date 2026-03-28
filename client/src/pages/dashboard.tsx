@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
-import { LogOut, Wifi, WifiOff, Fingerprint, Bell, Share, X, BookOpen, BarChart2, Bot, Video, ClipboardList, Inbox, Users, Menu, Globe } from "lucide-react";
+import { LogOut, Wifi, WifiOff, Fingerprint, Bell, Share, X, BookOpen, BarChart2, Bot, Video, ClipboardList, Inbox, Users, Menu, Globe, BookUser } from "lucide-react";
 import { startRegistration } from "@simplewebauthn/browser";
 import { useAuth, useLogout } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/language-context";
@@ -144,6 +144,13 @@ export default function Dashboard() {
                 </a>
               </Link>
             )}
+            {isAdmin && (
+              <Link href="/contacts">
+                <a title={t("contacts")} className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white transition-colors p-2 xl:px-3 xl:py-1.5 rounded-md hover:bg-white/10">
+                  <BookUser className="w-4 h-4 shrink-0" /><span className="hidden xl:inline">{t("contacts")}</span>
+                </a>
+              </Link>
+            )}
             <Link href="/statistics">
               <a title={t("statistics")} className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white transition-colors p-2 xl:px-3 xl:py-1.5 rounded-md hover:bg-white/10">
                 <BarChart2 className="w-4 h-4 shrink-0" /><span className="hidden xl:inline">{t("statistics")}</span>
@@ -242,6 +249,7 @@ export default function Dashboard() {
                 [
                   { href: "/inbox",         icon: <Inbox className="w-5 h-5" />,        label: t("inbox") },
                   ...(isAdmin ? [{ href: "/agents", icon: <Users className="w-5 h-5" />, label: t("agents") }] : []),
+                  ...(isAdmin ? [{ href: "/contacts", icon: <BookUser className="w-5 h-5" />, label: t("contacts") }] : []),
                   { href: "/statistics",    icon: <BarChart2 className="w-5 h-5" />,     label: t("statistics") },
                   { href: "/meetings",      icon: <Video className="w-5 h-5" />,          label: t("meetings") },
                   { href: "/chatbot-config",icon: <Bot className="w-5 h-5" />,            label: t("chatbotConfig") },

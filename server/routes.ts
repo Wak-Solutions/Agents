@@ -1252,6 +1252,100 @@ export async function registerRoutes(
   // ── Agent Routes ───────────────────────────────────────────────────────────
   registerAgentRoutes(app, requireAdmin);
 
+  // ── Contacts Routes ────────────────────────────────────────────────────────
+
+  app.get('/api/contacts', requireAdmin, async (req, res) => {
+    try {
+      const result = await pool.query(
+        `SELECT id, phone_number, name, source, created_at
+         FROM contacts ORDER BY created_at DESC`
+      );
+      res.json(result.rows);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post('/api/contacts', requireAdmin, async (req, res) => {
+    const { name, phone_number } = req.body;
+    if (!phone_number) return res.status(400).json({ message: 'Phone number is required' });
+    const phone = String(phone_number).trim().replace(/[\s\-().]/g, '');
+    if (!/^\+?\d{7,15}$/.test(phone)) return res.status(400).json({ message: 'invalid_phone' });
+    try {
+      const result = await pool.query(
+        `INSERT INTO contacts (phone_number, name, source)
+         VALUES ($1, $2, 'manual')
+         RETURNING id, phone_number, name, source, created_at`,
+        [phone, (name || '').trim() || null]
+      );
+      res.json(result.rows[0]);
+    } catch (err: any) {
+      if (err.code === '23505') return res.status(409).json({ message: 'duplicate' });
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.patch('/api/contacts/:id', requireAdmin, async (req, res) => {
+    const id = Number(req.params.id);
+    const { name } = req.body;
+    try {
+      const result = await pool.query(
+        `UPDATE contacts SET name = $1 WHERE id = $2
+         RETURNING id, phone_number, name, source, created_at`,
+        [(name || '').trim() || null, id]
+      );
+      if (result.rowCount === 0) return res.status(404).json({ message: 'Not found' });
+      res.json(result.rows[0]);
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.delete('/api/contacts/:id', requireAdmin, async (req, res) => {
+    try {
+      await pool.query('DELETE FROM contacts WHERE id = $1', [Number(req.params.id)]);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post('/api/contacts/bulk-delete', requireAdmin, async (req, res) => {
+    const { ids } = req.body;
+    if (!Array.isArray(ids) || ids.length === 0) return res.status(400).json({ message: 'No ids provided' });
+    try {
+      await pool.query('DELETE FROM contacts WHERE id = ANY($1::int[])', [ids]);
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  app.post('/api/contacts/import', requireAdmin, async (req, res) => {
+    const { contacts: rows } = req.body;
+    if (!Array.isArray(rows)) return res.status(400).json({ message: 'Invalid payload' });
+    let added = 0, duplicates = 0, invalid = 0;
+    for (const row of rows) {
+      const phone = String(row.phone || '').trim().replace(/[\s\-().]/g, '');
+      const name = String(row.name || '').trim() || null;
+      if (!/^\+?\d{7,15}$/.test(phone)) { invalid++; continue; }
+      try {
+        const result = await pool.query(
+          `INSERT INTO contacts (phone_number, name, source)
+           VALUES ($1, $2, 'imported')
+           ON CONFLICT (phone_number) DO NOTHING
+           RETURNING id`,
+          [phone, name]
+        );
+        if ((result.rowCount ?? 0) > 0) added++;
+        else duplicates++;
+      } catch (_) {
+        invalid++;
+      }
+    }
+    res.json({ added, duplicates, invalid });
+  });
+
   return httpServer;
 }
 
