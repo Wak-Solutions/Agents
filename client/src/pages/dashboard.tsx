@@ -38,16 +38,6 @@ export default function Dashboard() {
     setConnected(!isEscalationsLoading ? true : connected);
   }, [isFetching]);
 
-  if (isAuthLoading || !isAuthenticated) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  const selectedConversation = conversations.find(c => c.customer_phone === selectedPhone) ?? null;
-
   // When an agent opens a chat, clear the push-notification "already notified" flag
   // so they'll be notified again if new messages arrive after they leave.
   useEffect(() => {
@@ -57,6 +47,16 @@ export default function Dashboard() {
       credentials: 'include',
     }).catch(() => {});
   }, [selectedPhone, isAuthenticated]);
+
+  if (isAuthLoading || !isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  const selectedConversation = conversations.find(c => c.customer_phone === selectedPhone) ?? null;
 
   const handleLogout = () => {
     logout(undefined, { onSuccess: () => setLocation("/login") });
