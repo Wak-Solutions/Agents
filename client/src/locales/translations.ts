@@ -309,7 +309,7 @@ export const en = {
   chatConfirmResolve: "Are you sure you want to close this conversation?",
 } as const;
 
-export const ar: typeof en = {
+export const ar: Record<keyof typeof en, string> = {
   // ── Dashboard / shared header ─────────────────────────────────────────────
   agentDashboard: "لوحة تحكم الوكيل",
   online: "متصل",
