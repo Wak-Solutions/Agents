@@ -24,6 +24,7 @@ export function useAuth() {
     agentId: data?.agentId ?? null,
     agentName: data?.agentName ?? 'Admin',
     isAdmin: (data?.role ?? 'admin') === 'admin',
+    termsAcceptedAt: data?.termsAcceptedAt ?? null,
   };
 }
 

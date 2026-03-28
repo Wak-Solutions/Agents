@@ -382,6 +382,27 @@ export const en = {
   funnelTitle: "Conversion Funnel",
   funnelDropOff: "drop-off",
   funnelCustomers: "customers",
+
+  // ── Terms modal (login) ───────────────────────────────────────────────────
+  termsModalTitle: "Before you continue",
+  termsModalSubtitle: "Please read and accept the WAK Solutions Terms & Conditions to use the dashboard.",
+  termsModalReadLink: "Open Terms & Conditions in a new tab →",
+  termsModalCheckbox: "I have read and agree to the Terms & Conditions and Privacy Policy",
+  termsModalContinue: "Continue to Dashboard",
+  termsModalAccepting: "Saving…",
+
+  // ── Terms page ────────────────────────────────────────────────────────────
+  termsPageTitle: "Terms & Conditions",
+  termsPageLastUpdated: "Last Updated: March 2026",
+  termsPageSectionService: "Service Overview",
+  termsPageSectionMessaging: "WhatsApp Messaging Consent",
+  termsPageSectionData: "Data Usage & Privacy",
+  termsPageSectionAgents: "Agent Responsibilities",
+  termsPageSectionCookies: "Cookie Policy",
+  termsPageSectionServiceTerms: "Service Terms",
+  termsPageSectionContact: "Contact",
+  termsPageFooter: "© 2026 WAK Solutions. All rights reserved.",
+  termsLink: "Terms & Conditions",
 } as const;
 
 export const ar: Record<keyof typeof en, string> = {
@@ -768,6 +789,27 @@ export const ar: Record<keyof typeof en, string> = {
   funnelTitle: "قمع التحويل",
   funnelDropOff: "نسبة التسرب",
   funnelCustomers: "عميل",
+
+  // ── Terms modal (login) ───────────────────────────────────────────────────
+  termsModalTitle: "قبل المتابعة",
+  termsModalSubtitle: "يرجى قراءة الشروط والأحكام الخاصة بـ WAK Solutions والموافقة عليها لاستخدام لوحة التحكم.",
+  termsModalReadLink: "فتح الشروط والأحكام في تبويب جديد ←",
+  termsModalCheckbox: "لقد قرأت الشروط والأحكام وسياسة الخصوصية وأوافق عليها",
+  termsModalContinue: "المتابعة إلى لوحة التحكم",
+  termsModalAccepting: "جارٍ الحفظ…",
+
+  // ── Terms page ────────────────────────────────────────────────────────────
+  termsPageTitle: "الشروط والأحكام",
+  termsPageLastUpdated: "آخر تحديث: مارس 2026",
+  termsPageSectionService: "نظرة عامة على الخدمة",
+  termsPageSectionMessaging: "موافقة رسائل واتساب",
+  termsPageSectionData: "استخدام البيانات والخصوصية",
+  termsPageSectionAgents: "مسؤوليات الوكلاء",
+  termsPageSectionCookies: "سياسة ملفات تعريف الارتباط",
+  termsPageSectionServiceTerms: "شروط الخدمة",
+  termsPageSectionContact: "التواصل",
+  termsPageFooter: "© 2026 WAK Solutions. جميع الحقوق محفوظة.",
+  termsLink: "الشروط والأحكام",
 } as const;
 
 export type TranslationKey = keyof typeof en;

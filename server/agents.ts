@@ -19,6 +19,9 @@ export async function ensureAgentsTable(): Promise<void> {
     )
   `);
   await pool.query(`
+    ALTER TABLE agents ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ DEFAULT NULL
+  `);
+  await pool.query(`
     ALTER TABLE escalations ADD COLUMN IF NOT EXISTS assigned_agent_id INTEGER REFERENCES agents(id)
   `);
   await pool.query(`
@@ -39,7 +42,22 @@ export async function ensureAgentsTable(): Promise<void> {
 
 // ── Route registration ─────────────────────────────────────────────────────────
 
-export function registerAgentRoutes(app: any, requireAdmin: any): void {
+export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: any): void {
+
+  // POST /api/agents/accept-terms — any authenticated agent accepts T&C
+  app.post('/api/agents/accept-terms', requireAuth, async (req: any, res: any) => {
+    try {
+      const agentId = req.session.agentId;
+      if (!agentId) return res.status(400).json({ message: 'No agent ID in session' });
+      await pool.query(
+        `UPDATE agents SET terms_accepted_at = NOW() WHERE id = $1`,
+        [agentId]
+      );
+      res.json({ success: true });
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
 
   // GET /api/agents/workload — must be before /api/agents/:id
   app.get('/api/agents/workload', requireAdmin, async (_req: any, res: any) => {

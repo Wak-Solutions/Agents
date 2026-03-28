@@ -4,6 +4,8 @@ import { MessageSquareQuote, Lock, Fingerprint, Mail } from "lucide-react";
 import { useAuth, useLogin } from "@/hooks/use-auth";
 import { Card, Input, Button } from "@/components/ui-elements";
 import { useLanguage } from "@/lib/language-context";
+import { useQueryClient } from "@tanstack/react-query";
+import { api } from "@shared/routes";
 import {
   startRegistration,
   startAuthentication,
@@ -13,19 +15,42 @@ export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [, setLocation] = useLocation();
-  const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
+  const { isAuthenticated, isLoading: isAuthLoading, termsAcceptedAt } = useAuth();
   const { mutate: login, isPending, error } = useLogin();
+  const queryClient = useQueryClient();
   const [biometricAvailable, setBiometricAvailable] = useState(false);
   const [biometricRegistered, setBiometricRegistered] = useState(false);
   const [biometricError, setBiometricError] = useState("");
   const [biometricPending, setBiometricPending] = useState(false);
-  const { t } = useLanguage();
+  const [showTermsModal, setShowTermsModal] = useState(false);
+  const [termsChecked, setTermsChecked] = useState(false);
+  const [termsAccepting, setTermsAccepting] = useState(false);
+  const { t, lang } = useLanguage();
+  const isRtl = lang === "ar";
 
   useEffect(() => {
     if (isAuthenticated && !isAuthLoading) {
-      setLocation("/");
+      if (termsAcceptedAt === null) {
+        setShowTermsModal(true);
+      } else {
+        setLocation("/");
+      }
     }
-  }, [isAuthenticated, isAuthLoading, setLocation]);
+  }, [isAuthenticated, isAuthLoading, termsAcceptedAt, setLocation]);
+
+  const handleAcceptTerms = async () => {
+    setTermsAccepting(true);
+    try {
+      const res = await fetch("/api/agents/accept-terms", {
+        method: "POST",
+        credentials: "include",
+      });
+      if (res.ok) {
+        setLocation("/");
+      }
+    } catch {}
+    setTermsAccepting(false);
+  };
 
   // Check if device supports platform biometrics and if one is registered
   useEffect(() => {
@@ -56,7 +81,8 @@ export default function Login() {
         credentials: 'include',
       });
       if (!verifyRes.ok) throw new Error(t("loginErrorBiometricFailed"));
-      setLocation("/");
+      // Invalidate auth query so useAuth refetches and the redirect useEffect handles terms check
+      queryClient.invalidateQueries({ queryKey: [api.auth.me.path] });
     } catch (e: any) {
       setBiometricError(e.message || t("loginErrorBiometricLogin"));
     } finally {
@@ -67,9 +93,8 @@ export default function Login() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!password) return;
-    login({ email: email || undefined, password }, {
-      onSuccess: () => setLocation("/")
-    });
+    // No onSuccess redirect — the useEffect watching termsAcceptedAt handles the redirect
+    login({ email: email || undefined, password });
   };
 
   if (isAuthLoading) {
@@ -81,7 +106,58 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4 relative overflow-hidden">
+    <div className="min-h-screen flex items-center justify-center bg-background p-4 relative overflow-hidden" dir={isRtl ? "rtl" : "ltr"}>
+
+      {/* Terms Acceptance Modal — shown after login if terms not yet accepted */}
+      {showTermsModal && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]" dir={isRtl ? "rtl" : "ltr"}>
+            {/* Modal header */}
+            <div className="px-6 pt-6 pb-4 border-b border-gray-100">
+              <h2 className="text-lg font-bold text-gray-900">{t("termsModalTitle")}</h2>
+              <p className="text-sm text-gray-500 mt-1">{t("termsModalSubtitle")}</p>
+            </div>
+            {/* T&C link area */}
+            <div className="flex-1 overflow-y-auto mx-4 my-4 border border-gray-200 rounded-xl bg-[#F5F2EC] px-5 py-4 text-center min-h-0">
+              <p className="text-sm text-gray-500 mb-3">
+                {t("termsModalSubtitle")}
+              </p>
+              <a
+                href="/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-[#0F510F] underline underline-offset-2 hover:text-[#408440] transition-colors"
+              >
+                {t("termsModalReadLink")}
+              </a>
+            </div>
+            {/* Checkbox + button */}
+            <div className="px-6 pb-6 pt-2 space-y-4">
+              <label className="flex items-start gap-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={termsChecked}
+                  onChange={(e) => setTermsChecked(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 accent-[#0F510F] flex-shrink-0"
+                />
+                <span className="text-sm text-gray-700 leading-snug">{t("termsModalCheckbox")}</span>
+              </label>
+              <button
+                disabled={!termsChecked || termsAccepting}
+                onClick={handleAcceptTerms}
+                className="w-full bg-[#0F510F] text-white py-3 rounded-xl font-semibold text-sm disabled:opacity-50 hover:bg-[#0d4510] transition-colors flex items-center justify-center gap-2"
+              >
+                {termsAccepting ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    {t("termsModalAccepting")}
+                  </>
+                ) : t("termsModalContinue")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Subtle background blobs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">

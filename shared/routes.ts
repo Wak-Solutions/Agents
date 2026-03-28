@@ -45,6 +45,7 @@ export const api = {
           role: z.string().optional(),
           agentId: z.number().nullable().optional(),
           agentName: z.string().optional(),
+          termsAcceptedAt: z.string().nullable().optional(),
         }),
         401: errorSchemas.unauthorized,
       }

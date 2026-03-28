@@ -241,6 +241,14 @@ export default function SurveyPage() {
           </div>
         )}
       </main>
+
+      {/* Footer */}
+      <footer className="py-4 text-center text-xs text-gray-400 border-t border-gray-100 mt-2">
+        © 2026 WAK Solutions ·{" "}
+        <a href="/terms" target="_blank" rel="noopener noreferrer" className="hover:text-gray-600 transition-colors underline underline-offset-2">
+          Terms &amp; Conditions
+        </a>
+      </footer>
     </div>
   );
 }

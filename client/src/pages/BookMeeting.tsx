@@ -232,6 +232,14 @@ export default function BookMeeting() {
         )}
 
       </main>
+
+      {/* Footer */}
+      <footer className="py-4 text-center text-xs text-muted-foreground border-t border-border/50">
+        © 2026 WAK Solutions ·{" "}
+        <a href="/terms" target="_blank" rel="noopener noreferrer" className="hover:text-foreground transition-colors underline underline-offset-2">
+          Terms &amp; Conditions
+        </a>
+      </footer>
     </div>
   );
 }

@@ -201,13 +201,25 @@ export async function registerRoutes(
     });
   });
 
-  app.get(api.auth.me.path, (req, res) => {
+  app.get(api.auth.me.path, async (req, res) => {
     if (req.session.authenticated) {
+      let termsAcceptedAt: string | null = null;
+      if (req.session.agentId) {
+        try {
+          const r = await pool.query(
+            `SELECT terms_accepted_at FROM agents WHERE id = $1`,
+            [req.session.agentId]
+          );
+          const raw = r.rows[0]?.terms_accepted_at;
+          termsAcceptedAt = raw ? new Date(raw).toISOString() : null;
+        } catch {}
+      }
       res.json({
         authenticated: true,
         role: req.session.role || 'admin',
         agentId: req.session.agentId || null,
         agentName: req.session.agentName || 'Admin',
+        termsAcceptedAt,
       });
     } else {
       res.status(401).json({ message: "Unauthorized" });
@@ -1250,7 +1262,7 @@ export async function registerRoutes(
   registerSurveyRoutes(app, requireAuth);
 
   // ── Agent Routes ───────────────────────────────────────────────────────────
-  registerAgentRoutes(app, requireAdmin);
+  registerAgentRoutes(app, requireAdmin, requireAuth);
 
   // ── Customer Journey Routes ───────────────────────────────────────────────
 
