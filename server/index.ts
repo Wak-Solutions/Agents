@@ -120,6 +120,27 @@ app.use((req, res, next) => {
 (async () => {
   validateStartupEnv();
 
+  // Run pending migrations before starting up (inline so esbuild bundles them)
+  const { pool } = await import("./db");
+  try {
+    await pool.query(`
+      ALTER TABLE messages
+        ADD COLUMN IF NOT EXISTS media_type    TEXT,
+        ADD COLUMN IF NOT EXISTS media_url     TEXT,
+        ADD COLUMN IF NOT EXISTS transcription TEXT;
+
+      CREATE TABLE IF NOT EXISTS voice_notes (
+        id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+        audio_data BYTEA       NOT NULL,
+        mime_type  TEXT        NOT NULL DEFAULT 'audio/ogg',
+        created_at TIMESTAMPTZ DEFAULT NOW()
+      );
+    `);
+    log("Migrations applied successfully", "db");
+  } catch (err) {
+    log(`Migration error (continuing): ${err}`, "db");
+  }
+
   const [{ registerRoutes }, { serveStatic }] = await Promise.all([
     import("./routes"),
     import("./static"),
