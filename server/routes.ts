@@ -349,7 +349,13 @@ export async function registerRoutes(
           e.assigned_agent_id,
           a.name               AS assigned_agent_name
         FROM (SELECT DISTINCT customer_phone FROM messages) m
-        LEFT JOIN escalations e ON e.customer_phone = m.customer_phone
+        LEFT JOIN LATERAL (
+          SELECT status, escalation_reason, assigned_agent_id
+          FROM escalations
+          WHERE customer_phone = m.customer_phone
+          ORDER BY created_at DESC
+          LIMIT 1
+        ) e ON true
         LEFT JOIN agents a ON a.id = e.assigned_agent_id
         WHERE 1=1 ${visibilityFilter}
         ORDER BY last_message_at DESC NULLS LAST
