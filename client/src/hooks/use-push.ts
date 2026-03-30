@@ -65,12 +65,15 @@ function arrayBufferEqual(a: ArrayBuffer, b: ArrayBuffer): boolean {
   return true;
 }
 
-export function usePushNotifications(isAuthenticated: boolean) {
+export function usePushNotifications(isAuthenticated: boolean, isAuthLoading: boolean) {
   const [showBanner, setShowBanner] = useState(false);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
 
   useEffect(() => {
-    if (!isAuthenticated) return;
+    // Wait until /api/me has fully resolved before attempting push subscribe.
+    // Firing while loading risks a stale-cache race where isAuthenticated is
+    // true from a cached response but the actual session is not yet confirmed.
+    if (isAuthLoading || !isAuthenticated) return;
     if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return;
 
     // Register SW early so it's ready
@@ -93,7 +96,7 @@ export function usePushNotifications(isAuthenticated: boolean) {
       setShowBanner(true);
     }
     // "denied" — do nothing
-  }, [isAuthenticated]);
+  }, [isAuthenticated, isAuthLoading]);
 
   const enableNotifications = async () => {
     try {

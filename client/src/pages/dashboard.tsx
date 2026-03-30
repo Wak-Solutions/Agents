@@ -20,7 +20,7 @@ export default function Dashboard() {
   const [connected, setConnected] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const { showBanner, showInstallPrompt, enableNotifications, dismissInstallPrompt } = usePushNotifications(isAuthenticated);
+  const { showBanner, showInstallPrompt, enableNotifications, dismissInstallPrompt } = usePushNotifications(isAuthenticated, isAuthLoading);
 
   // Immediately re-fetch all data when the PWA/tab returns to the foreground.
   // Fixes iOS timer throttling: polls freeze in the background so stale data

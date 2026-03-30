@@ -195,8 +195,11 @@ export async function registerRoutes(
   app.post(api.auth.logout.path, (req, res) => {
     req.session.destroy((err) => {
       if (err) {
-        return res.status(500).json({ message: "Logout error" });
+        console.error("Session destroy error (non-fatal):", err);
       }
+      // Always succeed — if the DB store fails, the orphaned cookie becomes
+      // invalid on the next /api/me call and the client is redirected to login.
+      res.clearCookie("connect.sid");
       res.json({ success: true });
     });
   });
