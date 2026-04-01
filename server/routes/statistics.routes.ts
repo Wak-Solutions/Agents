@@ -77,7 +77,7 @@ export function registerStatisticsRoutes(app: Express): void {
 
       logger.info(
         'OpenAI summary request',
-        `model: gpt-4o-mini, messages: ${msgs.length}, period: ${from} to ${to}`
+        `model: ${process.env.OPENAI_MODEL ?? 'gpt-4.1-mini'}, messages: ${msgs.length}, period: ${from} to ${to}`
       );
 
       const openAiRes = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -87,7 +87,7 @@ export function registerStatisticsRoutes(app: Express): void {
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model: 'gpt-4o-mini',
+          model: process.env.OPENAI_MODEL ?? 'gpt-4.1-mini',
           messages: [{ role: 'user', content: prompt }],
           max_tokens: 400,
           temperature: 0.4,
@@ -104,7 +104,7 @@ export function registerStatisticsRoutes(app: Express): void {
       const summary: string =
         json.choices?.[0]?.message?.content?.trim() ?? 'Could not generate summary.';
 
-      logger.info('OpenAI summary success', `model: gpt-4o-mini, summary_chars: ${summary.length}`);
+      logger.info('OpenAI summary success', `model: ${process.env.OPENAI_MODEL ?? 'gpt-4.1-mini'}, summary_chars: ${summary.length}`);
       res.json({ summary });
     } catch (err: any) {
       logger.error('getSummary failed', err.message);
