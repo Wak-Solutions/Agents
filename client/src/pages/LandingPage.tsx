@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { useLanguage } from "@/lib/language-context";
+import ProductDemo from "./ProductDemo";
 import {
   Bot, Users, Calendar, Mic, BarChart3, TrendingUp,
   Link2, Settings, Rocket, Zap, Clock, Globe, MessageCircle,
-  ChevronDown, Check, Menu, X, ArrowRight,
+  ChevronDown, Check, Menu, X, ArrowRight, Play,
 } from "lucide-react";
 
 /* ─── Bilingual copy ──────────────────────────────────────────── */
@@ -17,6 +18,7 @@ const copy = {
     faq: "FAQ",
     bookDemo: "Book a demo",
     startTrial: "Start free trial",
+    seeDemo: "See a demo",
     /* hero */
     heroTitle: "AI-powered WhatsApp for businesses that can't afford to miss a message.",
     heroSub: "WAK connects your WhatsApp to an AI that replies instantly, books meetings, escalates to agents, and works 24/7 — in Arabic and English.",
@@ -113,6 +115,7 @@ const copy = {
     faq: "الأسئلة الشائعة",
     bookDemo: "احجز عرض تجريبي",
     startTrial: "ابدأ تجربة مجانية",
+    seeDemo: "شاهد العرض التجريبي",
     heroTitle: "واتساب بالذكاء الاصطناعي للشركات اللي ما تقدر تفوّت أي رسالة.",
     heroSub: "واك يربط واتساب شركتك بذكاء اصطناعي يرد فوراً، يحجز مواعيد، يحوّل للموظفين، ويشتغل ٢٤/٧ — بالعربي والإنجليزي.",
     heroProof: "موثوق من شركات في السعودية · الرد خلال ٣ ثواني · متوفر ٢٤/٧",
@@ -385,6 +388,7 @@ export default function LandingPage() {
   const isRtl = lang === "ar";
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [demoOpen, setDemoOpen] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -532,6 +536,9 @@ export default function LandingPage() {
                   </Link>
                   <button onClick={() => scrollTo("pricing")} className="inline-flex items-center gap-2 border-2 border-[#0F510F]/20 text-[#0F510F] font-semibold px-7 py-3.5 rounded-xl hover:border-[#0F510F]/40 transition-colors text-sm">
                     {t.bookDemo}
+                  </button>
+                  <button onClick={() => setDemoOpen(true)} className="inline-flex items-center gap-2 text-[#0F510F] font-semibold px-4 py-3.5 rounded-xl hover:bg-[#0F510F]/5 transition-colors text-sm">
+                    <Play className="w-4 h-4" /> {t.seeDemo}
                   </button>
                 </div>
               </Reveal>
@@ -760,6 +767,9 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+
+      {/* Interactive product demo overlay */}
+      <ProductDemo open={demoOpen} onClose={() => setDemoOpen(false)} />
     </div>
   );
 }
