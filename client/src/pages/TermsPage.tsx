@@ -6,17 +6,16 @@ export default function TermsPage() {
 
   return (
     <div
-      className="min-h-screen flex flex-col"
-      style={{ backgroundColor: "#F5F2EC" }}
+      className="min-h-screen flex flex-col bg-gray-50"
       dir={isRtl ? "rtl" : "ltr"}
     >
       {/* Header */}
-      <header className="bg-[#0F510F] text-white px-5 py-4 shadow-md">
+      <header className="bg-white border-b border-gray-200 px-5 py-4">
         <div className="max-w-3xl mx-auto flex items-center gap-4">
-          <img src="/logo.png" alt="WAK Solutions" className="h-9" />
+          <div className="w-10 h-10 bg-[#0F510F] rounded-xl flex items-center justify-center text-white font-bold text-lg">W</div>
           <div>
-            <p className="font-bold text-base leading-tight">WAK Solutions</p>
-            <p className="text-xs text-white/70">{t("termsPageTitle")}</p>
+            <p className="font-bold text-base leading-tight text-gray-900">WAK Solutions</p>
+            <p className="text-xs text-gray-500">{t("termsPageTitle")}</p>
           </div>
         </div>
       </header>
@@ -131,7 +130,7 @@ export default function TermsPage() {
         </Section>
 
         {/* Footer */}
-        <div className="pt-4 border-t border-[#0F510F]/20 text-center text-sm text-gray-500">
+        <div className="pt-4 border-t border-gray-200 text-center text-sm text-gray-500">
           {t("termsPageFooter")}
         </div>
       </main>
@@ -149,7 +148,7 @@ function Section({
   isRtl: boolean;
 }) {
   return (
-    <section className="bg-white rounded-2xl shadow-sm border border-[#0F510F]/10 px-7 py-6">
+    <section className="bg-white rounded-xl border border-gray-200 px-7 py-6">
       <h2 className="text-lg font-bold text-[#408440] mb-3 flex items-center gap-2">
         <span className="w-1 h-5 rounded-full bg-[#0F510F] flex-shrink-0" />
         {title}

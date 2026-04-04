@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { useLocation, Link } from "wouter";
-import { ArrowLeft, Inbox, User, Users, Clock, RefreshCw, Calendar, Video, X } from "lucide-react";
+import { Inbox, User, Users, Clock, RefreshCw, Calendar, Video, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/language-context";
-
-// ── Types ─────────────────────────────────────────────────────────────────────
+import DashboardLayout from "@/components/DashboardLayout";
 
 interface InboxItem {
   item_type: "chat" | "meeting";
@@ -21,8 +20,6 @@ interface InboxItem {
   meeting_agent_id: number | null;
   meeting_agent_name: string | null;
 }
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function timeAgo(iso: string): string {
   const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
@@ -41,101 +38,67 @@ function formatKsa(iso: string): string {
   });
 }
 
-function ChatStatusBadge({ status, agentName }: { status: string; agentName?: string | null }) {
-  const { t } = useLanguage();
-  if (status === "in_progress") return (
-    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-      <Clock className="w-2.5 h-2.5" />
-      {t("statusInProgress")}{agentName ? ` · ${agentName}` : ""}
-    </span>
-  );
-  if (status === "closed" || status === "resolved") return (
-    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-[#0F510F]/10 text-[#0F510F]">
-      {t("statusResolved")}
-    </span>
-  );
+function StatusBadge({ status, label }: { status: string; label: string }) {
+  const colors: Record<string, string> = {
+    in_progress: "bg-yellow-100 text-yellow-700",
+    closed: "bg-green-100 text-green-700",
+    resolved: "bg-green-100 text-green-700",
+    completed: "bg-green-100 text-green-700",
+    open: "bg-gray-100 text-gray-600",
+    pending: "bg-blue-100 text-blue-700",
+  };
   return (
-    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-muted text-muted-foreground">
-      {t("statusOpen")}
+    <span className={`text-[11px] font-medium px-2.5 py-1 rounded-full ${colors[status] ?? colors.open}`}>
+      {label}
     </span>
   );
 }
-
-function MeetingStatusBadge({ status }: { status: string }) {
-  const { t } = useLanguage();
-  if (status === "in_progress") return (
-    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700">
-      <Clock className="w-2.5 h-2.5" /> {t("statusInProgress")}
-    </span>
-  );
-  if (status === "completed") return (
-    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-[#0F510F]/10 text-[#0F510F]">
-      {t("statusCompleted")}
-    </span>
-  );
-  return (
-    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-      <Calendar className="w-2.5 h-2.5" /> {t("statusUpcoming")}
-    </span>
-  );
-}
-
-// ── Meeting detail modal ──────────────────────────────────────────────────────
 
 function MeetingModal({ item, onClose }: { item: InboxItem; onClose: () => void }) {
   const { t } = useLanguage();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
-      <div
-        className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6"
-        onClick={e => e.stopPropagation()}
-      >
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2">
             <Calendar className="w-5 h-5 text-blue-600" />
-            <h3 className="text-base font-semibold text-foreground">{t("inboxMeetingDetails")}</h3>
+            <h3 className="text-base font-semibold text-gray-900">{t("inboxMeetingDetails")}</h3>
           </div>
-          <button
-            onClick={onClose}
-            className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          >
+          <button onClick={onClose} className="p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
             <X className="w-4 h-4" />
           </button>
         </div>
-
         <div className="space-y-4">
-          <div className="bg-muted/50 rounded-xl p-4 space-y-3">
+          <div className="bg-gray-50 rounded-xl p-4 space-y-3">
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">{t("inboxCustomer")}</p>
-              <p className="text-sm font-semibold font-mono text-foreground">{item.customer_phone}</p>
+              <p className="text-xs text-gray-500 uppercase tracking-wider font-medium mb-0.5">{t("inboxCustomer")}</p>
+              <p className="text-sm font-semibold font-mono text-gray-900">{item.customer_phone}</p>
             </div>
             {item.meeting_scheduled_at && (
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">{t("inboxDateTime")}</p>
-                <p className="text-sm font-semibold text-foreground">{formatKsa(item.meeting_scheduled_at)}</p>
+                <p className="text-xs text-gray-500 uppercase tracking-wider font-medium mb-0.5">{t("inboxDateTime")}</p>
+                <p className="text-sm font-semibold text-gray-900">{formatKsa(item.meeting_scheduled_at)}</p>
               </div>
             )}
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">{t("inboxStatus")}</p>
-              <MeetingStatusBadge status={item.meeting_status ?? "pending"} />
+              <p className="text-xs text-gray-500 uppercase tracking-wider font-medium mb-0.5">{t("inboxStatus")}</p>
+              <StatusBadge status={item.meeting_status ?? "pending"} label={item.meeting_status ?? "pending"} />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-0.5">{t("inboxAssignedAgent")}</p>
+              <p className="text-xs text-gray-500 uppercase tracking-wider font-medium mb-0.5">{t("inboxAssignedAgent")}</p>
               {item.meeting_agent_name
-                ? <p className="text-sm text-foreground">{item.meeting_agent_name}</p>
-                : <p className="text-sm text-muted-foreground italic">{t("inboxUnassigned")}</p>}
+                ? <p className="text-sm text-gray-900">{item.meeting_agent_name}</p>
+                : <p className="text-sm text-gray-400 italic">{t("inboxUnassigned")}</p>}
             </div>
           </div>
-
           {item.meeting_link && (
             <a
               href={item.meeting_link}
               target="_blank"
               rel="noopener noreferrer"
-              className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-xl transition-colors"
+              className="w-full flex items-center justify-center gap-2 py-2.5 bg-[#0F510F] hover:bg-[#0d4510] text-white text-sm font-semibold rounded-xl transition-colors"
             >
-              <Video className="w-4 h-4" />
-              {t("inboxJoinMeeting")}
+              <Video className="w-4 h-4" /> {t("inboxJoinMeeting")}
             </a>
           )}
         </div>
@@ -143,107 +106,6 @@ function MeetingModal({ item, onClose }: { item: InboxItem; onClose: () => void 
     </div>
   );
 }
-
-// ── Chat card (with optional meeting attachment) ──────────────────────────────
-
-function ChatCard({
-  item,
-  showAgent,
-  action,
-  onMeetingClick,
-}: {
-  item: InboxItem;
-  showAgent?: boolean;
-  action: React.ReactNode;
-  onMeetingClick?: () => void;
-}) {
-  const { t } = useLanguage();
-  return (
-    <div className="bg-white border border-border rounded-xl px-4 py-3 hover:bg-muted/30 transition-colors">
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-full bg-[#0F510F]/10 flex items-center justify-center flex-shrink-0">
-          <User className="w-4 h-4 text-[#0F510F]" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <p className="text-sm font-semibold text-foreground font-mono">{item.customer_phone}</p>
-            <ChatStatusBadge status={item.chat_status ?? "open"} agentName={item.assigned_agent_name} />
-          </div>
-          {item.escalation_reason && (
-            <p className="text-xs text-muted-foreground truncate">{item.escalation_reason}</p>
-          )}
-          <div className="flex items-center gap-2 mt-0.5">
-            <Clock className="w-3 h-3 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground">{timeAgo(item.created_at)}</span>
-            {showAgent && !item.assigned_agent_name && (
-              <span className="text-xs text-muted-foreground italic">{t("inboxUnassigned")}</span>
-            )}
-          </div>
-        </div>
-        <div className="flex-shrink-0">{action}</div>
-      </div>
-
-      {/* Linked meeting pill — shown when this chat customer also has a booked meeting */}
-      {item.meeting_id && item.meeting_scheduled_at && (
-        <button
-          onClick={onMeetingClick}
-          className="mt-2 ml-12 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-700 font-medium hover:bg-blue-100 transition-colors"
-        >
-          <Calendar className="w-3 h-3" />
-          {t("inboxMeeting")} · {formatKsa(item.meeting_scheduled_at)}
-        </button>
-      )}
-    </div>
-  );
-}
-
-// ── Standalone meeting card ───────────────────────────────────────────────────
-
-function MeetingCard({
-  item,
-  showAgent,
-  onView,
-}: {
-  item: InboxItem;
-  showAgent?: boolean;
-  onView: () => void;
-}) {
-  const { t } = useLanguage();
-  return (
-    <div className="bg-white border border-blue-200 rounded-xl px-4 py-3 flex items-center gap-3 hover:bg-blue-50/40 transition-colors">
-      <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
-        <Calendar className="w-4 h-4 text-blue-600" />
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2 flex-wrap">
-          <p className="text-sm font-semibold text-foreground font-mono">{item.customer_phone}</p>
-          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-            <Calendar className="w-2.5 h-2.5" /> {t("inboxMeeting")}
-          </span>
-          <MeetingStatusBadge status={item.meeting_status ?? "pending"} />
-        </div>
-        {item.meeting_scheduled_at && (
-          <p className="text-xs text-blue-700 font-medium mt-0.5">{formatKsa(item.meeting_scheduled_at)}</p>
-        )}
-        {showAgent && (
-          <p className="text-xs text-muted-foreground mt-0.5">
-            {item.meeting_agent_name ?? <span className="italic">{t("inboxUnassigned")}</span>}
-          </p>
-        )}
-      </div>
-      <div className="flex-shrink-0">
-        <button
-          onClick={onView}
-          className="px-3 py-1.5 text-xs font-semibold border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-50 transition-colors"
-        >
-          {t("inboxView")}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── Main page ─────────────────────────────────────────────────────────────────
 
 type Tab = "shared" | "mine" | "all";
 
@@ -265,7 +127,7 @@ export default function InboxPage() {
     try {
       const res = await fetch("/api/inbox", { credentials: "include" });
       if (res.ok) setItems(await res.json());
-    } catch (_) {}
+    } catch {}
   }, []);
 
   useEffect(() => {
@@ -276,9 +138,6 @@ export default function InboxPage() {
     }
   }, [isAuthenticated, fetchData]);
 
-  // Re-fetch immediately when the PWA/tab returns to the foreground so both
-  // agents always see each other's claim/reassign actions without waiting for
-  // the next 15-second poll tick.
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState === "visible" && isAuthenticated) fetchData();
@@ -301,152 +160,161 @@ export default function InboxPage() {
       } else {
         await fetchData();
       }
-    } catch (_) {
+    } catch {
       setError(t("inboxNetworkError"));
     } finally {
       setClaiming(null);
     }
   };
 
-  if (isAuthLoading || !isAuthenticated) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
-      </div>
-    );
-  }
-
-  // Tab filtering
   const sharedItems = items.filter(item =>
-    item.item_type === "chat" ? item.assigned_agent_id === null : item.meeting_agent_id === null
+    item.item_type === "chat" ? item.assigned_agent_id === null : item.meeting_agent_id === null,
   );
   const myItems = items.filter(item =>
-    item.item_type === "chat" ? item.assigned_agent_id === agentId : item.meeting_agent_id === agentId
+    item.item_type === "chat" ? item.assigned_agent_id === agentId : item.meeting_agent_id === agentId,
   );
 
   const tabs: { key: Tab; label: string; count: number; show: boolean }[] = [
     { key: "shared", label: t("inboxTabShared"), count: sharedItems.length, show: true },
-    { key: "mine",   label: t("inboxTabMy"),     count: myItems.length,    show: true },
-    { key: "all",    label: t("inboxTabAll"),     count: items.length,      show: isAdmin },
+    { key: "mine", label: t("inboxTabMy"), count: myItems.length, show: true },
+    { key: "all", label: t("inboxTabAll"), count: items.length, show: isAdmin },
   ];
 
-  const activeItems =
-    tab === "shared" ? sharedItems :
-    tab === "mine"   ? myItems :
-    items;
+  const activeItems = tab === "shared" ? sharedItems : tab === "mine" ? myItems : items;
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
-      <header className="h-14 bg-[#0F510F] text-white flex items-center justify-between px-5 flex-shrink-0 shadow-md">
-        <div className="flex items-center gap-4">
-          <img src="/logo.png" alt="WAK Solutions" className="h-[36px] shrink-0" />
-          <span className="hidden sm:block font-semibold text-sm text-white/90">WAK Solutions</span>
-          <span className="hidden sm:block text-white/40">—</span>
-          <span className="hidden sm:block text-sm text-white/70">{t("inboxTitle")}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={fetchData}
-            title="Refresh"
-            className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white px-3 py-1.5 rounded-md hover:bg-white/10 transition-colors"
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-          </button>
-          <Link href="/dashboard">
-            <a className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white transition-colors px-3 py-1.5 rounded-md hover:bg-white/10">
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">{t("dashboard")}</span>
-            </a>
-          </Link>
-        </div>
-      </header>
-
-      <main className="flex-1 w-full max-w-3xl mx-auto px-4 py-6 space-y-4">
-        <div className="flex items-center gap-2">
-          <Inbox className="w-5 h-5 text-[#0F510F]" />
-          <h1 className="text-xl font-bold text-foreground">{t("inboxTitle")}</h1>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex gap-1 bg-muted p-1 rounded-xl w-fit">
-          {tabs.filter(tb => tb.show).map(tb => (
-            <button
-              key={tb.key}
-              onClick={() => setTab(tb.key)}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
-                tab === tb.key
-                  ? "bg-white shadow-sm text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {tb.key === "all" ? <Users className="w-3.5 h-3.5" /> : <Inbox className="w-3.5 h-3.5" />}
-              {tb.label}
-              <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${
-                tab === tb.key ? "bg-[#0F510F] text-white" : "bg-muted-foreground/20 text-muted-foreground"
-              }`}>
-                {tb.count}
-              </span>
-            </button>
-          ))}
-        </div>
-
-        {error && (
-          <p className="text-sm text-destructive bg-destructive/10 rounded-lg px-4 py-2">{error}</p>
-        )}
-
-        {/* Item list */}
-        <div className="space-y-2">
-          {activeItems.length === 0 ? (
-            <div className="bg-card border border-border rounded-xl flex flex-col items-center justify-center py-16 text-muted-foreground gap-2">
-              <Inbox className="w-10 h-10 opacity-30" />
-              <p className="text-sm">
-                {tab === "shared" ? t("inboxEmptyShared") :
-                 tab === "mine"   ? t("inboxEmptyMy") :
-                 t("inboxEmptyAll")}
-              </p>
+    <DashboardLayout>
+      <div className="h-full overflow-y-auto">
+        <div className="max-w-3xl mx-auto">
+          {/* Page header */}
+          <div className="flex items-center justify-between mb-6">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">{t("inboxTitle")}</h1>
+              <p className="text-sm text-gray-500 mt-1">{items.length} items</p>
             </div>
-          ) : (
-            activeItems.map(item =>
-              item.item_type === "meeting" ? (
-                <MeetingCard
-                  key={`meeting-${item.meeting_id}`}
-                  item={item}
-                  showAgent={tab === "all"}
-                  onView={() => setMeetingModal(item)}
-                />
-              ) : (
-                <ChatCard
-                  key={item.customer_phone}
-                  item={item}
-                  showAgent={tab === "all"}
-                  onMeetingClick={item.meeting_id ? () => setMeetingModal(item) : undefined}
-                  action={
-                    tab === "shared" ? (
-                      <button
-                        onClick={() => claim(item.customer_phone)}
-                        disabled={claiming === item.customer_phone}
-                        className="px-3 py-1.5 text-xs font-semibold bg-[#0F510F] text-white rounded-lg hover:bg-[#0d4510] disabled:opacity-50 transition-colors"
-                      >
-                        {claiming === item.customer_phone ? t("inboxClaiming") : t("inboxClaim")}
-                      </button>
-                    ) : (
-                      <Link href={`/?phone=${encodeURIComponent(item.customer_phone)}`}>
-                        <a className="px-3 py-1.5 text-xs font-semibold border border-[#0F510F]/30 text-[#0F510F] rounded-lg hover:bg-[#0F510F]/5 transition-colors">
-                          {t("inboxOpen")}
-                        </a>
-                      </Link>
-                    )
-                  }
-                />
-              )
-            )
-          )}
-        </div>
-      </main>
+            <button
+              onClick={fetchData}
+              className="flex items-center gap-1.5 text-xs font-medium text-gray-600 border border-gray-200 px-3 py-2 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <RefreshCw className="w-3.5 h-3.5" /> Refresh
+            </button>
+          </div>
 
-      {meetingModal && (
-        <MeetingModal item={meetingModal} onClose={() => setMeetingModal(null)} />
-      )}
-    </div>
+          {/* Tabs */}
+          <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit mb-5">
+            {tabs.filter(tb => tb.show).map(tb => (
+              <button
+                key={tb.key}
+                onClick={() => setTab(tb.key)}
+                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                  tab === tb.key ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                {tb.key === "all" ? <Users className="w-3.5 h-3.5" /> : <Inbox className="w-3.5 h-3.5" />}
+                {tb.label}
+                <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${
+                  tab === tb.key ? "bg-[#0F510F] text-white" : "bg-gray-300/50 text-gray-500"
+                }`}>
+                  {tb.count}
+                </span>
+              </button>
+            ))}
+          </div>
+
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-4 py-2 mb-4">{error}</p>
+          )}
+
+          {/* Items */}
+          <div className="space-y-2">
+            {activeItems.length === 0 ? (
+              <div className="bg-white border border-gray-200 rounded-xl flex flex-col items-center justify-center py-16 text-gray-400 gap-2">
+                <Inbox className="w-10 h-10 opacity-30" />
+                <p className="text-sm">
+                  {tab === "shared" ? t("inboxEmptyShared") : tab === "mine" ? t("inboxEmptyMy") : t("inboxEmptyAll")}
+                </p>
+              </div>
+            ) : (
+              activeItems.map(item =>
+                item.item_type === "meeting" ? (
+                  <div key={`meeting-${item.meeting_id}`} className="bg-white border border-gray-200 rounded-xl px-4 py-3 flex items-center gap-3 hover:bg-gray-50/50 transition-colors">
+                    <div className="w-9 h-9 rounded-full bg-blue-100 flex items-center justify-center shrink-0">
+                      <Calendar className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium text-gray-900 font-mono">{item.customer_phone}</p>
+                        <StatusBadge status={item.meeting_status ?? "pending"} label={item.meeting_status ?? "pending"} />
+                      </div>
+                      {item.meeting_scheduled_at && (
+                        <p className="text-xs text-gray-500 mt-0.5">{formatKsa(item.meeting_scheduled_at)}</p>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => setMeetingModal(item)}
+                      className="px-3 py-1.5 text-xs font-medium border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                    >
+                      {t("inboxView")}
+                    </button>
+                  </div>
+                ) : (
+                  <div key={item.customer_phone} className="bg-white border border-gray-200 rounded-xl px-4 py-3 hover:bg-gray-50/50 transition-colors">
+                    <div className="flex items-center gap-3">
+                      <div className="w-9 h-9 rounded-full bg-[#0F510F]/10 flex items-center justify-center shrink-0">
+                        <User className="w-4 h-4 text-[#0F510F]" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="text-sm font-medium text-gray-900 font-mono">{item.customer_phone}</p>
+                          <StatusBadge
+                            status={item.chat_status ?? "open"}
+                            label={item.chat_status === "in_progress" ? `${t("statusInProgress")}${item.assigned_agent_name ? ` · ${item.assigned_agent_name}` : ""}` : item.chat_status === "closed" || item.chat_status === "resolved" ? t("statusResolved") : t("statusOpen")}
+                          />
+                        </div>
+                        {item.escalation_reason && (
+                          <p className="text-xs text-gray-500 truncate">{item.escalation_reason}</p>
+                        )}
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          <Clock className="w-3 h-3 text-gray-400" />
+                          <span className="text-xs text-gray-400">{timeAgo(item.created_at)}</span>
+                        </div>
+                      </div>
+                      <div className="shrink-0">
+                        {tab === "shared" ? (
+                          <button
+                            onClick={() => claim(item.customer_phone)}
+                            disabled={claiming === item.customer_phone}
+                            className="px-3 py-1.5 text-xs font-medium bg-[#0F510F] text-white rounded-lg hover:bg-[#0d4510] disabled:opacity-50 transition-colors"
+                          >
+                            {claiming === item.customer_phone ? t("inboxClaiming") : t("inboxClaim")}
+                          </button>
+                        ) : (
+                          <Link href={`/dashboard?phone=${encodeURIComponent(item.customer_phone)}`}>
+                            <a className="px-3 py-1.5 text-xs font-medium border border-[#0F510F]/30 text-[#0F510F] rounded-lg hover:bg-[#0F510F]/5 transition-colors">
+                              {t("inboxOpen")}
+                            </a>
+                          </Link>
+                        )}
+                      </div>
+                    </div>
+                    {item.meeting_id && item.meeting_scheduled_at && (
+                      <button
+                        onClick={() => setMeetingModal(item)}
+                        className="mt-2 ms-12 flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-blue-50 border border-blue-200 text-xs text-blue-700 font-medium hover:bg-blue-100 transition-colors"
+                      >
+                        <Calendar className="w-3 h-3" />
+                        {t("inboxMeeting")} · {formatKsa(item.meeting_scheduled_at)}
+                      </button>
+                    )}
+                  </div>
+                ),
+              )
+            )}
+          </div>
+        </div>
+      </div>
+
+      {meetingModal && <MeetingModal item={meetingModal} onClose={() => setMeetingModal(null)} />}
+    </DashboardLayout>
   );
 }

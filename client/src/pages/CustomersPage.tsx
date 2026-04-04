@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useLocation, Link } from "wouter";
+import { useLocation } from "wouter";
 import {
-  ArrowLeft, Search, MessageSquare, Bot, HeadphonesIcon,
+  Search, MessageSquare, Bot, HeadphonesIcon,
   AlertTriangle, Calendar, CheckCircle2, ClipboardList,
   ClipboardCheck, Package, ChevronLeft, ChevronRight, X,
-  Users2,
+  Users2, BarChart3,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList,
@@ -12,6 +12,7 @@ import {
 import { format, formatDistanceToNow } from "date-fns";
 import { useAuth } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/language-context";
+import DashboardLayout from "@/components/DashboardLayout";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -72,9 +73,9 @@ function TimelineRow({ event }: { event: TimelineEvent }) {
         {cfg.icon}
       </div>
       {/* Content */}
-      <div className="flex-1 min-w-0 pb-4 border-b border-border/40 last:border-0 last:pb-0">
-        <p className="text-sm font-medium text-foreground leading-snug">{event.summary}</p>
-        <p className="text-xs text-muted-foreground mt-0.5">
+      <div className="flex-1 min-w-0 pb-4 border-b border-gray-200/40 last:border-0 last:pb-0">
+        <p className="text-sm font-medium text-gray-900 leading-snug">{event.summary}</p>
+        <p className="text-xs text-gray-500 mt-0.5">
           {format(new Date(event.timestamp), "MMM d, yyyy · h:mm a")}
         </p>
       </div>
@@ -150,10 +151,10 @@ function JourneyPanel({
               <div className="w-6 h-6 border-4 border-[#0F510F]/20 border-t-[#0F510F] rounded-full animate-spin" />
             </div>
           ) : !data || data.timeline.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center pt-12">{t("journeyNoEvents")}</p>
+            <p className="text-sm text-gray-500 text-center pt-12">{t("journeyNoEvents")}</p>
           ) : (
             <div className="space-y-0">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-4">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">
                 {data.timeline.length} events
               </p>
               {data.timeline.map((evt, i) => (
@@ -198,10 +199,10 @@ function FunnelTab() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-base font-semibold text-foreground">{t("funnelTitle")}</h2>
+      <h2 className="text-base font-semibold text-gray-900">{t("funnelTitle")}</h2>
 
       {/* Recharts bar chart */}
-      <div className="bg-card border border-border rounded-xl p-4">
+      <div className="bg-white border border-gray-200 rounded-xl p-4">
         <ResponsiveContainer width="100%" height={300}>
           <BarChart
             data={annotated}
@@ -234,30 +235,30 @@ function FunnelTab() {
       </div>
 
       {/* Stage table with drop-off */}
-      <div className="bg-card border border-border rounded-xl overflow-hidden">
+      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-border bg-muted/50">
-              <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Stage</th>
-              <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">Customers</th>
-              <th className="text-right px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t("funnelDropOff")}</th>
+            <tr className="border-b border-gray-200 bg-gray-50/50">
+              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Stage</th>
+              <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Customers</th>
+              <th className="text-right px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{t("funnelDropOff")}</th>
               <th className="px-4 py-3 w-40"></th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-border">
+          <tbody className="divide-y divide-gray-200">
             {annotated.map((s, i) => (
-              <tr key={s.stage} className="hover:bg-muted/30">
-                <td className="px-4 py-3 font-medium text-foreground">{s.stage}</td>
-                <td className="px-4 py-3 text-right font-semibold text-foreground">{s.count}</td>
+              <tr key={s.stage} className="hover:bg-gray-50/50">
+                <td className="px-4 py-3 font-medium text-gray-900">{s.stage}</td>
+                <td className="px-4 py-3 text-right font-semibold text-gray-900">{s.count}</td>
                 <td className="px-4 py-3 text-right">
                   {s.dropOff !== null ? (
-                    <span className={`text-sm font-medium ${s.dropOff >= 50 ? "text-red-500" : s.dropOff >= 25 ? "text-orange-500" : "text-muted-foreground"}`}>
+                    <span className={`text-sm font-medium ${s.dropOff >= 50 ? "text-red-500" : s.dropOff >= 25 ? "text-orange-500" : "text-gray-500"}`}>
                       −{s.dropOff}%
                     </span>
-                  ) : <span className="text-muted-foreground">—</span>}
+                  ) : <span className="text-gray-500">—</span>}
                 </td>
                 <td className="px-4 py-3">
-                  <div className="w-full bg-muted rounded-full h-2">
+                  <div className="w-full bg-gray-100 rounded-full h-2">
                     <div
                       className="h-2 rounded-full transition-all"
                       style={{
@@ -330,8 +331,8 @@ export default function CustomersPage() {
 
   if (isAuthLoading || !isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="w-8 h-8 border-4 border-[#0F510F]/20 border-t-[#0F510F] rounded-full animate-spin" />
       </div>
     );
   }
@@ -339,152 +340,135 @@ export default function CustomersPage() {
   const totalPages = Math.ceil(total / 20);
 
   return (
-    <div className="flex flex-col min-h-screen bg-background">
-      {/* Header */}
-      <header className="h-14 bg-[#0F510F] text-white flex items-center justify-between px-5 flex-shrink-0 shadow-md">
-        <div className="flex items-center gap-4">
-          <img src="/logo.png" alt="WAK Solutions" className="h-[36px] shrink-0" />
-          <span className="hidden sm:block font-semibold text-sm text-white/90">WAK Solutions</span>
-          <span className="hidden sm:block text-white/40">—</span>
-          <span className="hidden sm:block text-sm text-white/70">{t("customersTitle")}</span>
-        </div>
-        <Link href="/dashboard">
-          <a className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white transition-colors px-3 py-1.5 rounded-md hover:bg-white/10">
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">{t("dashboard")}</span>
-          </a>
-        </Link>
-      </header>
+    <DashboardLayout>
+      <div className="h-full overflow-y-auto">
+        <div className="max-w-5xl mx-auto px-6 py-6 space-y-4">
+          {/* Page header */}
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900">{t("customersTitle")}</h1>
+            <p className="text-sm text-gray-500 mt-1">{total} {t("customersTotal")}</p>
+          </div>
 
-      {/* Tab bar */}
-      <div className="border-b border-border bg-card flex-shrink-0">
-        <div className="max-w-5xl mx-auto px-4 flex gap-0">
-          {(["list", "funnel"] as const).map(key => (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
-                tab === key
-                  ? "border-[#0F510F] text-[#0F510F]"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {key === "list" ? t("customersTabList") : t("customersTabFunnel")}
-            </button>
-          ))}
-        </div>
-      </div>
+          {/* Tab bar */}
+          <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
+            {(["list", "funnel"] as const).map(key => (
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5 ${
+                  tab === key
+                    ? "bg-white shadow-sm text-gray-900"
+                    : "text-gray-500 hover:text-gray-700"
+                }`}
+              >
+                {key === "list" ? <Users2 className="w-3.5 h-3.5" /> : <BarChart3 className="w-3.5 h-3.5" />}
+                {key === "list" ? t("customersTabList") : t("customersTabFunnel")}
+              </button>
+            ))}
+          </div>
 
-      <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-6 space-y-4 pb-8">
-        {tab === "funnel" ? (
-          <FunnelTab />
-        ) : (
-          <>
-            {/* Title + search */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-2">
-                <Users2 className="w-5 h-5 text-[#0F510F]" />
-                <h1 className="text-xl font-bold text-foreground">{t("customersTitle")}</h1>
-                <span className="text-sm text-muted-foreground ml-1">{total} {t("customersTotal")}</span>
+          {tab === "funnel" ? (
+            <FunnelTab />
+          ) : (
+            <>
+              {/* Search */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder={t("customersSearch")}
+                  value={search}
+                  onChange={e => setSearch(e.target.value)}
+                  className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-xl bg-white focus:outline-none focus:border-[#0F510F] transition-colors"
+                />
               </div>
-            </div>
 
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
-              <input
-                type="text"
-                placeholder={t("customersSearch")}
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 text-sm border border-border rounded-xl bg-card focus:outline-none focus:border-[#0F510F] transition-colors"
-              />
-            </div>
+              {/* Table */}
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                {loading ? (
+                  <div className="flex items-center justify-center py-16">
+                    <div className="w-6 h-6 border-4 border-[#0F510F]/20 border-t-[#0F510F] rounded-full animate-spin" />
+                  </div>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200 bg-gray-50/50">
+                          <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{t("customersColName")}</th>
+                          <th className="hidden md:table-cell text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{t("customersColFirstSeen")}</th>
+                          <th className="hidden sm:table-cell text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{t("customersColLastSeen")}</th>
+                          <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">{t("customersTouchpoints")}</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {customers.map(c => (
+                          <tr
+                            key={c.phone}
+                            onClick={() => setSelectedPhone(c.phone)}
+                            className="hover:bg-gray-50/50 cursor-pointer transition-colors"
+                          >
+                            <td className="px-4 py-3">
+                              <p className="font-medium text-gray-900">
+                                {c.name || <span className="text-gray-500 italic text-xs">{t("customersUnknown")}</span>}
+                              </p>
+                              <p className="text-xs text-gray-500 font-mono">{c.phone}</p>
+                            </td>
+                            <td className="hidden md:table-cell px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
+                              {c.firstSeen ? format(new Date(c.firstSeen), "MMM d, yyyy") : "—"}
+                            </td>
+                            <td className="hidden sm:table-cell px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
+                              {c.lastSeen
+                                ? formatDistanceToNow(new Date(c.lastSeen), { addSuffix: true })
+                                : "—"}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <span className="inline-flex items-center justify-center w-8 h-6 rounded-full bg-[#0F510F]/10 text-[#0F510F] text-xs font-semibold">
+                                {c.touchpoints}
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                        {customers.length === 0 && (
+                          <tr>
+                            <td colSpan={4} className="px-4 py-12 text-center text-gray-500 text-sm">
+                              {t("customersNoResults")}
+                            </td>
+                          </tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
 
-            {/* Table */}
-            <div className="bg-card border border-border rounded-xl overflow-hidden">
-              {loading ? (
-                <div className="flex items-center justify-center py-16">
-                  <div className="w-6 h-6 border-4 border-[#0F510F]/20 border-t-[#0F510F] rounded-full animate-spin" />
-                </div>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-border bg-muted/50">
-                        <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t("customersColName")}</th>
-                        <th className="hidden md:table-cell text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t("customersColFirstSeen")}</th>
-                        <th className="hidden sm:table-cell text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t("customersColLastSeen")}</th>
-                        <th className="text-center px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wide">{t("customersTouchpoints")}</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-border">
-                      {customers.map(c => (
-                        <tr
-                          key={c.phone}
-                          onClick={() => setSelectedPhone(c.phone)}
-                          className="hover:bg-muted/30 cursor-pointer transition-colors"
-                        >
-                          <td className="px-4 py-3">
-                            <p className="font-medium text-foreground">
-                              {c.name || <span className="text-muted-foreground italic text-xs">{t("customersUnknown")}</span>}
-                            </p>
-                            <p className="text-xs text-muted-foreground font-mono">{c.phone}</p>
-                          </td>
-                          <td className="hidden md:table-cell px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
-                            {c.firstSeen ? format(new Date(c.firstSeen), "MMM d, yyyy") : "—"}
-                          </td>
-                          <td className="hidden sm:table-cell px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
-                            {c.lastSeen
-                              ? formatDistanceToNow(new Date(c.lastSeen), { addSuffix: true })
-                              : "—"}
-                          </td>
-                          <td className="px-4 py-3 text-center">
-                            <span className="inline-flex items-center justify-center w-8 h-6 rounded-full bg-[#0F510F]/10 text-[#0F510F] text-xs font-semibold">
-                              {c.touchpoints}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                      {customers.length === 0 && (
-                        <tr>
-                          <td colSpan={4} className="px-4 py-12 text-center text-muted-foreground text-sm">
-                            {t("customersNoResults")}
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
+              {/* Pagination */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between pt-1">
+                  <p className="text-xs text-gray-500">
+                    Page {page} of {totalPages}
+                  </p>
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => setPage(p => Math.max(1, p - 1))}
+                      disabled={page === 1}
+                      className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                      disabled={page === totalPages}
+                      className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-40 transition-colors"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               )}
-            </div>
-
-            {/* Pagination */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between pt-1">
-                <p className="text-xs text-muted-foreground">
-                  Page {page} of {totalPages}
-                </p>
-                <div className="flex gap-1">
-                  <button
-                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                    className="p-1.5 rounded-lg border border-border hover:bg-muted disabled:opacity-40 transition-colors"
-                  >
-                    <ChevronLeft className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                    disabled={page === totalPages}
-                    className="p-1.5 rounded-lg border border-border hover:bg-muted disabled:opacity-40 transition-colors"
-                  >
-                    <ChevronRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            )}
-          </>
-        )}
-      </main>
+            </>
+          )}
+        </div>
+      </div>
 
       {/* Journey side panel */}
       {selectedPhone && (
@@ -493,6 +477,6 @@ export default function CustomersPage() {
           onClose={() => setSelectedPhone(null)}
         />
       )}
-    </div>
+    </DashboardLayout>
   );
 }

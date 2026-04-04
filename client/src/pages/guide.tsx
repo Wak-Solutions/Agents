@@ -1,8 +1,9 @@
 import { useState, useEffect } from "react";
-import { useLocation, Link } from "wouter";
-import { ArrowLeft, X, BookOpen, Globe } from "lucide-react";
+import { useLocation } from "wouter";
+import { X, BookOpen, Globe } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/language-context";
+import DashboardLayout from "@/components/DashboardLayout";
 
 // ── iOS install wizard ──────────────────────────────────────────────────────
 const installSteps = [
@@ -28,25 +29,25 @@ const installStepsAr = [
 // ── Tiny helpers for the guide prose ────────────────────────────────────────
 function H2({ id, children }: { id: string; children: React.ReactNode }) {
   return (
-    <h2 id={id} className="text-lg font-bold text-foreground mt-10 mb-3 pb-1 border-b border-border scroll-mt-20">
+    <h2 id={id} className="text-lg font-bold text-gray-900 mt-10 mb-3 pb-1 border-b border-gray-200 scroll-mt-20">
       {children}
     </h2>
   );
 }
 function H3({ children }: { children: React.ReactNode }) {
-  return <h3 className="text-base font-semibold text-foreground mt-6 mb-2">{children}</h3>;
+  return <h3 className="text-base font-semibold text-gray-900 mt-6 mb-2">{children}</h3>;
 }
 function H4({ children }: { children: React.ReactNode }) {
-  return <h4 className="text-sm font-semibold text-foreground mt-4 mb-1">{children}</h4>;
+  return <h4 className="text-sm font-semibold text-gray-900 mt-4 mb-1">{children}</h4>;
 }
 function P({ children }: { children: React.ReactNode }) {
-  return <p className="text-sm text-foreground/80 leading-relaxed mb-3">{children}</p>;
+  return <p className="text-sm text-gray-700 leading-relaxed mb-3">{children}</p>;
 }
 function Ol({ children }: { children: React.ReactNode }) {
-  return <ol className="list-decimal list-outside ms-5 space-y-1 mb-3 text-sm text-foreground/80">{children}</ol>;
+  return <ol className="list-decimal list-outside ms-5 space-y-1 mb-3 text-sm text-gray-700">{children}</ol>;
 }
 function Ul({ children }: { children: React.ReactNode }) {
-  return <ul className="list-disc list-outside ms-5 space-y-1 mb-3 text-sm text-foreground/80">{children}</ul>;
+  return <ul className="list-disc list-outside ms-5 space-y-1 mb-3 text-sm text-gray-700">{children}</ul>;
 }
 function Li({ children }: { children: React.ReactNode }) {
   return <li className="leading-relaxed">{children}</li>;
@@ -68,19 +69,19 @@ function Note({ children }: { children: React.ReactNode }) {
 function Table({ headers, rows }: { headers: string[]; rows: string[][] }) {
   return (
     <div className="overflow-x-auto mb-4">
-      <table className="w-full text-sm border border-border rounded-lg overflow-hidden">
-        <thead className="bg-muted">
+      <table className="w-full text-sm border border-gray-200 rounded-lg overflow-hidden">
+        <thead className="bg-gray-100">
           <tr>
             {headers.map(h => (
-              <th key={h} className="text-start px-3 py-2 font-semibold text-foreground border-b border-border">{h}</th>
+              <th key={h} className="text-start px-3 py-2 font-semibold text-gray-900 border-b border-gray-200">{h}</th>
             ))}
           </tr>
         </thead>
         <tbody>
           {rows.map((row, i) => (
-            <tr key={i} className={i % 2 === 0 ? "bg-background" : "bg-muted/40"}>
+            <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
               {row.map((cell, j) => (
-                <td key={j} className="px-3 py-2 text-foreground/80 border-b border-border/50">{cell}</td>
+                <td key={j} className="px-3 py-2 text-gray-700 border-b border-gray-200/50">{cell}</td>
               ))}
             </tr>
           ))}
@@ -94,14 +95,14 @@ function Table({ headers, rows }: { headers: string[]; rows: string[][] }) {
 function UserGuide() {
   return (
     <article className="max-w-3xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold text-foreground mb-1">WAK Agent Dashboard — User Guide</h1>
-      <p className="text-sm text-muted-foreground mb-8">
+      <h1 className="text-2xl font-bold text-gray-900 mb-1">WAK Agent Dashboard — User Guide</h1>
+      <p className="text-sm text-gray-500 mb-8">
         Everything you need to know to handle customer conversations, meetings, and team management — no technical knowledge needed.
       </p>
 
       {/* Table of contents */}
-      <nav className="bg-muted/50 border border-border rounded-xl p-5 mb-10">
-        <p className="text-sm font-semibold text-foreground mb-3">Contents</p>
+      <nav className="bg-gray-50/50 border border-gray-200 rounded-xl p-5 mb-10">
+        <p className="text-sm font-semibold text-gray-900 mb-3">Contents</p>
         <ol className="list-decimal list-outside ml-5 space-y-1 text-sm">
           {[
             ["#dashboard", "The Dashboard (Chat View)"],
@@ -485,7 +486,7 @@ function UserGuide() {
         <Li>Next time, tap <strong>Sign in with Face ID / Fingerprint</strong> on the login screen.</Li>
       </Ol>
 
-      <p className="text-xs text-muted-foreground mt-12 pt-4 border-t border-border">
+      <p className="text-xs text-gray-500 mt-12 pt-4 border-t border-gray-200">
         WAK Solutions Agent Portal — Internal Guide
       </p>
     </article>
@@ -496,14 +497,14 @@ function UserGuide() {
 function ArabicUserGuide() {
   return (
     <article dir="rtl" className="max-w-3xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold text-foreground mb-1">دليل المستخدم — لوحة تحكم وكلاء WAK</h1>
-      <p className="text-sm text-muted-foreground mb-8">
+      <h1 className="text-2xl font-bold text-gray-900 mb-1">دليل المستخدم — لوحة تحكم وكلاء WAK</h1>
+      <p className="text-sm text-gray-500 mb-8">
         كل ما تحتاج معرفته للتعامل مع محادثات العملاء، الاجتماعات، وإدارة الفريق — لا حاجة لمعرفة تقنية.
       </p>
 
       {/* Table of contents */}
-      <nav className="bg-muted/50 border border-border rounded-xl p-5 mb-10">
-        <p className="text-sm font-semibold text-foreground mb-3">المحتويات</p>
+      <nav className="bg-gray-50/50 border border-gray-200 rounded-xl p-5 mb-10">
+        <p className="text-sm font-semibold text-gray-900 mb-3">المحتويات</p>
         <ol className="list-decimal list-outside ms-5 space-y-1 text-sm">
           {[
             ["#dashboard", "لوحة التحكم (عرض المحادثة)"],
@@ -887,7 +888,7 @@ function ArabicUserGuide() {
         <Li>في المرة القادمة، انقر على <strong>تسجيل الدخول ببصمة الوجه / الإصبع</strong> في شاشة تسجيل الدخول.</Li>
       </Ol>
 
-      <p className="text-xs text-muted-foreground mt-12 pt-4 border-t border-border">
+      <p className="text-xs text-gray-500 mt-12 pt-4 border-t border-gray-200">
         بوابة وكلاء WAK Solutions — دليل داخلي
       </p>
     </article>
@@ -908,8 +909,8 @@ function InstallGuide({
 }) {
   return (
     <div className="max-w-2xl mx-auto px-4 py-8">
-      <h1 className="text-xl font-bold text-foreground mb-2">{title}</h1>
-      <p className="text-sm text-muted-foreground mb-8">{subtitle}</p>
+      <h1 className="text-xl font-bold text-gray-900 mb-2">{title}</h1>
+      <p className="text-sm text-gray-500 mb-8">{subtitle}</p>
       <ol className="space-y-10">
         {steps.map((step, i) => (
           <li key={i} className="flex flex-col items-center gap-3">
@@ -917,11 +918,11 @@ function InstallGuide({
               <span className="flex-shrink-0 w-7 h-7 rounded-full bg-[#0F510F] text-white text-xs font-bold flex items-center justify-center mt-0.5">
                 {i + 1}
               </span>
-              <p className="text-sm text-foreground leading-snug pt-1">{step.label}</p>
+              <p className="text-sm text-gray-900 leading-snug pt-1">{step.label}</p>
             </div>
             <button
               onClick={() => onLightbox(step.img)}
-              className="block rounded-2xl overflow-hidden border border-border shadow-sm hover:shadow-md transition-shadow focus:outline-none focus:ring-2 focus:ring-[#0F510F]"
+              className="block rounded-2xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition-shadow focus:outline-none focus:ring-2 focus:ring-[#0F510F]"
               aria-label={`View step ${i + 1} fullscreen`}
             >
               <img
@@ -944,7 +945,7 @@ type Tab = "guide" | "setup";
 export default function Guide() {
   const [, setLocation] = useLocation();
   const { isAuthenticated, isLoading } = useAuth();
-  const { lang, isRTL } = useLanguage();
+  const { lang } = useLanguage();
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>("guide");
 
@@ -963,8 +964,8 @@ export default function Guide() {
 
   if (isLoading || !isAuthenticated) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="w-8 h-8 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+      <div className="min-h-screen flex items-center justify-center bg-white">
+        <div className="w-8 h-8 border-4 border-[#0F510F]/20 border-t-[#0F510F] rounded-full animate-spin" />
       </div>
     );
   }
@@ -975,52 +976,29 @@ export default function Guide() {
   ];
 
   return (
-    <div dir={isRTL ? "rtl" : "ltr"} className="flex flex-col min-h-screen bg-background">
-      {/* Header */}
-      <header className="h-14 bg-[#0F510F] text-white flex items-center justify-between px-5 flex-shrink-0 z-20 shadow-md">
-        <div className="flex items-center gap-4">
-          <img src="/logo.png" alt="WAK Solutions" className="h-[36px] shrink-0" />
-          <div className="hidden sm:block">
-            <span className="font-semibold text-sm text-white/90">WAK Solutions</span>
-            <span className="text-white/40 mx-2">—</span>
-            <span className="text-sm text-white/70">
-              {isAr ? "المساعدة والدليل" : "Help & Guide"}
-            </span>
+    <DashboardLayout>
+      <div className="h-full overflow-y-auto">
+        {/* Tab bar */}
+        <div className="border-b border-gray-200 bg-white flex-shrink-0">
+          <div className="max-w-3xl mx-auto px-4 flex gap-0">
+            {tabs.map(({ key, Icon, label }) => (
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
+                  tab === key
+                    ? "border-[#0F510F] text-[#0F510F]"
+                    : "border-transparent text-gray-500 hover:text-gray-900"
+                }`}
+              >
+                <Icon className="w-4 h-4" />
+                {label}
+              </button>
+            ))}
           </div>
         </div>
-        <Link href="/dashboard">
-          <a className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white transition-colors px-3 py-1.5 rounded-md hover:bg-white/10">
-            <ArrowLeft className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">
-              {isAr ? "العودة إلى لوحة التحكم" : "Back to Dashboard"}
-            </span>
-            <span className="sm:hidden">{isAr ? "عودة" : "Back"}</span>
-          </a>
-        </Link>
-      </header>
 
-      {/* Tab bar */}
-      <div className="border-b border-border bg-card flex-shrink-0">
-        <div className="max-w-3xl mx-auto px-4 flex gap-0">
-          {tabs.map(({ key, Icon, label }) => (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              className={`flex items-center gap-2 px-5 py-3 text-sm font-medium border-b-2 transition-colors ${
-                tab === key
-                  ? "border-[#0F510F] text-[#0F510F]"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              {label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Content */}
-      <main className="flex-1 overflow-y-auto">
+        {/* Content */}
         {tab === "guide" ? (
           isAr ? <ArabicUserGuide /> : <UserGuide />
         ) : (
@@ -1034,29 +1012,29 @@ export default function Guide() {
             }
           />
         )}
-      </main>
 
-      {/* Lightbox */}
-      {lightbox && (
-        <div
-          className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4"
-          onClick={() => setLightbox(null)}
-        >
-          <button
+        {/* Lightbox */}
+        {lightbox && (
+          <div
+            className="fixed inset-0 z-50 bg-black/85 flex items-center justify-center p-4"
             onClick={() => setLightbox(null)}
-            className="absolute top-4 right-4 text-white/80 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors"
-            aria-label="Close"
           >
-            <X className="w-6 h-6" />
-          </button>
-          <img
-            src={lightbox}
-            alt="Step fullscreen"
-            className="max-h-[90vh] max-w-full rounded-xl object-contain"
-            onClick={e => e.stopPropagation()}
-          />
-        </div>
-      )}
-    </div>
+            <button
+              onClick={() => setLightbox(null)}
+              className="absolute top-4 right-4 text-white/80 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors"
+              aria-label="Close"
+            >
+              <X className="w-6 h-6" />
+            </button>
+            <img
+              src={lightbox}
+              alt="Step fullscreen"
+              className="max-h-[90vh] max-w-full rounded-xl object-contain"
+              onClick={e => e.stopPropagation()}
+            />
+          </div>
+        )}
+      </div>
+    </DashboardLayout>
   );
 }
