@@ -113,7 +113,7 @@ export default function ContactsPage() {
   // All hooks before early returns
   useEffect(() => {
     if (!isAuthLoading && !isAuthenticated) setLocation("/login");
-    if (!isAuthLoading && isAuthenticated && !isAdmin) setLocation("/");
+    if (!isAuthLoading && isAuthenticated && !isAdmin) setLocation("/dashboard");
   }, [isAuthLoading, isAuthenticated, isAdmin, setLocation]);
 
   const fetchContacts = useCallback(async () => {
@@ -283,7 +283,7 @@ export default function ContactsPage() {
           <span className="hidden sm:block text-white/40">—</span>
           <span className="hidden sm:block text-sm text-white/70">{t("contactsTitle")}</span>
         </div>
-        <Link href="/">
+        <Link href="/dashboard">
           <a className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white transition-colors px-3 py-1.5 rounded-md hover:bg-white/10">
             <ArrowLeft className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">{t("dashboard")}</span>

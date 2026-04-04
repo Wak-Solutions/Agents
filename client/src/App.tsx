@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { LanguageProvider } from "@/lib/language-context";
 import NotFound from "@/pages/not-found";
+import LandingPage from "./pages/LandingPage";
 import Dashboard from "./pages/dashboard";
 import Login from "./pages/login";
 import Guide from "./pages/guide";
@@ -39,7 +40,8 @@ function Router() {
       <Route path="/agents" component={AgentsTab} />
       <Route path="/contacts" component={ContactsPage} />
       <Route path="/customers" component={CustomersPage} />
-      <Route path="/" component={Dashboard} />
+      <Route path="/dashboard" component={Dashboard} />
+      <Route path="/" component={LandingPage} />
       <Route component={NotFound} />
     </Switch>
   );

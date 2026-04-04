@@ -33,7 +33,7 @@ export default function Login() {
       if (termsAcceptedAt === null) {
         setShowTermsModal(true);
       } else {
-        setLocation("/");
+        setLocation("/dashboard");
       }
     }
   }, [isAuthenticated, isAuthLoading, termsAcceptedAt, setLocation]);
@@ -46,7 +46,7 @@ export default function Login() {
         credentials: "include",
       });
       if (res.ok) {
-        setLocation("/");
+        setLocation("/dashboard");
       }
     } catch {}
     setTermsAccepting(false);

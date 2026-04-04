@@ -461,7 +461,7 @@ export default function ChatbotConfig() {
             <span className="text-sm text-white/70">{t("chatbotTitle")}</span>
           </div>
         </div>
-        <Link href="/">
+        <Link href="/dashboard">
           <a className="flex items-center gap-1.5 text-xs text-white/70 hover:text-white transition-colors px-3 py-1.5 rounded-md hover:bg-white/10">
             <ArrowLeft className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">{t("backToDashboard")}</span>
