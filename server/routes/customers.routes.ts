@@ -20,54 +20,55 @@ export function registerCustomerRoutes(app: Express): void {
     const limit  = 20;
     const offset = (page - 1) * limit;
     const search = ((req.query.search as string) || '').trim();
+    const companyId = req.session.companyId;
 
     try {
       const searchClause = search
-        ? `AND (all_phones.phone ILIKE $3 OR c.name ILIKE $3)`
+        ? `AND (all_phones.phone ILIKE $4 OR c.name ILIKE $4)`
         : '';
-      const params: any[] = search ? [limit, offset, `%${search}%`] : [limit, offset];
+      const params: any[] = search ? [limit, offset, companyId, `%${search}%`] : [limit, offset, companyId];
 
       const rows = await pool.query(`
         WITH all_phones AS (
-          SELECT DISTINCT customer_phone AS phone FROM messages
-          UNION SELECT DISTINCT customer_phone FROM escalations
-          UNION SELECT DISTINCT customer_phone FROM meetings
+          SELECT DISTINCT customer_phone AS phone FROM messages WHERE company_id = $3
+          UNION SELECT DISTINCT customer_phone FROM escalations WHERE company_id = $3
+          UNION SELECT DISTINCT customer_phone FROM meetings WHERE company_id = $3
         )
         SELECT
           all_phones.phone,
           c.name, c.source,
           MIN(m.created_at)  AS first_seen,
           MAX(m.created_at)  AS last_seen,
-          (SELECT COUNT(*) FROM messages       WHERE customer_phone = all_phones.phone) +
-          (SELECT COUNT(*) FROM escalations    WHERE customer_phone = all_phones.phone) +
-          (SELECT COUNT(*) FROM meetings       WHERE customer_phone = all_phones.phone) +
-          (SELECT COUNT(*) FROM survey_responses WHERE customer_phone = all_phones.phone) +
-          (SELECT COUNT(*) FROM orders         WHERE customer_phone = all_phones.phone) AS touchpoints
+          (SELECT COUNT(*) FROM messages       WHERE customer_phone = all_phones.phone AND company_id = $3) +
+          (SELECT COUNT(*) FROM escalations    WHERE customer_phone = all_phones.phone AND company_id = $3) +
+          (SELECT COUNT(*) FROM meetings       WHERE customer_phone = all_phones.phone AND company_id = $3) +
+          (SELECT COUNT(*) FROM survey_responses WHERE customer_phone = all_phones.phone AND company_id = $3) +
+          (SELECT COUNT(*) FROM orders         WHERE customer_phone = all_phones.phone AND company_id = $3) AS touchpoints
         FROM all_phones
-        LEFT JOIN contacts c ON c.phone_number = all_phones.phone
-        LEFT JOIN messages m ON m.customer_phone = all_phones.phone
+        LEFT JOIN contacts c ON c.phone_number = all_phones.phone AND c.company_id = $3
+        LEFT JOIN messages m ON m.customer_phone = all_phones.phone AND m.company_id = $3
         ${searchClause}
         GROUP BY all_phones.phone, c.name, c.source
         ORDER BY first_seen DESC NULLS LAST
         LIMIT $1 OFFSET $2
       `, params);
 
-      const totalParams: any[] = search ? [`%${search}%`] : [];
+      const totalParams: any[] = search ? [companyId, `%${search}%`] : [companyId];
       const totalQ = search
         ? `SELECT COUNT(*) FROM (
              SELECT DISTINCT all_phones.phone
              FROM (
-               SELECT DISTINCT customer_phone AS phone FROM messages
-               UNION SELECT DISTINCT customer_phone FROM escalations
-               UNION SELECT DISTINCT customer_phone FROM meetings
+               SELECT DISTINCT customer_phone AS phone FROM messages WHERE company_id = $1
+               UNION SELECT DISTINCT customer_phone FROM escalations WHERE company_id = $1
+               UNION SELECT DISTINCT customer_phone FROM meetings WHERE company_id = $1
              ) all_phones
-             LEFT JOIN contacts c ON c.phone_number = all_phones.phone
-             WHERE all_phones.phone ILIKE $1 OR c.name ILIKE $1
+             LEFT JOIN contacts c ON c.phone_number = all_phones.phone AND c.company_id = $1
+             WHERE all_phones.phone ILIKE $2 OR c.name ILIKE $2
            ) t`
         : `SELECT COUNT(*) FROM (
-             SELECT customer_phone FROM messages
-             UNION SELECT customer_phone FROM escalations
-             UNION SELECT customer_phone FROM meetings
+             SELECT customer_phone FROM messages WHERE company_id = $1
+             UNION SELECT customer_phone FROM escalations WHERE company_id = $1
+             UNION SELECT customer_phone FROM meetings WHERE company_id = $1
            ) t`;
       const totalRes = await pool.query(totalQ, totalParams);
 
@@ -90,16 +91,17 @@ export function registerCustomerRoutes(app: Express): void {
   });
 
   // GET /api/customers/funnel — conversion stage counts
-  app.get('/api/customers/funnel', requireAdmin, async (_req: any, res: any) => {
+  app.get('/api/customers/funnel', requireAdmin, async (req: any, res: any) => {
+    const companyId = req.session.companyId;
     try {
       const result = await pool.query(`
         SELECT
-          (SELECT COUNT(DISTINCT customer_phone) FROM messages)                                AS first_contact,
-          (SELECT COUNT(DISTINCT customer_phone) FROM messages WHERE sender IN ('ai','agent')) AS bot_conversation,
-          (SELECT COUNT(DISTINCT customer_phone) FROM escalations)                             AS escalated,
-          (SELECT COUNT(DISTINCT customer_phone) FROM meetings)                                AS meeting_booked,
-          (SELECT COUNT(DISTINCT customer_phone) FROM survey_responses WHERE submitted = true) AS survey_submitted
-      `);
+          (SELECT COUNT(DISTINCT customer_phone) FROM messages WHERE company_id = $1)                                AS first_contact,
+          (SELECT COUNT(DISTINCT customer_phone) FROM messages WHERE company_id = $1 AND sender IN ('ai','agent'))   AS bot_conversation,
+          (SELECT COUNT(DISTINCT customer_phone) FROM escalations WHERE company_id = $1)                             AS escalated,
+          (SELECT COUNT(DISTINCT customer_phone) FROM meetings WHERE company_id = $1)                                AS meeting_booked,
+          (SELECT COUNT(DISTINCT customer_phone) FROM survey_responses WHERE company_id = $1 AND submitted = true)   AS survey_submitted
+      `, [companyId]);
       const r = result.rows[0];
       res.json({
         stages: [
@@ -119,38 +121,39 @@ export function registerCustomerRoutes(app: Express): void {
   // GET /api/customers/:phone/journey — full sorted timeline for one customer
   app.get('/api/customers/:phone/journey', requireAdmin, async (req: any, res: any) => {
     const phone = decodeURIComponent(req.params.phone);
+    const companyId = req.session.companyId;
     try {
       const [msgRes, escRes, meetRes, survRes, ordRes, contactRes] = await Promise.all([
         pool.query(
           `SELECT id, direction, sender, message_text, created_at
-           FROM messages WHERE customer_phone = $1 ORDER BY created_at ASC`,
-          [phone]
+           FROM messages WHERE customer_phone = $1 AND company_id = $2 ORDER BY created_at ASC`,
+          [phone, companyId]
         ),
         pool.query(
           `SELECT id, escalation_reason, status, assigned_agent_id, created_at
-           FROM escalations WHERE customer_phone = $1 ORDER BY created_at ASC`,
-          [phone]
+           FROM escalations WHERE customer_phone = $1 AND company_id = $2 ORDER BY created_at ASC`,
+          [phone, companyId]
         ),
         pool.query(
           `SELECT id, status, meeting_link, meeting_token, created_at, scheduled_at
-           FROM meetings WHERE customer_phone = $1 ORDER BY created_at ASC`,
-          [phone]
+           FROM meetings WHERE customer_phone = $1 AND company_id = $2 ORDER BY created_at ASC`,
+          [phone, companyId]
         ),
         pool.query(
           `SELECT sr.id, sr.submitted, sr.created_at, sr.submitted_at, s.title
            FROM survey_responses sr
-           LEFT JOIN surveys s ON s.id = sr.survey_id
-           WHERE sr.customer_phone = $1 ORDER BY sr.created_at ASC`,
-          [phone]
+           LEFT JOIN surveys s ON s.id = sr.survey_id AND s.company_id = $2
+           WHERE sr.customer_phone = $1 AND sr.company_id = $2 ORDER BY sr.created_at ASC`,
+          [phone, companyId]
         ),
         pool.query(
           `SELECT id, order_number, status, details, created_at
-           FROM orders WHERE customer_phone = $1 ORDER BY created_at ASC`,
-          [phone]
+           FROM orders WHERE customer_phone = $1 AND company_id = $2 ORDER BY created_at ASC`,
+          [phone, companyId]
         ),
         pool.query(
-          `SELECT name, source FROM contacts WHERE phone_number = $1 LIMIT 1`,
-          [phone]
+          `SELECT name, source FROM contacts WHERE phone_number = $1 AND company_id = $2 LIMIT 1`,
+          [phone, companyId]
         ),
       ]);
 
@@ -257,10 +260,12 @@ export function registerCustomerRoutes(app: Express): void {
 
   // ── Contacts CRUD ──────────────────────────────────────────────────────────
 
-  app.get('/api/contacts', requireAdmin, async (_req: any, res: any) => {
+  app.get('/api/contacts', requireAdmin, async (req: any, res: any) => {
+    const companyId = req.session.companyId;
     try {
       const result = await pool.query(
-        `SELECT id, phone_number, name, source, created_at FROM contacts ORDER BY created_at DESC`
+        `SELECT id, phone_number, name, source, created_at FROM contacts WHERE company_id = $1 ORDER BY created_at DESC`,
+        [companyId]
       );
       res.json(result.rows);
     } catch (err: any) {
@@ -274,11 +279,12 @@ export function registerCustomerRoutes(app: Express): void {
     if (!phone_number) return res.status(400).json({ message: 'Phone number is required' });
     const phone = String(phone_number).trim().replace(/[\s\-().]/g, '');
     if (!/^\+?\d{7,15}$/.test(phone)) return res.status(400).json({ message: 'invalid_phone' });
+    const companyId = req.session.companyId;
     try {
       const result = await pool.query(
-        `INSERT INTO contacts (phone_number, name, source) VALUES ($1, $2, 'manual')
+        `INSERT INTO contacts (phone_number, name, source, company_id) VALUES ($1, $2, 'manual', $3)
          RETURNING id, phone_number, name, source, created_at`,
-        [phone, (name || '').trim() || null]
+        [phone, (name || '').trim() || null, companyId]
       );
       logger.info('Contact created', `phone: ${maskPhone(phone)}`);
       res.json(result.rows[0]);
@@ -292,11 +298,12 @@ export function registerCustomerRoutes(app: Express): void {
   app.patch('/api/contacts/:id', requireAdmin, async (req: any, res: any) => {
     const id = Number(req.params.id);
     const { name } = req.body;
+    const companyId = req.session.companyId;
     try {
       const result = await pool.query(
-        `UPDATE contacts SET name = $1 WHERE id = $2
+        `UPDATE contacts SET name = $1 WHERE id = $2 AND company_id = $3
          RETURNING id, phone_number, name, source, created_at`,
-        [(name || '').trim() || null, id]
+        [(name || '').trim() || null, id, companyId]
       );
       if (result.rowCount === 0) return res.status(404).json({ message: 'Not found' });
       res.json(result.rows[0]);
@@ -307,8 +314,9 @@ export function registerCustomerRoutes(app: Express): void {
   });
 
   app.delete('/api/contacts/:id', requireAdmin, async (req: any, res: any) => {
+    const companyId = req.session.companyId;
     try {
-      await pool.query('DELETE FROM contacts WHERE id = $1', [Number(req.params.id)]);
+      await pool.query('DELETE FROM contacts WHERE id = $1 AND company_id = $2', [Number(req.params.id), companyId]);
       logger.info('Contact deleted', `contactId: ${req.params.id}`);
       res.json({ success: true });
     } catch (err: any) {
@@ -322,8 +330,9 @@ export function registerCustomerRoutes(app: Express): void {
     if (!Array.isArray(ids) || ids.length === 0) {
       return res.status(400).json({ message: 'No ids provided' });
     }
+    const companyId = req.session.companyId;
     try {
-      await pool.query('DELETE FROM contacts WHERE id = ANY($1::int[])', [ids]);
+      await pool.query('DELETE FROM contacts WHERE id = ANY($1::int[]) AND company_id = $2', [ids, companyId]);
       logger.info('Contacts bulk deleted', `count: ${ids.length}`);
       res.json({ success: true });
     } catch (err: any) {
@@ -335,6 +344,7 @@ export function registerCustomerRoutes(app: Express): void {
   app.post('/api/contacts/import', requireAdmin, async (req: any, res: any) => {
     const { contacts: rows } = req.body;
     if (!Array.isArray(rows)) return res.status(400).json({ message: 'Invalid payload' });
+    const companyId = req.session.companyId;
     let added = 0, duplicates = 0, invalid = 0;
     for (const row of rows) {
       const phone = String(row.phone || '').trim().replace(/[\s\-().]/g, '');
@@ -342,11 +352,11 @@ export function registerCustomerRoutes(app: Express): void {
       if (!/^\+?\d{7,15}$/.test(phone)) { invalid++; continue; }
       try {
         const result = await pool.query(
-          `INSERT INTO contacts (phone_number, name, source)
-           VALUES ($1, $2, 'imported')
+          `INSERT INTO contacts (phone_number, name, source, company_id)
+           VALUES ($1, $2, 'imported', $3)
            ON CONFLICT (phone_number) DO NOTHING
            RETURNING id`,
-          [phone, name]
+          [phone, name, companyId]
         );
         if ((result.rowCount ?? 0) > 0) added++; else duplicates++;
       } catch (_) {

@@ -32,12 +32,13 @@ export function registerMeetingRoutes(app: Express): void {
       if (!customer_phone) {
         return res.status(400).json({ message: 'customer_phone is required' });
       }
+      const companyId = req.body.company_id || 1;
       const token = crypto.randomUUID();
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
       await pool.query(
-        `INSERT INTO meetings (customer_phone, meeting_link, meeting_token, token_expires_at, status, created_at)
-         VALUES ($1, '', $2, $3, 'pending', NOW())`,
-        [customer_phone, token, expiresAt]
+        `INSERT INTO meetings (customer_phone, meeting_link, meeting_token, token_expires_at, status, created_at, company_id)
+         VALUES ($1, '', $2, $3, 'pending', NOW(), $4)`,
+        [customer_phone, token, expiresAt, companyId]
       );
       logger.info('Meeting token created', `phone: ${maskPhone(customer_phone)}`);
       return res.json({ token });
@@ -50,17 +51,19 @@ export function registerMeetingRoutes(app: Express): void {
   // ── List meetings (dashboard) ─────────────────────────────────────────────
   app.get('/api/meetings', requireAuth, async (req: any, res: any) => {
     try {
+      const companyId = req.session.companyId;
       const filter = (req.query.filter as string) || 'all';
-      let where = '';
-      if (filter === 'upcoming') where = "WHERE status IN ('pending', 'in_progress')";
-      else if (filter === 'completed') where = "WHERE status = 'completed'";
+      let where = 'WHERE m.company_id = $1';
+      if (filter === 'upcoming') where += " AND status IN ('pending', 'in_progress')";
+      else if (filter === 'completed') where += " AND status = 'completed'";
       const result = await pool.query(
         `SELECT m.id, m.customer_phone, m.agent_id, a.name AS agent_name,
                 m.meeting_link, m.meeting_token, m.agreed_time, m.scheduled_at,
                 m.customer_email, m.status, m.created_at
          FROM meetings m
          LEFT JOIN agents a ON a.id = m.agent_id
-         ${where} ORDER BY m.created_at DESC`
+         ${where} ORDER BY m.created_at DESC`,
+        [companyId]
       );
       res.json(result.rows);
     } catch (err: any) {
@@ -72,11 +75,12 @@ export function registerMeetingRoutes(app: Express): void {
   // ── Start a meeting ───────────────────────────────────────────────────────
   app.patch('/api/meetings/:id/start', requireAuth, async (req: any, res: any) => {
     try {
+      const companyId = req.session.companyId;
       const agentId = req.session.agentId ?? null;
       const result = await pool.query(
-        `UPDATE meetings SET status = 'in_progress', agent_id = $2 WHERE id = $1
+        `UPDATE meetings SET status = 'in_progress', agent_id = $2 WHERE id = $1 AND company_id = $3
          RETURNING meetings.*, (SELECT name FROM agents WHERE id = $2) AS agent_name`,
-        [req.params.id, agentId]
+        [req.params.id, agentId, companyId]
       );
       if (result.rows.length === 0) return res.status(404).json({ message: 'Meeting not found' });
       logger.info('Meeting started', `meetingId: ${req.params.id}, agentId: ${agentId}`);
@@ -90,9 +94,10 @@ export function registerMeetingRoutes(app: Express): void {
   // ── Complete a meeting ────────────────────────────────────────────────────
   app.patch('/api/meetings/:id/complete', requireAuth, async (req: any, res: any) => {
     try {
+      const companyId = req.session.companyId;
       const result = await pool.query(
-        `UPDATE meetings SET status = 'completed' WHERE id = $1 RETURNING *`,
-        [req.params.id]
+        `UPDATE meetings SET status = 'completed' WHERE id = $1 AND company_id = $2 RETURNING *`,
+        [req.params.id, companyId]
       );
       if (result.rows.length === 0) return res.status(404).json({ message: 'Meeting not found' });
       const meeting = result.rows[0];
@@ -108,12 +113,14 @@ export function registerMeetingRoutes(app: Express): void {
   // ── Availability: get blocked slots ───────────────────────────────────────
   app.get('/api/availability', requireAuth, async (req: any, res: any) => {
     try {
+      const companyId = req.session.companyId;
       const weekStart = (req.query.weekStart as string) || new Date().toISOString().slice(0, 10);
       const result = await pool.query(
         `SELECT date::text, time FROM blocked_slots
          WHERE date >= $1::date AND date < $1::date + INTERVAL '7 days'
+           AND company_id = $2
          ORDER BY date, time`,
-        [weekStart]
+        [weekStart, companyId]
       );
       res.json(result.rows);
     } catch (err: any) {
@@ -125,19 +132,20 @@ export function registerMeetingRoutes(app: Express): void {
   // ── Availability: toggle a blocked slot ───────────────────────────────────
   app.post('/api/availability/toggle', requireAuth, async (req: any, res: any) => {
     try {
+      const companyId = req.session.companyId;
       const { date, time } = z.object({ date: z.string(), time: z.string() }).parse(req.body);
       const existing = await pool.query(
-        'SELECT id FROM blocked_slots WHERE date=$1::date AND time=$2',
-        [date, time]
+        'SELECT id FROM blocked_slots WHERE date=$1::date AND time=$2 AND company_id = $3',
+        [date, time, companyId]
       );
       if (existing.rows.length > 0) {
-        await pool.query('DELETE FROM blocked_slots WHERE date=$1::date AND time=$2', [date, time]);
+        await pool.query('DELETE FROM blocked_slots WHERE date=$1::date AND time=$2 AND company_id = $3', [date, time, companyId]);
         logger.info('Slot unblocked', `date: ${date}, time: ${time}`);
         res.json({ blocked: false });
       } else {
         await pool.query(
-          'INSERT INTO blocked_slots (date, time) VALUES ($1::date, $2) ON CONFLICT DO NOTHING',
-          [date, time]
+          'INSERT INTO blocked_slots (date, time, company_id) VALUES ($1::date, $2, $3) ON CONFLICT DO NOTHING',
+          [date, time, companyId]
         );
         logger.info('Slot blocked', `date: ${date}, time: ${time}`);
         res.json({ blocked: true });
@@ -151,6 +159,7 @@ export function registerMeetingRoutes(app: Express): void {
   // ── Availability: get booked slots for a week ─────────────────────────────
   app.get('/api/availability/booked', requireAuth, async (req: any, res: any) => {
     try {
+      const companyId = req.session.companyId;
       const weekStart = (req.query.weekStart as string) || new Date().toISOString().slice(0, 10);
       const [yr, mo, dy] = weekStart.split('-').map(Number);
       const weekStartUtc = new Date(Date.UTC(yr, mo - 1, dy + 1, 0, 0, 0) - KSA_OFFSET_MS);
@@ -159,8 +168,9 @@ export function registerMeetingRoutes(app: Express): void {
         `SELECT scheduled_at FROM meetings
          WHERE scheduled_at >= $1 AND scheduled_at < $2
            AND scheduled_at IS NOT NULL
-           AND status != 'completed'`,
-        [weekStartUtc, weekEndUtc]
+           AND status != 'completed'
+           AND company_id = $3`,
+        [weekStartUtc, weekEndUtc, companyId]
       );
       const rows = result.rows.map((r: { scheduled_at: Date }) => {
         const ksa = new Date(new Date(r.scheduled_at).getTime() + KSA_OFFSET_MS);
@@ -182,7 +192,7 @@ export function registerMeetingRoutes(app: Express): void {
   app.get('/api/meeting/:token', async (req: any, res: any) => {
     try {
       const result = await pool.query(
-        `SELECT id, meeting_link, scheduled_at, status
+        `SELECT id, meeting_link, scheduled_at, status, company_id
          FROM meetings WHERE meeting_token=$1 LIMIT 1`,
         [req.params.token]
       );
@@ -208,12 +218,13 @@ export function registerMeetingRoutes(app: Express): void {
     try {
       const { token } = req.params;
       const mtg = await pool.query(
-        `SELECT id, customer_phone, scheduled_at, status, token_expires_at
+        `SELECT id, customer_phone, scheduled_at, status, token_expires_at, company_id
          FROM meetings WHERE meeting_token=$1 LIMIT 1`,
         [token]
       );
       if (mtg.rows.length === 0) return res.status(404).json({ message: 'Invalid booking link.' });
       const meeting = mtg.rows[0];
+      const companyId = meeting.company_id;
       if (new Date(meeting.token_expires_at) < new Date()) {
         return res.status(410).json({ message: 'This booking link has expired.' });
       }
@@ -241,14 +252,16 @@ export function registerMeetingRoutes(app: Express): void {
       const [blockedRes, takenRes] = await Promise.all([
         pool.query(
           `SELECT date::text, time FROM blocked_slots
-           WHERE date >= $1::date AND date < $1::date + INTERVAL '32 days'`,
-          [blockedWindowStart]
+           WHERE date >= $1::date AND date < $1::date + INTERVAL '32 days'
+             AND company_id = $2`,
+          [blockedWindowStart, companyId]
         ),
         pool.query(
           `SELECT scheduled_at FROM meetings
            WHERE scheduled_at >= $1 AND scheduled_at < $2
-             AND status != 'completed' AND id != $3`,
-          [windowStart, windowEnd, meeting.id]
+             AND status != 'completed' AND id != $3
+             AND company_id = $4`,
+          [windowStart, windowEnd, meeting.id, companyId]
         ),
       ]);
 
@@ -296,12 +309,13 @@ export function registerMeetingRoutes(app: Express): void {
       const { date, time } = z.object({ date: z.string(), time: z.string() }).parse(req.body);
 
       const mtg = await pool.query(
-        `SELECT id, customer_phone, meeting_token, scheduled_at, token_expires_at, agent_id
+        `SELECT id, customer_phone, meeting_token, scheduled_at, token_expires_at, agent_id, company_id
          FROM meetings WHERE meeting_token=$1 LIMIT 1`,
         [token]
       );
       if (mtg.rows.length === 0) return res.status(404).json({ message: 'Invalid booking link.' });
       const meeting = mtg.rows[0];
+      const companyId = meeting.company_id;
       if (new Date(meeting.token_expires_at) < new Date()) {
         return res.status(410).json({ message: 'This booking link has expired.' });
       }
@@ -319,12 +333,13 @@ export function registerMeetingRoutes(app: Express): void {
         pool.query(
           `SELECT 1 FROM meetings
            WHERE scheduled_at >= $1 AND scheduled_at < $2
-             AND status != 'completed' AND id != $3`,
-          [scheduledUtc, new Date(scheduledUtc.getTime() + 3600000), meeting.id]
+             AND status != 'completed' AND id != $3
+             AND company_id = $4`,
+          [scheduledUtc, new Date(scheduledUtc.getTime() + 3600000), meeting.id, companyId]
         ),
         pool.query(
-          'SELECT 1 FROM blocked_slots WHERE date=$1::date AND time=$2',
-          [new Date(Date.UTC(yr, mo - 1, dy) - KSA_OFFSET_MS).toISOString().slice(0, 10), time]
+          'SELECT 1 FROM blocked_slots WHERE date=$1::date AND time=$2 AND company_id = $3',
+          [new Date(Date.UTC(yr, mo - 1, dy) - KSA_OFFSET_MS).toISOString().slice(0, 10), time, companyId]
         ),
       ]);
 
@@ -350,8 +365,8 @@ export function registerMeetingRoutes(app: Express): void {
       const brandedLink = `${baseUrl}/meeting/${meeting.meeting_token}`;
 
       await pool.query(
-        `UPDATE meetings SET meeting_link=$1, scheduled_at=$2, link_sent=FALSE WHERE id=$3`,
-        [meetingLink, scheduledUtc, meeting.id]
+        `UPDATE meetings SET meeting_link=$1, scheduled_at=$2, link_sent=FALSE WHERE id=$3 AND company_id=$4`,
+        [meetingLink, scheduledUtc, meeting.id, companyId]
       );
 
       const ksaDt = new Date(scheduledUtc.getTime() + KSA_OFFSET_MS);

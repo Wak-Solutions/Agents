@@ -25,9 +25,10 @@ export function registerStatisticsRoutes(app: Express): void {
       if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
         return res.status(400).json({ message: 'Invalid date format' });
       }
+      const companyId: number = req.session.companyId;
       const [totalCustomers, perDay] = await Promise.all([
-        storage.getTotalUniqueCustomers(fromDate, toDate),
-        storage.getStatsCustomersPerDay(fromDate, toDate),
+        storage.getTotalUniqueCustomers(fromDate, toDate, companyId),
+        storage.getStatsCustomersPerDay(fromDate, toDate, companyId),
       ]);
       res.json({ totalCustomers, perDay });
     } catch (err: any) {
@@ -42,6 +43,7 @@ export function registerStatisticsRoutes(app: Express): void {
       const { from, to } = z.object({ from: z.string(), to: z.string() }).parse(req.body);
       const fromDate = new Date(from);
       const toDate = new Date(to);
+      const companyId: number = req.session.companyId;
 
       const apiKey = process.env.OPENAI_API_KEY;
       if (!apiKey) {
@@ -50,7 +52,7 @@ export function registerStatisticsRoutes(app: Express): void {
         });
       }
 
-      const msgs = await storage.getInboundMessagesForSummary(fromDate, toDate);
+      const msgs = await storage.getInboundMessagesForSummary(fromDate, toDate, companyId);
       if (msgs.length === 0) {
         return res.json({ summary: 'No customer messages found in the selected period.' });
       }

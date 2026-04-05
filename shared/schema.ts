@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, boolean } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -14,15 +14,17 @@ export const messages = pgTable("messages", {
   media_type: text("media_type"),      // 'audio' for voice notes
   media_url: text("media_url"),        // playback URL served by the bot backend
   transcription: text("transcription"), // Whisper speech-to-text output
+  company_id: integer("company_id").default(1),
 });
 
 export const escalations = pgTable("escalations", {
   id: serial("id").primaryKey(),
   customer_phone: text("customer_phone").notNull(),
   escalation_reason: text("escalation_reason"),
-  status: text("status").notNull().default('open'), // 'open' | 'closed'
+  status: text("status").notNull().default('open'), // 'open' | 'closed' | 'in_progress'
   created_at: timestamp("created_at").defaultNow(),
   assigned_agent_id: integer("assigned_agent_id"),
+  company_id: integer("company_id").default(1),
 });
 
 export const insertMessageSchema = createInsertSchema(messages).omit({ id: true, created_at: true });

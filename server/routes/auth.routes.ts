@@ -73,6 +73,7 @@ export function registerAuthRoutes(app: Express): void {
         await pool.query(`UPDATE agents SET last_login=NOW() WHERE id=$1`, [agent.id]);
         req.session.authenticated = true;
         req.session.agentId = agent.id;
+        req.session.companyId = agent.company_id;
         req.session.role = agent.role;
         req.session.agentName = agent.name;
         return req.session.save((err: any) => {
@@ -98,6 +99,7 @@ export function registerAuthRoutes(app: Express): void {
         const admin = adminRes.rows[0];
         req.session.authenticated = true;
         req.session.agentId = admin?.id ?? null;
+        req.session.companyId = admin?.company_id ?? 1;
         req.session.role = 'admin';
         req.session.agentName = admin?.name ?? 'Admin';
         return req.session.save((err: any) => {
@@ -157,6 +159,7 @@ export function registerAuthRoutes(app: Express): void {
         authenticated: true,
         role: req.session.role || 'admin',
         agentId: req.session.agentId || null,
+        companyId: req.session.companyId || null,
         agentName: req.session.agentName || 'Admin',
         termsAcceptedAt,
       });
@@ -243,6 +246,7 @@ export function registerAuthRoutes(app: Express): void {
         }
         req.session.authenticated = true;
         req.session.agentId = admin.id;
+        req.session.companyId = admin.company_id ?? 1;
         req.session.role = 'admin';
         req.session.agentName = admin.name;
         req.session.save((err: any) => {

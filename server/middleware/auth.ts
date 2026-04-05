@@ -8,10 +8,14 @@
 
 import type { Request, Response, NextFunction } from 'express';
 
-/** Reject requests from unauthenticated sessions. */
+/** Reject requests from unauthenticated sessions or sessions missing company_id. */
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
   if (!req.session.authenticated) {
     res.status(401).json({ message: 'Unauthorized' });
+    return;
+  }
+  if (!req.session.companyId) {
+    res.status(401).json({ message: 'Session missing company context — please log in again' });
     return;
   }
   next();

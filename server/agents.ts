@@ -36,7 +36,7 @@ export async function ensureAgentsTable(): Promise<void> {
   if (count.rows[0].n === 0 && process.env.DASHBOARD_PASSWORD) {
     const hash = await bcrypt.hash(process.env.DASHBOARD_PASSWORD, 10);
     await pool.query(
-      `INSERT INTO agents (name, email, password_hash, role) VALUES ($1, $2, $3, 'admin')`,
+      `INSERT INTO agents (name, email, password_hash, role, company_id) VALUES ($1, $2, $3, 'admin', 1)`,
       ['Admin', 'admin@wak-solutions.com', hash]
     );
     logger.info('Default admin seeded', 'email: admin@wak-solutions.com');
@@ -51,10 +51,11 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
   app.post('/api/agents/accept-terms', requireAuth, async (req: any, res: any) => {
     try {
       const agentId = req.session.agentId;
+      const companyId: number = req.session.companyId;
       if (!agentId) return res.status(400).json({ message: 'No agent ID in session' });
       await pool.query(
-        `UPDATE agents SET terms_accepted_at = NOW() WHERE id = $1`,
-        [agentId]
+        `UPDATE agents SET terms_accepted_at = NOW() WHERE id = $1 AND company_id = $2`,
+        [agentId, companyId]
       );
       res.json({ success: true });
     } catch (err: any) {
@@ -63,27 +64,29 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
   });
 
   // GET /api/agents/workload — must be before /api/agents/:id
-  app.get('/api/agents/workload', requireAdmin, async (_req: any, res: any) => {
+  app.get('/api/agents/workload', requireAdmin, async (req: any, res: any) => {
     try {
+      const companyId: number = req.session.companyId;
       const result = await pool.query(`
         SELECT
           a.id   AS agent_id,
           a.name,
           a.is_active,
-          COUNT(e.customer_phone) FILTER (WHERE e.status = 'open')::int  AS active_chats,
+          COUNT(e.customer_phone) FILTER (WHERE e.status = 'open' AND e.company_id = $1)::int  AS active_chats,
           COUNT(e.customer_phone) FILTER (
-            WHERE e.status = 'closed' AND e.created_at >= CURRENT_DATE
+            WHERE e.status = 'closed' AND e.company_id = $1 AND e.created_at >= CURRENT_DATE
           )::int AS resolved_today,
           COUNT(e.customer_phone) FILTER (
-            WHERE e.status = 'closed' AND e.created_at >= DATE_TRUNC('week', NOW())
+            WHERE e.status = 'closed' AND e.company_id = $1 AND e.created_at >= DATE_TRUNC('week', NOW())
           )::int AS resolved_this_week,
-          COUNT(e.customer_phone) FILTER (WHERE e.status = 'closed')::int AS total_resolved,
-          (SELECT COUNT(*)::int FROM meetings m WHERE m.agent_id = a.id AND m.status = 'completed') AS meetings_completed
+          COUNT(e.customer_phone) FILTER (WHERE e.status = 'closed' AND e.company_id = $1)::int AS total_resolved,
+          (SELECT COUNT(*)::int FROM meetings m WHERE m.agent_id = a.id AND m.status = 'completed' AND m.company_id = $1) AS meetings_completed
         FROM agents a
         LEFT JOIN escalations e ON e.assigned_agent_id = a.id
+        WHERE a.company_id = $1
         GROUP BY a.id, a.name, a.is_active
         ORDER BY a.name
-      `);
+      `, [companyId]);
       res.json(result.rows);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
@@ -93,6 +96,7 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
   // GET /api/agents
   app.get('/api/agents', requireAdmin, async (req: any, res: any) => {
     try {
+      const companyId: number = req.session.companyId;
       const period = ['today', 'week', 'month', 'all'].includes(req.query.period)
         ? req.query.period : 'all';
       const dateFilter =
@@ -104,19 +108,20 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
         SELECT
           a.id, a.name, a.email, a.role, a.is_active, a.last_login,
           COUNT(e.customer_phone) FILTER (
-            WHERE e.status = 'closed' ${dateFilter}
+            WHERE e.status = 'closed' AND e.company_id = $1 ${dateFilter}
           )::int AS resolved_chats,
           (SELECT COUNT(*)::int FROM meetings m
-           WHERE m.agent_id = a.id AND m.status = 'completed') AS meetings_completed,
+           WHERE m.agent_id = a.id AND m.status = 'completed' AND m.company_id = $1) AS meetings_completed,
           (SELECT ROUND(AVG(sa.answer_rating)::numeric, 1)
            FROM survey_answers sa
            JOIN survey_responses sr ON sr.id = sa.response_id
-           WHERE sr.agent_id = a.id AND sa.answer_rating IS NOT NULL) AS avg_survey_rating
+           WHERE sr.agent_id = a.id AND sr.company_id = $1 AND sa.answer_rating IS NOT NULL) AS avg_survey_rating
         FROM agents a
         LEFT JOIN escalations e ON e.assigned_agent_id = a.id
+        WHERE a.company_id = $1
         GROUP BY a.id
         ORDER BY a.created_at
-      `);
+      `, [companyId]);
       res.json(result.rows);
     } catch (err: any) {
       res.status(500).json({ message: err.message });
@@ -126,6 +131,7 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
   // POST /api/agents — create new agent
   app.post('/api/agents', requireAdmin, async (req: any, res: any) => {
     try {
+      const companyId: number = req.session.companyId;
       const { name, email, password, role } = z.object({
         name:     z.string().min(1),
         email:    z.string().email(),
@@ -134,10 +140,10 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
       }).parse(req.body);
       const hash = await bcrypt.hash(password, 10);
       const result = await pool.query(
-        `INSERT INTO agents (name, email, password_hash, role)
-         VALUES ($1, $2, $3, $4)
+        `INSERT INTO agents (name, email, password_hash, role, company_id)
+         VALUES ($1, $2, $3, $4, $5)
          RETURNING id, name, email, role, is_active, created_at`,
-        [name, email, hash, role]
+        [name, email, hash, role, companyId]
       );
       logger.info('Agent created', `agentId: ${result.rows[0].id}, role: ${role}`);
       res.status(201).json(result.rows[0]);
@@ -151,15 +157,16 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
   // PUT /api/agents/:id — update name/email/role
   app.put('/api/agents/:id', requireAdmin, async (req: any, res: any) => {
     try {
+      const companyId: number = req.session.companyId;
       const { name, email, role } = z.object({
         name:  z.string().min(1),
         email: z.string().email(),
         role:  z.enum(['agent', 'admin']),
       }).parse(req.body);
       const result = await pool.query(
-        `UPDATE agents SET name=$1, email=$2, role=$3 WHERE id=$4
+        `UPDATE agents SET name=$1, email=$2, role=$3 WHERE id=$4 AND company_id=$5
          RETURNING id, name, email, role, is_active`,
-        [name, email, role, req.params.id]
+        [name, email, role, req.params.id, companyId]
       );
       if (result.rows.length === 0) return res.status(404).json({ message: 'Agent not found' });
       res.json(result.rows[0]);
@@ -171,26 +178,30 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
   // PATCH /api/agents/:id/deactivate
   app.patch('/api/agents/:id/deactivate', requireAdmin, async (req: any, res: any) => {
     try {
+      const companyId: number = req.session.companyId;
       const id = parseInt(req.params.id);
       if (req.session.agentId === id) {
         return res.status(400).json({ message: 'You cannot deactivate your own account.' });
       }
-      const agentRes = await pool.query(`SELECT role FROM agents WHERE id=$1`, [id]);
+      const agentRes = await pool.query(
+        `SELECT role FROM agents WHERE id=$1 AND company_id=$2`,
+        [id, companyId]
+      );
       if (agentRes.rows.length === 0) return res.status(404).json({ message: 'Agent not found' });
       if (agentRes.rows[0].role === 'admin') {
         const adminCount = await pool.query(
-          `SELECT COUNT(*)::int AS n FROM agents WHERE role='admin' AND is_active=true AND id!=$1`,
-          [id]
+          `SELECT COUNT(*)::int AS n FROM agents WHERE role='admin' AND is_active=true AND id!=$1 AND company_id=$2`,
+          [id, companyId]
         );
         if (adminCount.rows[0].n === 0) {
           return res.status(400).json({ message: 'Cannot deactivate the last active admin.' });
         }
       }
-      await pool.query(`UPDATE agents SET is_active=false WHERE id=$1`, [id]);
+      await pool.query(`UPDATE agents SET is_active=false WHERE id=$1 AND company_id=$2`, [id, companyId]);
       logger.info('Agent deactivated', `agentId: ${id}`);
       res.json({ success: true });
     } catch (err: any) {
-      logger.error('deactivateAgent failed', `agentId: ${id}, error: ${err.message}`);
+      logger.error('deactivateAgent failed', `agentId: ${req.params.id}, error: ${err.message}`);
       res.status(500).json({ message: err.message });
     }
   });
@@ -198,9 +209,10 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
   // PATCH /api/agents/:id/activate
   app.patch('/api/agents/:id/activate', requireAdmin, async (req: any, res: any) => {
     try {
+      const companyId: number = req.session.companyId;
       const result = await pool.query(
-        `UPDATE agents SET is_active=true WHERE id=$1 RETURNING id`,
-        [req.params.id]
+        `UPDATE agents SET is_active=true WHERE id=$1 AND company_id=$2 RETURNING id`,
+        [req.params.id, companyId]
       );
       if (result.rows.length === 0) return res.status(404).json({ message: 'Agent not found' });
       res.json({ success: true });
@@ -212,11 +224,12 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
   // PATCH /api/agents/:id/reset-password
   app.patch('/api/agents/:id/reset-password', requireAdmin, async (req: any, res: any) => {
     try {
+      const companyId: number = req.session.companyId;
       const { new_password } = z.object({ new_password: z.string().min(6) }).parse(req.body);
       const hash = await bcrypt.hash(new_password, 10);
       const result = await pool.query(
-        `UPDATE agents SET password_hash=$1 WHERE id=$2 RETURNING id`,
-        [hash, req.params.id]
+        `UPDATE agents SET password_hash=$1 WHERE id=$2 AND company_id=$3 RETURNING id`,
+        [hash, req.params.id, companyId]
       );
       if (result.rows.length === 0) return res.status(404).json({ message: 'Agent not found' });
       res.json({ success: true });

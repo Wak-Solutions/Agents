@@ -1,8 +1,8 @@
 /**
  * chatbot-config.routes.ts — Chatbot system prompt configuration routes.
  *
- * Handles: get current config (public — Python bot reads this), save config,
- * preview a compiled structured config without saving.
+ * Handles: get current config (public — Python bot reads this via ?company_id=N),
+ * save config, preview a compiled structured config without saving.
  *
  * The compilePrompt() function converts the structured UI config (tone, FAQ,
  * escalation rules, questions) into the system prompt string stored in the DB
@@ -83,10 +83,15 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
       ADD COLUMN IF NOT EXISTS override_active   BOOLEAN DEFAULT true
   `).catch(() => {});
 
-  // GET /api/chatbot-config — no auth required; the Python bot reads this
-  app.get('/api/chatbot-config', async (_req: any, res: any) => {
+  // GET /api/chatbot-config — no auth required; Python bot reads this.
+  // Bot passes ?company_id=N as a query parameter. Defaults to 1 during migration.
+  app.get('/api/chatbot-config', async (req: any, res: any) => {
     try {
-      const result = await pool.query('SELECT * FROM chatbot_config ORDER BY id LIMIT 1');
+      const companyId = parseInt(req.query.company_id) || 1;
+      const result = await pool.query(
+        'SELECT * FROM chatbot_config WHERE company_id = $1 ORDER BY id LIMIT 1',
+        [companyId]
+      );
       if (result.rows.length === 0) {
         return res.json({
           system_prompt: null,
@@ -106,31 +111,35 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
   app.post('/api/chatbot-config', requireAuth, async (req: any, res: any) => {
     try {
       const { structured_config, override_active, raw_prompt } = req.body;
+      const companyId: number = req.session.companyId;
 
       const activePrompt = override_active
         ? (raw_prompt || '')
         : compilePrompt(structured_config || {});
 
-      const existing = await pool.query('SELECT id FROM chatbot_config WHERE id = 1');
+      const existing = await pool.query(
+        'SELECT id FROM chatbot_config WHERE company_id = $1',
+        [companyId]
+      );
       let result;
       if (existing.rows.length > 0) {
         result = await pool.query(
           `UPDATE chatbot_config
            SET system_prompt=$1, structured_config=$2, override_active=$3, updated_at=NOW()
-           WHERE id=1 RETURNING *`,
-          [activePrompt, JSON.stringify(structured_config), override_active]
+           WHERE company_id=$4 RETURNING *`,
+          [activePrompt, JSON.stringify(structured_config), override_active, companyId]
         );
       } else {
         result = await pool.query(
-          `INSERT INTO chatbot_config (system_prompt, structured_config, override_active, updated_at)
-           VALUES ($1,$2,$3,NOW()) RETURNING *`,
-          [activePrompt, JSON.stringify(structured_config), override_active]
+          `INSERT INTO chatbot_config (system_prompt, structured_config, override_active, updated_at, company_id)
+           VALUES ($1,$2,$3,NOW(),$4) RETURNING *`,
+          [activePrompt, JSON.stringify(structured_config), override_active, companyId]
         );
       }
 
       logger.info(
         'Chatbot config saved',
-        `override_active: ${override_active}, prompt_length: ${activePrompt.length}`
+        `companyId: ${companyId}, override_active: ${override_active}, prompt_length: ${activePrompt.length}`
       );
       return res.json(result.rows[0]);
     } catch (err: any) {

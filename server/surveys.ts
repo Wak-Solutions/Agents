@@ -49,7 +49,7 @@ export async function ensureSurveyTables(): Promise<void> {
       created_at    TIMESTAMPTZ DEFAULT NOW()
     )`,
     `CREATE UNIQUE INDEX IF NOT EXISTS one_active_survey ON surveys (is_active) WHERE is_active = true`,
-    // ── Column migrations: safely add new columns to tables that may already exist ──
+    // ── Column migrations ──
     `ALTER TABLE surveys          ADD COLUMN IF NOT EXISTS is_default    BOOLEAN DEFAULT false`,
     `ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS agent_id      INTEGER`,
     `ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS escalation_id INTEGER`,
@@ -83,20 +83,29 @@ export async function sendSurveyToCustomer(
   agentId: number | null,
   escalationId: number | null,
   meetingId: number | null = null,
+  companyId: number = 1,
 ): Promise<void> {
   try {
     const surveyRes = await pool.query(
-      `SELECT id FROM surveys WHERE is_active = true LIMIT 1`
+      `SELECT id FROM surveys WHERE is_active = true AND company_id = $1 LIMIT 1`,
+      [companyId]
     );
-    if (surveyRes.rows.length === 0) return; // no active survey — skip silently
+    if (surveyRes.rows.length === 0) {
+      // Fall back to any active survey if no company-scoped one found
+      const fallback = await pool.query(
+        `SELECT id FROM surveys WHERE is_active = true LIMIT 1`
+      );
+      if (fallback.rows.length === 0) return;
+    }
+    const surveyId = (surveyRes.rows[0] ?? (await pool.query(`SELECT id FROM surveys WHERE is_active = true LIMIT 1`)).rows[0])?.id;
+    if (!surveyId) return;
 
-    const surveyId = surveyRes.rows[0].id;
     const token = crypto.randomUUID();
 
     await pool.query(
-      `INSERT INTO survey_responses (survey_id, token, customer_phone, agent_id, escalation_id, meeting_id, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, NOW() + INTERVAL '24 hours')`,
-      [surveyId, token, customerPhone, agentId, escalationId, meetingId]
+      `INSERT INTO survey_responses (survey_id, token, customer_phone, agent_id, escalation_id, meeting_id, company_id, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, NOW() + INTERVAL '24 hours')`,
+      [surveyId, token, customerPhone, agentId, escalationId, meetingId, companyId]
     );
 
     const rawBase = (
@@ -135,10 +144,12 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
   // ── Admin: summary for Statistics tab ─────────────────────────────────────
   // Must come before /api/surveys/:id to avoid "active-summary" matching as id
 
-  app.get('/api/surveys/active-summary', requireAuth, async (_req: any, res: any) => {
+  app.get('/api/surveys/active-summary', requireAuth, async (req: any, res: any) => {
     try {
+      const companyId: number = req.session.companyId;
       const activeSurveyRes = await pool.query(
-        `SELECT id, title FROM surveys WHERE is_active = true LIMIT 1`
+        `SELECT id, title FROM surveys WHERE is_active = true AND company_id = $1 LIMIT 1`,
+        [companyId]
       );
       if (activeSurveyRes.rows.length === 0) {
         return res.json({ survey_id: null });
@@ -156,12 +167,12 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
            (SELECT ROUND(AVG(sa.answer_rating)::numeric, 1)
             FROM survey_answers sa
             JOIN survey_responses sr ON sr.id = sa.response_id
-            WHERE sr.survey_id = $1 AND sr.submitted = true
+            WHERE sr.survey_id = $1 AND sr.submitted = true AND sr.company_id = $3
               AND sa.answer_rating IS NOT NULL AND sr.created_at >= $2
            ) AS avg_rating_this_week
          FROM survey_responses
-         WHERE survey_id = $1 AND created_at >= $2`,
-        [survey_id, weekStart.toISOString()]
+         WHERE survey_id = $1 AND company_id = $3 AND created_at >= $2`,
+        [survey_id, weekStart.toISOString(), companyId]
       );
 
       const row = statsRes.rows[0];
@@ -181,15 +192,18 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
 
   // ── Admin: Survey CRUD ─────────────────────────────────────────────────────
 
-  app.get('/api/surveys', requireAuth, async (_req: any, res: any) => {
+  app.get('/api/surveys', requireAuth, async (req: any, res: any) => {
     try {
+      const companyId: number = req.session.companyId;
       const result = await pool.query(
         `SELECT s.*,
            (SELECT COUNT(*) FROM survey_questions sq WHERE sq.survey_id = s.id)::int AS question_count,
-           (SELECT COUNT(*) FROM survey_responses sr WHERE sr.survey_id = s.id)::int AS response_count,
-           (SELECT COUNT(*) FROM survey_responses sr WHERE sr.survey_id = s.id AND sr.submitted = true)::int AS submitted_count
+           (SELECT COUNT(*) FROM survey_responses sr WHERE sr.survey_id = s.id AND sr.company_id = $1)::int AS response_count,
+           (SELECT COUNT(*) FROM survey_responses sr WHERE sr.survey_id = s.id AND sr.company_id = $1 AND sr.submitted = true)::int AS submitted_count
          FROM surveys s
-         ORDER BY s.is_default DESC, s.created_at DESC`
+         WHERE s.company_id = $1
+         ORDER BY s.is_default DESC, s.created_at DESC`,
+        [companyId]
       );
       res.json(result.rows);
     } catch (err: any) {
@@ -199,13 +213,14 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
 
   app.post('/api/surveys', requireAuth, async (req: any, res: any) => {
     try {
+      const companyId: number = req.session.companyId;
       const { title, description } = z.object({
         title: z.string().min(1),
         description: z.string().optional().default(''),
       }).parse(req.body);
       const result = await pool.query(
-        `INSERT INTO surveys (title, description) VALUES ($1, $2) RETURNING *`,
-        [title, description]
+        `INSERT INTO surveys (title, description, company_id) VALUES ($1, $2, $3) RETURNING *`,
+        [title, description, companyId]
       );
       res.status(201).json(result.rows[0]);
     } catch (err: any) {
@@ -215,7 +230,11 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
 
   app.get('/api/surveys/:id', requireAuth, async (req: any, res: any) => {
     try {
-      const surveyRes = await pool.query(`SELECT * FROM surveys WHERE id = $1`, [req.params.id]);
+      const companyId: number = req.session.companyId;
+      const surveyRes = await pool.query(
+        `SELECT * FROM surveys WHERE id = $1 AND company_id = $2`,
+        [req.params.id, companyId]
+      );
       if (surveyRes.rows.length === 0) return res.status(404).json({ message: 'Survey not found' });
       const questionsRes = await pool.query(
         `SELECT * FROM survey_questions WHERE survey_id = $1 ORDER BY order_index`,
@@ -229,13 +248,14 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
 
   app.put('/api/surveys/:id', requireAuth, async (req: any, res: any) => {
     try {
+      const companyId: number = req.session.companyId;
       const { title, description } = z.object({
         title: z.string().min(1),
         description: z.string().optional().default(''),
       }).parse(req.body);
       const result = await pool.query(
-        `UPDATE surveys SET title=$1, description=$2, updated_at=NOW() WHERE id=$3 RETURNING *`,
-        [title, description, req.params.id]
+        `UPDATE surveys SET title=$1, description=$2, updated_at=NOW() WHERE id=$3 AND company_id=$4 RETURNING *`,
+        [title, description, req.params.id, companyId]
       );
       if (result.rows.length === 0) return res.status(404).json({ message: 'Survey not found' });
       res.json(result.rows[0]);
@@ -246,12 +266,16 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
 
   app.delete('/api/surveys/:id', requireAuth, async (req: any, res: any) => {
     try {
-      const survey = await pool.query(`SELECT is_default FROM surveys WHERE id=$1`, [req.params.id]);
+      const companyId: number = req.session.companyId;
+      const survey = await pool.query(
+        `SELECT is_default FROM surveys WHERE id=$1 AND company_id=$2`,
+        [req.params.id, companyId]
+      );
       if (survey.rows.length === 0) return res.status(404).json({ message: 'Survey not found' });
       if (survey.rows[0].is_default) {
         return res.status(403).json({ message: 'The default survey cannot be deleted.' });
       }
-      await pool.query(`DELETE FROM surveys WHERE id=$1`, [req.params.id]);
+      await pool.query(`DELETE FROM surveys WHERE id=$1 AND company_id=$2`, [req.params.id, companyId]);
       res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
@@ -260,10 +284,11 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
 
   app.post('/api/surveys/:id/activate', requireAuth, async (req: any, res: any) => {
     try {
-      await pool.query(`UPDATE surveys SET is_active=false, updated_at=NOW()`);
+      const companyId: number = req.session.companyId;
+      await pool.query(`UPDATE surveys SET is_active=false, updated_at=NOW() WHERE company_id=$1`, [companyId]);
       const result = await pool.query(
-        `UPDATE surveys SET is_active=true, updated_at=NOW() WHERE id=$1 RETURNING *`,
-        [req.params.id]
+        `UPDATE surveys SET is_active=true, updated_at=NOW() WHERE id=$1 AND company_id=$2 RETURNING *`,
+        [req.params.id, companyId]
       );
       if (result.rows.length === 0) return res.status(404).json({ message: 'Survey not found' });
       res.json(result.rows[0]);
@@ -274,9 +299,10 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
 
   app.post('/api/surveys/:id/deactivate', requireAuth, async (req: any, res: any) => {
     try {
+      const companyId: number = req.session.companyId;
       const result = await pool.query(
-        `UPDATE surveys SET is_active=false, updated_at=NOW() WHERE id=$1 RETURNING *`,
-        [req.params.id]
+        `UPDATE surveys SET is_active=false, updated_at=NOW() WHERE id=$1 AND company_id=$2 RETURNING *`,
+        [req.params.id, companyId]
       );
       if (result.rows.length === 0) return res.status(404).json({ message: 'Survey not found' });
       res.json(result.rows[0]);
@@ -289,6 +315,14 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
 
   app.post('/api/surveys/:id/questions', requireAuth, async (req: any, res: any) => {
     try {
+      // Verify the survey belongs to this company before adding questions
+      const companyId: number = req.session.companyId;
+      const surveyCheck = await pool.query(
+        `SELECT id FROM surveys WHERE id=$1 AND company_id=$2`,
+        [req.params.id, companyId]
+      );
+      if (surveyCheck.rows.length === 0) return res.status(404).json({ message: 'Survey not found' });
+
       const { question_text, question_type, order_index } = z.object({
         question_text: z.string().min(1),
         question_type: z.enum(['rating', 'yes_no', 'free_text']),
@@ -357,14 +391,18 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
 
   app.get('/api/surveys/:id/results', requireAuth, async (req: any, res: any) => {
     try {
-      const surveyRes = await pool.query(`SELECT * FROM surveys WHERE id=$1`, [req.params.id]);
+      const companyId: number = req.session.companyId;
+      const surveyRes = await pool.query(
+        `SELECT * FROM surveys WHERE id=$1 AND company_id=$2`,
+        [req.params.id, companyId]
+      );
       if (surveyRes.rows.length === 0) return res.status(404).json({ message: 'Survey not found' });
 
       const totalRes = await pool.query(
         `SELECT COUNT(*)::int AS total_sent,
                 COUNT(*) FILTER (WHERE submitted=true)::int AS total_submitted
-         FROM survey_responses WHERE survey_id=$1`,
-        [req.params.id]
+         FROM survey_responses WHERE survey_id=$1 AND company_id=$2`,
+        [req.params.id, companyId]
       );
       const { total_sent, total_submitted } = totalRes.rows[0];
 
@@ -377,8 +415,8 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
         `SELECT sa.question_id, sa.answer_text, sa.answer_rating, sa.answer_yes_no
          FROM survey_answers sa
          JOIN survey_responses sr ON sr.id = sa.response_id
-         WHERE sr.survey_id=$1 AND sr.submitted=true`,
-        [req.params.id]
+         WHERE sr.survey_id=$1 AND sr.submitted=true AND sr.company_id=$2`,
+        [req.params.id, companyId]
       );
 
       const answerMap = new Map<number, any[]>();
@@ -416,9 +454,9 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
            ROUND(AVG(sa.answer_rating)::numeric, 1) AS avg_rating
          FROM survey_responses sr
          LEFT JOIN survey_answers sa ON sa.response_id = sr.id AND sa.answer_rating IS NOT NULL
-         WHERE sr.survey_id=$1 AND sr.submitted=true
+         WHERE sr.survey_id=$1 AND sr.submitted=true AND sr.company_id=$2
          GROUP BY sr.agent_id`,
-        [req.params.id]
+        [req.params.id, companyId]
       );
       const per_agent = agentRes.rows.map((r: any) => ({
         agent_id: r.agent_id,
@@ -440,6 +478,8 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
   });
 
   // ── Public: Survey submission ──────────────────────────────────────────────
+  // These routes use the token for identity — no company_id needed in the lookup
+  // since tokens are globally unique UUIDs.
 
   app.get('/api/survey/:token', async (req: any, res: any) => {
     try {

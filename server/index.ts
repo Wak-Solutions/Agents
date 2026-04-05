@@ -26,6 +26,7 @@ declare module "express-session" {
   interface SessionData {
     authenticated?: boolean;
     agentId?: number | null;
+    companyId?: number | null;
     role?: string;
     agentName?: string;
   }

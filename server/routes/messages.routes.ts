@@ -22,9 +22,15 @@ export function registerMessageRoutes(app: Express): void {
   // GET /api/messages/:phone — conversation history
   app.get(api.messages.list.path, requireAuth, async (req: any, res: any) => {
     const phone = req.params.phone;
+    const companyId = req.session.companyId;
     try {
-      const messages = await storage.getMessages(phone);
-      res.json(messages);
+      const result = await pool.query(
+        `SELECT * FROM messages
+         WHERE customer_phone = $1 AND company_id = $2
+         ORDER BY created_at ASC`,
+        [phone, companyId]
+      );
+      res.json(result.rows);
     } catch (err: any) {
       logger.error('getMessages failed', `phone: ${maskPhone(phone)}, error: ${err.message}`);
       res.status(500).json({ message: err.message });
@@ -35,9 +41,10 @@ export function registerMessageRoutes(app: Express): void {
   app.get('/api/voice-notes/:id', requireAuth, async (req: any, res: any) => {
     const { id } = req.params;
     try {
+      const companyId = req.session.companyId;
       const result = await pool.query(
-        'SELECT audio_data, mime_type FROM voice_notes WHERE id = $1::uuid',
-        [id]
+        'SELECT audio_data, mime_type FROM voice_notes WHERE id = $1::uuid AND company_id = $2',
+        [id, companyId]
       );
       if (result.rows.length === 0) {
         logger.warn('Voice note not found', `id: ${id}`);
@@ -105,11 +112,12 @@ export function registerMessageRoutes(app: Express): void {
       );
 
       // Look up whether this chat is assigned to a specific agent.
+      const companyId = req.body.company_id || 1;
       const escRow = await pool.query(
         `SELECT assigned_agent_id FROM escalations
-         WHERE customer_phone=$1 AND status IN ('open','in_progress')
+         WHERE customer_phone=$1 AND status IN ('open','in_progress') AND company_id = $2
          ORDER BY created_at DESC LIMIT 1`,
-        [data.customer_phone]
+        [data.customer_phone, companyId]
       );
       const assignedAgentId: number | null = escRow.rows[0]?.assigned_agent_id ?? null;
 

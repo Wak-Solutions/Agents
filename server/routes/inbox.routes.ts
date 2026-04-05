@@ -22,6 +22,7 @@ export function registerInboxRoutes(app: Express): void {
     try {
       const role = req.session.role || 'admin';
       const agentId = req.session.agentId || null;
+      const companyId = req.session.companyId;
 
       // Admin sees all; agents see only their assigned + unassigned chats.
       const visibilityFilter =
@@ -32,24 +33,25 @@ export function registerInboxRoutes(app: Express): void {
       const result = await pool.query(`
         SELECT
           m.customer_phone,
-          (SELECT message_text FROM messages WHERE customer_phone = m.customer_phone ORDER BY created_at DESC LIMIT 1) AS last_message,
-          (SELECT created_at  FROM messages WHERE customer_phone = m.customer_phone ORDER BY created_at DESC LIMIT 1) AS last_message_at,
+          (SELECT message_text FROM messages WHERE customer_phone = m.customer_phone AND company_id = $1 ORDER BY created_at DESC LIMIT 1) AS last_message,
+          (SELECT created_at  FROM messages WHERE customer_phone = m.customer_phone AND company_id = $1 ORDER BY created_at DESC LIMIT 1) AS last_message_at,
           e.status             AS escalation_status,
           e.escalation_reason,
           e.assigned_agent_id,
           a.name               AS assigned_agent_name
-        FROM (SELECT DISTINCT customer_phone FROM messages) m
+        FROM (SELECT DISTINCT customer_phone FROM messages WHERE company_id = $1) m
         LEFT JOIN LATERAL (
           SELECT status, escalation_reason, assigned_agent_id
           FROM escalations
           WHERE customer_phone = m.customer_phone
+            AND company_id = $1
           ORDER BY created_at DESC
           LIMIT 1
         ) e ON true
         LEFT JOIN agents a ON a.id = e.assigned_agent_id
         WHERE 1=1 ${visibilityFilter}
         ORDER BY last_message_at DESC NULLS LAST
-      `);
+      `, [companyId]);
       res.json(result.rows);
     } catch (err: any) {
       logger.error('getConversations failed', err.message);
@@ -60,8 +62,9 @@ export function registerInboxRoutes(app: Express): void {
   // GET /api/inbox — unified inbox: active chats + upcoming meetings as a single feed.
   // Dedup rule: if a customer has both an active chat AND a booked meeting,
   // they appear as one item (chat type) with meeting fields attached.
-  app.get('/api/inbox', requireAuth, async (_req: any, res: any) => {
+  app.get('/api/inbox', requireAuth, async (req: any, res: any) => {
     try {
+      const companyId = req.session.companyId;
       const [escRes, meetRes] = await Promise.all([
         pool.query(`
           SELECT
@@ -83,14 +86,16 @@ export function registerInboxRoutes(app: Express): void {
           LEFT JOIN LATERAL (
             SELECT * FROM meetings
             WHERE customer_phone = e.customer_phone
+              AND company_id = $1
               AND scheduled_at IS NOT NULL
               AND status IN ('pending','in_progress')
             ORDER BY scheduled_at ASC LIMIT 1
           ) m ON true
           LEFT JOIN agents ma ON ma.id = m.agent_id
           WHERE e.status IN ('open','in_progress')
+            AND e.company_id = $1
           ORDER BY e.created_at DESC
-        `),
+        `, [companyId]),
         pool.query(`
           SELECT
             'meeting'::text       AS item_type,
@@ -109,14 +114,16 @@ export function registerInboxRoutes(app: Express): void {
           FROM meetings m
           LEFT JOIN agents a ON a.id = m.agent_id
           WHERE m.scheduled_at IS NOT NULL
+            AND m.company_id = $1
             AND m.status IN ('pending','in_progress')
             AND NOT EXISTS (
               SELECT 1 FROM escalations e
               WHERE e.customer_phone = m.customer_phone
+                AND e.company_id = $1
                 AND e.status IN ('open','in_progress')
             )
           ORDER BY m.scheduled_at ASC
-        `),
+        `, [companyId]),
       ]);
 
       const items = [...escRes.rows, ...meetRes.rows].sort(
