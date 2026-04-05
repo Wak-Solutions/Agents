@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Link } from "wouter";
 import { useLanguage } from "@/lib/language-context";
 import ProductDemo from "./ProductDemo";
+import "devices.css/dist/devices.min.css";
 import {
   Bot, Users, Calendar, Mic, BarChart3, TrendingUp,
   Link2, Settings, Rocket, Zap, Clock, Globe, MessageCircle,
@@ -231,76 +232,106 @@ function Reveal({ children, className = "", delay = 0 }: { children: React.React
 
 /* ─── WhatsApp mockup ─────────────────────────────────────────── */
 function WhatsAppMockup({ t, isRtl }: { t: (typeof copy)[Lang]; isRtl: boolean }) {
+  // device-iphone-14-pro renders at 428×868px natively.
+  // Scale to ~300px wide for the landing page hero.
+  const SCALE = 0.70;
+  const NATIVE_W = 428;
+  const NATIVE_H = 868;
   return (
-    <div className="relative mx-auto w-[280px] sm:w-[300px] lg:w-[320px]">
-      {/* Phone frame */}
-      <div className="bg-gray-900 rounded-[36px] p-[6px] shadow-2xl shadow-black/25">
-        {/* Notch */}
-        <div className="absolute top-[6px] left-1/2 -translate-x-1/2 w-28 h-6 bg-gray-900 rounded-b-2xl z-10" />
-        {/* Screen */}
-        <div className="bg-[#ECE5DD] rounded-[30px] overflow-hidden flex flex-col h-[480px] sm:h-[520px] lg:h-[560px]">
-          {/* Header */}
-          <div className="bg-[#075E54] text-white px-4 pt-8 pb-3 flex items-center gap-3 shrink-0">
-            <div className="w-9 h-9 rounded-full bg-[#128C7E] flex items-center justify-center text-sm font-bold">W</div>
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-semibold truncate">{t.chatName}</div>
-              <div className="text-[10px] text-white/70">{t.chatOnline}</div>
-            </div>
-          </div>
-          {/* Messages */}
-          <div className={`flex-1 overflow-y-auto px-3 py-3 space-y-2 ${isRtl ? "text-right" : "text-left"}`}>
-            {/* Customer message */}
-            <div className={`flex ${isRtl ? "justify-start" : "justify-end"}`}>
-              <div className="bg-[#DCF8C6] rounded-lg rounded-tr-none px-3 py-1.5 max-w-[85%] shadow-sm">
-                <p className="text-[13px] text-gray-800 leading-relaxed">{t.chatMsg1}</p>
-                <div className="flex items-center justify-end gap-1 mt-0.5">
-                  <span className="text-[10px] text-gray-500">10:30</span>
-                  <svg className="w-3.5 h-3.5 text-[#53BDEB]" viewBox="0 0 16 11" fill="currentColor"><path d="M11.07.66L4.88 6.85 2.39 4.36a.75.75 0 00-1.06 1.06l3.03 3.03a.75.75 0 001.06 0l6.72-6.72A.75.75 0 0011.07.66z"/><path d="M14.07.66L7.88 6.85 7.12 6.09a.75.75 0 00-1.06 1.06l1.3 1.3a.75.75 0 001.06 0l6.72-6.72A.75.75 0 0014.07.66z"/></svg>
+    <div
+      style={{
+        width: `${Math.round(NATIVE_W * SCALE)}px`,
+        height: `${Math.round(NATIVE_H * SCALE)}px`,
+        position: "relative",
+        overflow: "hidden",
+        margin: "0 auto",
+      }}
+    >
+      <div
+        style={{
+          transform: `scale(${SCALE})`,
+          transformOrigin: "top left",
+          width: `${NATIVE_W}px`,
+          position: "absolute",
+          top: 0,
+          left: 0,
+        }}
+      >
+        <div className="device device-iphone-14-pro">
+          <div className="device-frame">
+            <div className="device-screen">
+              {/* WhatsApp content fills the screen */}
+              <div className="h-full flex flex-col bg-[#ECE5DD]">
+                {/* Header — pt-11 clears the Dynamic Island overlay */}
+                <div className="bg-[#075E54] text-white px-4 pt-11 pb-3 flex items-center gap-3 shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-[#128C7E] flex items-center justify-center text-sm font-bold">W</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold truncate">{t.chatName}</div>
+                    <div className="text-[10px] text-white/70">{t.chatOnline}</div>
+                  </div>
+                </div>
+                {/* Messages */}
+                <div className={`flex-1 overflow-y-auto px-3 py-3 space-y-2 ${isRtl ? "text-right" : "text-left"}`}>
+                  {/* Customer message */}
+                  <div className={`flex ${isRtl ? "justify-start" : "justify-end"}`}>
+                    <div className="bg-[#DCF8C6] rounded-lg rounded-tr-none px-3 py-1.5 max-w-[85%] shadow-sm">
+                      <p className="text-[13px] text-gray-800 leading-relaxed">{t.chatMsg1}</p>
+                      <div className="flex items-center justify-end gap-1 mt-0.5">
+                        <span className="text-[10px] text-gray-500">10:30</span>
+                        <svg className="w-3.5 h-3.5 text-[#53BDEB]" viewBox="0 0 16 11" fill="currentColor"><path d="M11.07.66L4.88 6.85 2.39 4.36a.75.75 0 00-1.06 1.06l3.03 3.03a.75.75 0 001.06 0l6.72-6.72A.75.75 0 0011.07.66z"/><path d="M14.07.66L7.88 6.85 7.12 6.09a.75.75 0 00-1.06 1.06l1.3 1.3a.75.75 0 001.06 0l6.72-6.72A.75.75 0 0014.07.66z"/></svg>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Bot reply */}
+                  <div className={`flex ${isRtl ? "justify-end" : "justify-start"}`}>
+                    <div className="bg-white rounded-lg rounded-tl-none px-3 py-1.5 max-w-[85%] shadow-sm">
+                      <p className="text-[13px] text-gray-800 leading-relaxed">{t.chatMsg2}</p>
+                      <span className="block text-[10px] text-gray-500 text-end mt-0.5">10:30</span>
+                    </div>
+                  </div>
+                  {/* Customer */}
+                  <div className={`flex ${isRtl ? "justify-start" : "justify-end"}`}>
+                    <div className="bg-[#DCF8C6] rounded-lg rounded-tr-none px-3 py-1.5 max-w-[85%] shadow-sm">
+                      <p className="text-[13px] text-gray-800 leading-relaxed">{t.chatMsg3}</p>
+                      <div className="flex items-center justify-end gap-1 mt-0.5">
+                        <span className="text-[10px] text-gray-500">10:31</span>
+                        <svg className="w-3.5 h-3.5 text-[#53BDEB]" viewBox="0 0 16 11" fill="currentColor"><path d="M11.07.66L4.88 6.85 2.39 4.36a.75.75 0 00-1.06 1.06l3.03 3.03a.75.75 0 001.06 0l6.72-6.72A.75.75 0 0011.07.66z"/><path d="M14.07.66L7.88 6.85 7.12 6.09a.75.75 0 00-1.06 1.06l1.3 1.3a.75.75 0 001.06 0l6.72-6.72A.75.75 0 0014.07.66z"/></svg>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Bot reply */}
+                  <div className={`flex ${isRtl ? "justify-end" : "justify-start"}`}>
+                    <div className="bg-white rounded-lg rounded-tl-none px-3 py-1.5 max-w-[85%] shadow-sm">
+                      <p className="text-[13px] text-gray-800 leading-relaxed">{t.chatMsg4}</p>
+                      <span className="block text-[10px] text-gray-500 text-end mt-0.5">10:31</span>
+                    </div>
+                  </div>
+                  {/* Typing indicator */}
+                  <div className={`flex ${isRtl ? "justify-end" : "justify-start"}`}>
+                    <div className="bg-white rounded-lg rounded-tl-none px-4 py-2.5 shadow-sm flex gap-1 items-center">
+                      <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                      <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                      <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+                    </div>
+                  </div>
+                </div>
+                {/* Input bar */}
+                <div className="bg-[#F0F0F0] px-2 py-2 flex items-center gap-2 shrink-0">
+                  <div className="flex-1 bg-white rounded-full px-4 py-2">
+                    <span className="text-xs text-gray-400">{t.chatPlaceholder}</span>
+                  </div>
+                  <div className="w-9 h-9 bg-[#128C7E] rounded-full flex items-center justify-center">
+                    <Mic className="w-4 h-4 text-white" />
+                  </div>
                 </div>
               </div>
             </div>
-            {/* Bot reply */}
-            <div className={`flex ${isRtl ? "justify-end" : "justify-start"}`}>
-              <div className="bg-white rounded-lg rounded-tl-none px-3 py-1.5 max-w-[85%] shadow-sm">
-                <p className="text-[13px] text-gray-800 leading-relaxed">{t.chatMsg2}</p>
-                <span className="block text-[10px] text-gray-500 text-end mt-0.5">10:30</span>
-              </div>
-            </div>
-            {/* Customer */}
-            <div className={`flex ${isRtl ? "justify-start" : "justify-end"}`}>
-              <div className="bg-[#DCF8C6] rounded-lg rounded-tr-none px-3 py-1.5 max-w-[85%] shadow-sm">
-                <p className="text-[13px] text-gray-800 leading-relaxed">{t.chatMsg3}</p>
-                <div className="flex items-center justify-end gap-1 mt-0.5">
-                  <span className="text-[10px] text-gray-500">10:31</span>
-                  <svg className="w-3.5 h-3.5 text-[#53BDEB]" viewBox="0 0 16 11" fill="currentColor"><path d="M11.07.66L4.88 6.85 2.39 4.36a.75.75 0 00-1.06 1.06l3.03 3.03a.75.75 0 001.06 0l6.72-6.72A.75.75 0 0011.07.66z"/><path d="M14.07.66L7.88 6.85 7.12 6.09a.75.75 0 00-1.06 1.06l1.3 1.3a.75.75 0 001.06 0l6.72-6.72A.75.75 0 0014.07.66z"/></svg>
-                </div>
-              </div>
-            </div>
-            {/* Bot reply */}
-            <div className={`flex ${isRtl ? "justify-end" : "justify-start"}`}>
-              <div className="bg-white rounded-lg rounded-tl-none px-3 py-1.5 max-w-[85%] shadow-sm">
-                <p className="text-[13px] text-gray-800 leading-relaxed">{t.chatMsg4}</p>
-                <span className="block text-[10px] text-gray-500 text-end mt-0.5">10:31</span>
-              </div>
-            </div>
-            {/* Typing indicator */}
-            <div className={`flex ${isRtl ? "justify-end" : "justify-start"}`}>
-              <div className="bg-white rounded-lg rounded-tl-none px-4 py-2.5 shadow-sm flex gap-1 items-center">
-                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                <span className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
-              </div>
-            </div>
           </div>
-          {/* Input bar */}
-          <div className="bg-[#F0F0F0] px-2 py-2 flex items-center gap-2 shrink-0">
-            <div className="flex-1 bg-white rounded-full px-4 py-2">
-              <span className="text-xs text-gray-400">{t.chatPlaceholder}</span>
-            </div>
-            <div className="w-9 h-9 bg-[#128C7E] rounded-full flex items-center justify-center">
-              <Mic className="w-4 h-4 text-white" />
-            </div>
-          </div>
+          <div className="device-stripe"></div>
+          <div className="device-header"></div>
+          <div className="device-sensors"></div>
+          <div className="device-btns"></div>
+          <div className="device-power"></div>
         </div>
       </div>
     </div>
