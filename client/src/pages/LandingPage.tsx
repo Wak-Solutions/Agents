@@ -232,19 +232,11 @@ function Reveal({ children, className = "", delay = 0 }: { children: React.React
 /* ─── WhatsApp mockup ─────────────────────────────────────────── */
 function WhatsAppMockup(_props: { t: (typeof copy)[Lang]; isRtl: boolean }) {
   return (
-    <div
-      className="mx-auto flex items-center justify-center rounded-3xl"
-      style={{
-        width: "min(360px, 90vw)",
-        padding: "32px 24px 40px",
-        background: "radial-gradient(ellipse at 50% 40%, #f5f5f0 0%, #ebebeb 60%, transparent 100%)",
-      }}
-    >
+    <div className="mx-auto" style={{ width: "min(320px, 85vw)" }}>
       <img
         src="/iphone-mockup.png"
         alt="WAK Solutions WhatsApp conversation on iPhone"
         className="w-full h-auto"
-        style={{ filter: "drop-shadow(0 24px 40px rgba(0,0,0,0.18))" }}
       />
     </div>
   );
