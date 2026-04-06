@@ -38,7 +38,11 @@ async function ensureOnboardingColumns(): Promise<void> {
       `ALTER TABLE companies ADD COLUMN IF NOT EXISTS ${col.name} ${col.type}`
     );
   }
-  logger.info('Onboarding columns ensured');
+  // Fix sequences after manual inserts / seeding to prevent duplicate key errors
+  await pool.query(`SELECT setval('companies_id_seq', GREATEST((SELECT COALESCE(MAX(id),0) FROM companies) + 1, nextval('companies_id_seq')), false)`);
+  await pool.query(`SELECT setval('agents_id_seq', GREATEST((SELECT COALESCE(MAX(id),0) FROM agents) + 1, nextval('agents_id_seq')), false)`);
+
+  logger.info('Onboarding columns and sequences ensured');
 }
 
 export function registerRegistrationRoutes(app: Express): void {
