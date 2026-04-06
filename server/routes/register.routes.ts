@@ -237,18 +237,32 @@ export function registerRegistrationRoutes(app: Express): void {
         [companyId]
       );
 
+      // Build structured_config so the dashboard can read individual fields back
+      const structuredConfig = JSON.stringify({
+        businessName: botName || '',
+        industry: '',
+        tone: tone || 'Professional',
+        customTone: '',
+        greeting: greeting || '',
+        questions: [],
+        faq: faqs && faqs.length > 0 ? faqs.map((f: any) => ({ question: f.question, answer: f.answer })) : [],
+        escalationRules: [],
+        closingMessage: '',
+      });
+
       if (existingConfig.rows.length > 0) {
         await pool.query(
           `UPDATE chatbot_config
-           SET system_prompt = $1, business_name = $2, tone = $3, greeting = $4, updated_at = NOW()
-           WHERE company_id = $5`,
-          [systemPrompt, botName, tone, greeting, companyId]
+           SET system_prompt = $1, business_name = $2, tone = $3, greeting = $4,
+               structured_config = $5, updated_at = NOW()
+           WHERE company_id = $6`,
+          [systemPrompt, botName, tone, greeting, structuredConfig, companyId]
         );
       } else {
         await pool.query(
-          `INSERT INTO chatbot_config (system_prompt, business_name, tone, greeting, company_id, override_active)
-           VALUES ($1, $2, $3, $4, $5, false)`,
-          [systemPrompt, botName, tone, greeting, companyId]
+          `INSERT INTO chatbot_config (system_prompt, business_name, tone, greeting, structured_config, company_id, override_active)
+           VALUES ($1, $2, $3, $4, $5, $6, false)`,
+          [systemPrompt, botName, tone, greeting, structuredConfig, companyId]
         );
       }
 

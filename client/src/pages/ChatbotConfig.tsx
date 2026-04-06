@@ -46,15 +46,15 @@ interface StructuredConfig {
 // ── Defaults ──────────────────────────────────────────────────────────────────
 
 const DEFAULT_STRUCTURED: StructuredConfig = {
-  businessName: "WAK Solutions",
-  industry: "AI and robotics solutions",
+  businessName: "",
+  industry: "",
   tone: "Professional",
   customTone: "",
-  greeting: "Welcome to WAK Solutions — your strategic AI partner. We deliver innovative solutions that connect human potential with machine precision to build a smarter future.",
+  greeting: "",
   questions: [],
   faq: [],
   escalationRules: [],
-  closingMessage: "Thank you for contacting us. A member of our team will be in touch shortly.",
+  closingMessage: "",
 };
 
 // ── Small helpers ─────────────────────────────────────────────────────────────
