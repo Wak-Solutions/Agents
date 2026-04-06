@@ -100,6 +100,13 @@ export function registerRegistrationRoutes(app: Express): void {
         );
       }
 
+      // Create a blank chatbot_config row so new companies have their own config from day 1
+      await client.query(
+        `INSERT INTO chatbot_config (system_prompt, override_active, company_id)
+         VALUES ('', false, $1)`,
+        [companyId]
+      );
+
       await client.query('COMMIT');
 
       // Set session

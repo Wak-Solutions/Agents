@@ -87,7 +87,26 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
   // Bot passes ?company_id=N as a query parameter. Defaults to 1 during migration.
   app.get('/api/chatbot-config', async (req: any, res: any) => {
     try {
-      const companyId = parseInt(req.query.company_id) || 1;
+      let companyId: number;
+
+      if (req.session?.authenticated) {
+        // Dashboard request — must use session company, never fall back to another
+        if (!req.session.companyId) {
+          logger.warn('getChatbotConfig — authenticated but no companyId in session', `agentId: ${req.session.agentId}`);
+          return res.status(401).json({ message: 'Session missing companyId' });
+        }
+        companyId = req.session.companyId;
+      } else {
+        // Python bot / unauthenticated — requires explicit ?company_id param
+        const parsed = parseInt(req.query.company_id);
+        if (!parsed) {
+          return res.status(400).json({ message: 'company_id required' });
+        }
+        companyId = parsed;
+      }
+
+      logger.info('getChatbotConfig', `companyId: ${companyId}`);
+
       const result = await pool.query(
         'SELECT * FROM chatbot_config WHERE company_id = $1 ORDER BY id LIMIT 1',
         [companyId]
@@ -96,7 +115,7 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
         return res.json({
           system_prompt: null,
           structured_config: null,
-          override_active: true,
+          override_active: false,
           updated_at: null,
         });
       }
