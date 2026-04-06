@@ -30,6 +30,7 @@ import { registerChatbotConfigRoutes } from './routes/chatbot-config.routes';
 import { registerStatisticsRoutes }    from './routes/statistics.routes';
 import { registerCustomerRoutes }      from './routes/customers.routes';
 import { registerPushRoutes }          from './routes/push.routes';
+import { registerRegistrationRoutes, ensureOnboardingColumns } from './routes/register.routes';
 import { ensureAgentsTable, registerAgentRoutes } from './agents';
 import { ensureSurveyTables, registerSurveyRoutes } from './surveys';
 import { requireAuth, requireAdmin }   from './middleware/auth';
@@ -45,9 +46,11 @@ export async function registerRoutes(
   );
   await ensureAgentsTable();
   await ensureSurveyTables();
+  await ensureOnboardingColumns();
 
   // ── Route modules ─────────────────────────────────────────────────────────
   registerAuthRoutes(app);
+  registerRegistrationRoutes(app);
   registerInboxRoutes(app);
   registerEscalationRoutes(app);
   registerMessageRoutes(app);

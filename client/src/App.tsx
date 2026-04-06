@@ -21,6 +21,7 @@ import AgentsTab from "./pages/AgentsTab";
 import ContactsPage from "./pages/ContactsPage";
 import CustomersPage from "./pages/CustomersPage";
 import TermsPage from "./pages/TermsPage";
+import RegisterPage from "./pages/RegisterPage";
 
 function Router() {
   return (
@@ -30,6 +31,7 @@ function Router() {
       <Route path="/survey/:token" component={SurveyPage} />
       <Route path="/meeting/:token" component={MeetingPage} />
       <Route path="/book/:token" component={BookMeeting} />
+      <Route path="/register" component={RegisterPage} />
       <Route path="/login" component={Login} />
       <Route path="/guide" component={Guide} />
       <Route path="/statistics" component={Statistics} />
