@@ -25,6 +25,12 @@ export async function ensureAgentsTable(): Promise<void> {
     ALTER TABLE agents ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ DEFAULT NULL
   `);
   await pool.query(`
+    ALTER TABLE agents ADD COLUMN IF NOT EXISTS company_id INTEGER DEFAULT 1 REFERENCES companies(id)
+  `);
+  await pool.query(`
+    CREATE INDEX IF NOT EXISTS idx_agents_company ON agents(company_id)
+  `);
+  await pool.query(`
     ALTER TABLE escalations ADD COLUMN IF NOT EXISTS assigned_agent_id INTEGER REFERENCES agents(id)
   `);
   await pool.query(`

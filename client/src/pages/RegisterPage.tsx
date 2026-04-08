@@ -283,11 +283,20 @@ function Step1({ form, setForm, t }: { form: FormData; setForm: (f: FormData) =>
       <FormField label={t("regPhone")} hint={t("regPhoneHint")}>
         <input
           type="tel"
-          className={inputClass}
-          placeholder={t("regPhonePlaceholder")}
+          className={`${inputClass} ${
+            form.phone && !/^\+[0-9]{9,14}$/.test(form.phone)
+              ? "border-red-300 focus:ring-red-200 focus:border-red-400"
+              : ""
+          }`}
+          placeholder="+966501234567"
           value={form.phone}
           onChange={(e) => setForm({ ...form, phone: e.target.value })}
         />
+        {form.phone && !/^\+[0-9]{9,14}$/.test(form.phone) && (
+          <p className="text-xs text-red-500 mt-1">
+            Phone must start with + and contain 10–15 digits (e.g. +966501234567)
+          </p>
+        )}
       </FormField>
 
       <div className="pt-2">
@@ -435,11 +444,24 @@ function Step3({ form, setForm, t }: { form: FormData; setForm: (f: FormData) =>
     }
   };
 
+  const credentialsEmpty = !form.phoneNumberId && !form.accessToken;
+
   return (
     <div className="space-y-5">
       <div className="bg-blue-50 border border-blue-100 rounded-xl p-4">
         <p className="text-sm text-blue-700">{t("regWhatsAppHelp")}</p>
       </div>
+
+      {credentialsEmpty && (
+        <div className="bg-amber-50 border border-amber-300 rounded-xl p-4">
+          <p className="text-sm font-semibold text-amber-800">
+            ⚠️ Without WhatsApp credentials your chatbot will not work.
+          </p>
+          <p className="text-xs text-amber-700 mt-1">
+            You can add these later in Settings, but the bot will be inactive until then.
+          </p>
+        </div>
+      )}
 
       <FormField label={t("regPhoneNumberId")}>
         <input
@@ -721,6 +743,12 @@ export default function RegisterPage() {
   const [form, setForm] = useState<FormData>(INITIAL_FORM);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [phoneError, setPhoneError] = useState("");
+
+  const validatePhone = (phone: string): boolean => {
+    if (!phone) return true; // optional field
+    return /^\+[0-9]{9,14}$/.test(phone);
+  };
 
   /* ─── Validation ───────────────────────────────────────────────── */
   const canContinue = (): boolean => {
@@ -731,7 +759,8 @@ export default function RegisterPage() {
           form.lastName &&
           form.email &&
           form.password.length >= 8 &&
-          form.password === form.confirmPassword
+          form.password === form.confirmPassword &&
+          validatePhone(form.phone)
         );
       case 2:
         return !!(form.businessName && form.industry && form.country);
@@ -774,7 +803,7 @@ export default function RegisterPage() {
           return;
         }
       } else if (step === 2) {
-        await fetch("/api/register/business", {
+        const resp2 = await fetch("/api/register/business", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
@@ -786,9 +815,15 @@ export default function RegisterPage() {
             teamSize: form.teamSize,
           }),
         });
+        if (!resp2.ok) {
+          const d = await resp2.json().catch(() => ({}));
+          setError(d.error || "Failed to save business details. Please try again.");
+          setLoading(false);
+          return;
+        }
       } else if (step === 3) {
         if (form.phoneNumberId || form.accessToken) {
-          await fetch("/api/register/whatsapp", {
+          const resp3 = await fetch("/api/register/whatsapp", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             credentials: "include",
@@ -798,9 +833,15 @@ export default function RegisterPage() {
               accessToken: form.accessToken,
             }),
           });
+          if (!resp3.ok) {
+            const d = await resp3.json().catch(() => ({}));
+            setError(d.error || "Failed to save WhatsApp credentials. Please try again.");
+            setLoading(false);
+            return;
+          }
         }
       } else if (step === 4) {
-        await fetch("/api/register/chatbot", {
+        const resp4 = await fetch("/api/register/chatbot", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
@@ -811,15 +852,27 @@ export default function RegisterPage() {
             faqs: form.faqs.filter((f) => f.question && f.answer),
           }),
         });
+        if (!resp4.ok) {
+          const d = await resp4.json().catch(() => ({}));
+          setError(d.error || "Failed to save chatbot config. Please try again.");
+          setLoading(false);
+          return;
+        }
       } else if (step === 5) {
         const validAgents = form.agents.filter((a) => a.name && a.email);
         if (validAgents.length > 0) {
-          await fetch("/api/register/invite", {
+          const resp5 = await fetch("/api/register/invite", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             credentials: "include",
             body: JSON.stringify({ agents: validAgents }),
           });
+          if (!resp5.ok) {
+            const d = await resp5.json().catch(() => ({}));
+            setError(d.error || "Failed to invite agents. Please try again.");
+            setLoading(false);
+            return;
+          }
         }
       } else if (step === 6) {
         await fetch("/api/register/complete", {

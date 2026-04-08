@@ -97,7 +97,11 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
         }
         companyId = req.session.companyId;
       } else {
-        // Python bot / unauthenticated — requires explicit ?company_id param
+        // Python bot / unauthenticated — requires webhook secret + explicit ?company_id param
+        const secret = req.headers['x-webhook-secret'];
+        if (!secret || secret !== process.env.WEBHOOK_SECRET) {
+          return res.status(401).json({ message: 'Unauthorized' });
+        }
         const parsed = parseInt(req.query.company_id);
         if (!parsed) {
           return res.status(400).json({ message: 'company_id required' });

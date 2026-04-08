@@ -13,9 +13,12 @@
 
 import bcrypt from 'bcrypt';
 import type { Express } from 'express';
+import { Resend } from 'resend';
 import { pool } from '../db';
 import { requireAuth } from '../middleware/auth';
 import { createLogger } from '../lib/logger';
+
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 
 const logger = createLogger('register');
 
@@ -306,6 +309,26 @@ export function registerRegistrationRoutes(app: Express): void {
             [agent.name, agent.email, hash, companyId]
           );
           invited.push({ email: agent.email });
+
+          // Send invitation email with temp credentials
+          if (resend) {
+            const dashboardUrl = process.env.DASHBOARD_URL || 'https://your-dashboard.up.railway.app';
+            resend.emails.send({
+              from: process.env.RESEND_FROM_EMAIL || 'WAK Solutions <noreply@wak-solutions.com>',
+              to: agent.email,
+              subject: `You've been invited to WAK Solutions`,
+              html: `
+                <p>Hi ${agent.name},</p>
+                <p>You've been invited to join your team on WAK Solutions.</p>
+                <p><strong>Login email:</strong> ${agent.email}<br>
+                <strong>Temporary password:</strong> ${tempPass}</p>
+                <p>Please <a href="${dashboardUrl}/login">sign in here</a> and change your password after your first login.</p>
+                <p>— WAK Solutions</p>
+              `,
+            }).catch((e: any) => logger.warn('Invite email failed', `email: ${agent.email}, error: ${e.message}`));
+          } else {
+            logger.warn('RESEND_API_KEY not set — invite email not sent', `email: ${agent.email}, tempPass: ${tempPass}`);
+          }
         }
       }
 

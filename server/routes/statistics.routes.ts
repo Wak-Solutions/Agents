@@ -5,6 +5,7 @@
 import { z } from 'zod';
 import type { Express } from 'express';
 
+import { pool } from '../db';
 import { storage } from '../storage';
 import { requireAuth } from '../middleware/auth';
 import { createLogger } from '../lib/logger';
@@ -57,6 +58,9 @@ export function registerStatisticsRoutes(app: Express): void {
         return res.json({ summary: 'No customer messages found in the selected period.' });
       }
 
+      const companyRes = await pool.query('SELECT name FROM companies WHERE id = $1', [companyId]);
+      const companyName = companyRes.rows[0]?.name ?? 'your company';
+
       const msgBlock = msgs
         .map(
           (m) =>
@@ -65,7 +69,7 @@ export function registerStatisticsRoutes(app: Express): void {
         .join('\n');
 
       const prompt = [
-        `You are reviewing customer support conversations for WAK Solutions.`,
+        `You are reviewing customer support conversations for ${companyName}.`,
         `Period: ${fromDate.toDateString()} to ${toDate.toDateString()}. Total inbound messages: ${msgs.length}.`,
         ``,
         `Summarise the following customer messages in 3–5 sentences covering:`,
@@ -79,7 +83,7 @@ export function registerStatisticsRoutes(app: Express): void {
 
       logger.info(
         'OpenAI summary request',
-        `model: ${process.env.OPENAI_MODEL ?? 'gpt-4.1-mini'}, messages: ${msgs.length}, period: ${from} to ${to}`
+        `model: ${process.env.OPENAI_MODEL ?? 'gpt-4o-mini'}, messages: ${msgs.length}, period: ${from} to ${to}`
       );
 
       const openAiRes = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -89,7 +93,7 @@ export function registerStatisticsRoutes(app: Express): void {
           Authorization: `Bearer ${apiKey}`,
         },
         body: JSON.stringify({
-          model: process.env.OPENAI_MODEL ?? 'gpt-4.1-mini',
+          model: process.env.OPENAI_MODEL ?? 'gpt-4o-mini',
           messages: [{ role: 'user', content: prompt }],
           max_tokens: 400,
           temperature: 0.4,
@@ -106,7 +110,7 @@ export function registerStatisticsRoutes(app: Express): void {
       const summary: string =
         json.choices?.[0]?.message?.content?.trim() ?? 'Could not generate summary.';
 
-      logger.info('OpenAI summary success', `model: ${process.env.OPENAI_MODEL ?? 'gpt-4.1-mini'}, summary_chars: ${summary.length}`);
+      logger.info('OpenAI summary success', `model: ${process.env.OPENAI_MODEL ?? 'gpt-4o-mini'}, summary_chars: ${summary.length}`);
       res.json({ summary });
     } catch (err: any) {
       logger.error('getSummary failed', err.message);

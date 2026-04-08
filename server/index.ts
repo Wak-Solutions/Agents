@@ -64,7 +64,7 @@ function slog(level: string, module: string, message: string, context?: string) 
 }
 
 function validateStartupEnv() {
-  const missing = ["DATABASE_URL", "DASHBOARD_PASSWORD"].filter(
+  const missing = ["DATABASE_URL"].filter(
     (key) => !process.env[key],
   );
 
@@ -161,19 +161,45 @@ app.use((req, res, next) => {
         id         UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
         audio_data BYTEA       NOT NULL,
         mime_type  TEXT        NOT NULL DEFAULT 'audio/ogg',
+        company_id INTEGER     DEFAULT 1,
         created_at TIMESTAMPTZ DEFAULT NOW()
       );
 
       CREATE TABLE IF NOT EXISTS contacts (
         id           SERIAL      PRIMARY KEY,
-        phone_number TEXT        NOT NULL UNIQUE,
+        phone_number TEXT        NOT NULL,
         name         TEXT,
         source       TEXT        NOT NULL DEFAULT 'manual',
-        created_at   TIMESTAMPTZ DEFAULT NOW()
+        company_id   INTEGER     DEFAULT 1,
+        created_at   TIMESTAMPTZ DEFAULT NOW(),
+        UNIQUE (phone_number, company_id)
       );
       CREATE INDEX IF NOT EXISTS contacts_phone_idx ON contacts (phone_number);
     `);
     slog('INFO', 'db', 'Startup migrations applied successfully');
+  } catch (err) {
+    slog('WARN', 'db', 'Migration error (continuing)', String(err));
+  }
+
+  // ── Additive column migrations (safe to run repeatedly) ─────────────────
+  try {
+    await pool.query(`ALTER TABLE voice_notes ADD COLUMN IF NOT EXISTS company_id INTEGER DEFAULT 1`);
+    await pool.query(`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS company_id INTEGER DEFAULT 1`);
+    // Drop the old single-column unique constraint and replace with per-company composite unique.
+    // The default PostgreSQL name for UNIQUE(phone_number) on the contacts table is contacts_phone_number_key.
+    await pool.query(`ALTER TABLE contacts DROP CONSTRAINT IF EXISTS contacts_phone_number_key`);
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_constraint WHERE conname = 'contacts_phone_company_key'
+        ) THEN
+          ALTER TABLE contacts ADD CONSTRAINT contacts_phone_company_key UNIQUE (phone_number, company_id);
+        END IF;
+      END;
+      $$
+    `);
+    slog('INFO', 'db', 'Column migrations applied successfully');
   } catch (err) {
     slog('WARN', 'db', 'Migration error (continuing)', String(err));
   }

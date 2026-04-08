@@ -49,7 +49,7 @@ export async function registerRoutes(
   await ensureOnboardingColumns();
 
   // ── Route modules ─────────────────────────────────────────────────────────
-  registerAuthRoutes(app);
+  await registerAuthRoutes(app);
   registerRegistrationRoutes(app);
   registerInboxRoutes(app);
   registerEscalationRoutes(app);

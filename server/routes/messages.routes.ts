@@ -61,41 +61,64 @@ export function registerMessageRoutes(app: Express): void {
     }
   });
 
-  // POST /api/send — agent sends a message from the dashboard
+  // POST /api/send — agent sends a message from the dashboard via Meta Cloud API
   app.post(api.messages.send.path, requireAuth, async (req: any, res: any) => {
     try {
       const data = api.messages.send.input.parse(req.body);
+      const companyId = req.session.companyId;
       logger.info(
         'Agent message send requested',
         `phone: ${maskPhone(data.customer_phone)}, type: text`
       );
 
-      if (process.env.N8N_SEND_WEBHOOK) {
-        const response = await fetch(process.env.N8N_SEND_WEBHOOK, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-webhook-secret': process.env.WEBHOOK_SECRET || '',
-          },
-          body: JSON.stringify({
-            customer_phone: data.customer_phone,
-            message: data.message,
-            company_id: req.session.companyId,
-          }),
+      // Look up this company's WhatsApp credentials
+      const credRes = await pool.query(
+        `SELECT whatsapp_phone_number_id, whatsapp_token FROM companies WHERE id = $1`,
+        [companyId]
+      );
+      const creds = credRes.rows[0];
+      if (!creds?.whatsapp_phone_number_id || !creds?.whatsapp_token) {
+        logger.error('Send failed — company missing WhatsApp credentials', `companyId: ${companyId}`);
+        return res.status(503).json({
+          message: 'WhatsApp credentials not configured for this account. Go to Settings to add them.',
         });
-        if (!response.ok) {
-          logger.error(
-            'Message delivery failed',
-            `phone: ${maskPhone(data.customer_phone)}, status: ${response.status}`
-          );
-          throw new Error('Failed to deliver message');
-        }
-        logger.info(
-          'Agent message delivered',
-          `phone: ${maskPhone(data.customer_phone)}, type: text`
-        );
       }
 
+      const metaUrl = `https://graph.facebook.com/v19.0/${creds.whatsapp_phone_number_id}/messages`;
+      const metaRes = await fetch(metaUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${creds.whatsapp_token}`,
+        },
+        body: JSON.stringify({
+          messaging_product: 'whatsapp',
+          to: data.customer_phone,
+          type: 'text',
+          text: { body: data.message },
+        }),
+      });
+
+      if (!metaRes.ok) {
+        const errBody = await metaRes.text();
+        logger.error(
+          'Meta Cloud API send failed',
+          `phone: ${maskPhone(data.customer_phone)}, status: ${metaRes.status}, body: ${errBody.slice(0, 200)}`
+        );
+        return res.status(502).json({ message: 'Failed to send message via WhatsApp. Check credentials.' });
+      }
+
+      // Save the outbound message to the database for the conversation history
+      await pool.query(
+        `INSERT INTO messages (customer_phone, direction, message_text, company_id, created_at)
+         VALUES ($1, 'outbound', $2, $3, NOW())`,
+        [data.customer_phone, data.message, companyId]
+      );
+
+      logger.info(
+        'Agent message delivered via Meta Cloud API',
+        `phone: ${maskPhone(data.customer_phone)}`
+      );
       res.json({ success: true });
     } catch (err: any) {
       logger.error('send failed', err.message);

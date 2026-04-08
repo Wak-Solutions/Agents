@@ -1,13 +1,12 @@
 /**
  * auth.routes.ts — Authentication and WebAuthn routes.
  *
- * Handles: login (email+password and legacy password), logout,
- * /me session info, and the full WebAuthn biometric register/login flow.
+ * Handles: login (email+password), logout, /me session info,
+ * and the full WebAuthn biometric register/login flow.
  *
- * NOTE: webAuthnCredential and currentChallenge are process-local in-memory state.
- * This means biometric registration is per-process and will not persist across
- * Railway restarts or multi-instance deployments. A DB-backed credential store
- * would be needed to fix this.
+ * WebAuthn credentials are stored in the webauthn_credentials table
+ * so they survive server restarts and Railway redeploys.
+ * The short-lived challenge is stored in the session (also DB-backed).
  */
 
 import bcrypt from 'bcrypt';
@@ -28,10 +27,6 @@ const logger = createLogger('auth');
 
 const RP_NAME = 'WAK Solutions Agent';
 
-// Process-local WebAuthn state — resets on restart.
-let webAuthnCredential: any = null;
-let currentChallenge: string | undefined;
-
 function getRpId(req: any): string {
   if (process.env.RP_ID) return process.env.RP_ID;
   return req.hostname;
@@ -43,81 +38,65 @@ function getRpOrigin(req: any): string {
   return `${proto}://${req.hostname}`;
 }
 
-export function registerAuthRoutes(app: Express): void {
+export async function registerAuthRoutes(app: Express): Promise<void> {
+
+  // Ensure the webauthn_credentials table exists on startup.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS webauthn_credentials (
+      id            SERIAL PRIMARY KEY,
+      agent_id      INTEGER NOT NULL REFERENCES agents(id),
+      credential_id TEXT NOT NULL UNIQUE,
+      public_key    TEXT NOT NULL,
+      counter       BIGINT NOT NULL DEFAULT 0,
+      created_at    TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(() => {});
 
   // ── Login ────────────────────────────────────────────────────────────────
   app.post(api.auth.login.path, async (req: any, res: any) => {
     const { email, password } = req.body;
 
-    // Email + password login (multi-agent)
-    if (email) {
-      try {
-        const agentRes = await pool.query(
-          `SELECT * FROM agents WHERE email=$1 LIMIT 1`,
-          [email]
-        );
-        if (agentRes.rows.length === 0) {
-          logger.warn('Login failed — agent not found', `email: ${email}`);
-          return res.status(401).json({ message: 'Invalid credentials' });
-        }
-        const agent = agentRes.rows[0];
-        if (!agent.is_active) {
-          logger.warn('Login rejected — account deactivated', `email: ${email}`);
-          return res.status(403).json({ error: 'Your account has been deactivated. Please contact your administrator.' });
-        }
-        const valid = await bcrypt.compare(password, agent.password_hash);
-        if (!valid) {
-          logger.warn('Login failed — wrong password', `email: ${email}`);
-          return res.status(401).json({ message: 'Invalid credentials' });
-        }
-        await pool.query(`UPDATE agents SET last_login=NOW() WHERE id=$1`, [agent.id]);
-        req.session.authenticated = true;
-        req.session.agentId = agent.id;
-        req.session.companyId = agent.company_id;
-        req.session.role = agent.role;
-        req.session.agentName = agent.name;
-        return req.session.save((err: any) => {
-          if (err) {
-            logger.error('Session save failed after login', `agentId: ${agent.id}, error: ${err.message}`);
-            return res.status(500).json({ message: 'Session save error' });
-          }
-          logger.info('Login success', `agentId: ${agent.id}, role: ${agent.role}`);
-          res.json({ success: true, role: agent.role, name: agent.name });
-        });
-      } catch (err: any) {
-        logger.error('Login error', err.message);
-        return res.status(500).json({ message: err.message });
-      }
+    if (!email || !password) {
+      return res.status(400).json({ message: 'Email and password are required' });
     }
 
-    // Legacy password-only login (backward compat + WebAuthn flow)
-    if (password === process.env.DASHBOARD_PASSWORD) {
-      try {
-        const adminRes = await pool.query(
-          `SELECT * FROM agents WHERE role='admin' AND is_active=true ORDER BY id LIMIT 1`
-        );
-        const admin = adminRes.rows[0];
-        req.session.authenticated = true;
-        req.session.agentId = admin?.id ?? null;
-        req.session.companyId = admin?.company_id ?? 1;
-        req.session.role = 'admin';
-        req.session.agentName = admin?.name ?? 'Admin';
-        return req.session.save((err: any) => {
-          if (err) {
-            logger.error('Session save failed after legacy login', err.message);
-            return res.status(500).json({ message: 'Session save error' });
-          }
-          logger.info('Legacy password login success', `agentId: ${admin?.id}`);
-          res.json({ success: true });
-        });
-      } catch (err: any) {
-        logger.error('Legacy login error', err.message);
-        return res.status(500).json({ message: err.message });
+    try {
+      const agentRes = await pool.query(
+        `SELECT * FROM agents WHERE email=$1 LIMIT 1`,
+        [email]
+      );
+      if (agentRes.rows.length === 0) {
+        logger.warn('Login failed — agent not found', `email: ${email}`);
+        return res.status(401).json({ message: 'Invalid credentials' });
       }
+      const agent = agentRes.rows[0];
+      if (!agent.is_active) {
+        logger.warn('Login rejected — account deactivated', `email: ${email}`);
+        return res.status(403).json({ error: 'Your account has been deactivated. Please contact your administrator.' });
+      }
+      const valid = await bcrypt.compare(password, agent.password_hash);
+      if (!valid) {
+        logger.warn('Login failed — wrong password', `email: ${email}`);
+        return res.status(401).json({ message: 'Invalid credentials' });
+      }
+      await pool.query(`UPDATE agents SET last_login=NOW() WHERE id=$1`, [agent.id]);
+      req.session.authenticated = true;
+      req.session.agentId = agent.id;
+      req.session.companyId = agent.company_id;
+      req.session.role = agent.role;
+      req.session.agentName = agent.name;
+      return req.session.save((err: any) => {
+        if (err) {
+          logger.error('Session save failed after login', `agentId: ${agent.id}, error: ${err.message}`);
+          return res.status(500).json({ message: 'Session save error' });
+        }
+        logger.info('Login success', `agentId: ${agent.id}, role: ${agent.role}`);
+        res.json({ success: true, role: agent.role, name: agent.name });
+      });
+    } catch (err: any) {
+      logger.error('Login error', err.message);
+      return res.status(500).json({ message: err.message });
     }
-
-    logger.warn('Login failed — invalid password (legacy path)');
-    res.status(401).json({ message: 'Invalid password' });
   });
 
   // ── Logout ───────────────────────────────────────────────────────────────
@@ -170,35 +149,61 @@ export function registerAuthRoutes(app: Express): void {
 
   // ── WebAuthn: register options ────────────────────────────────────────────
   app.post('/api/auth/webauthn/register/options', requireAuth, async (req: any, res: any) => {
-    const options = await generateRegistrationOptions({
-      rpName: RP_NAME,
-      rpID: getRpId(req),
-      userID: new TextEncoder().encode('wak-agent'),
-      userName: 'agent',
-      attestationType: 'none',
-      authenticatorSelection: {
-        authenticatorAttachment: 'platform',
-        residentKey: 'preferred',
-        userVerification: 'required',
-      },
-    });
-    currentChallenge = options.challenge;
-    logger.info('WebAuthn register options generated', `agentId: ${req.session.agentId}`);
-    res.json(options);
+    try {
+      // Load existing credentials for this agent to exclude them from the prompt
+      const existing = await pool.query(
+        `SELECT credential_id FROM webauthn_credentials WHERE agent_id = $1`,
+        [req.session.agentId]
+      );
+      const excludeCredentials = existing.rows.map((r: any) => ({ id: r.credential_id }));
+
+      const options = await generateRegistrationOptions({
+        rpName: RP_NAME,
+        rpID: getRpId(req),
+        userID: new TextEncoder().encode(String(req.session.agentId)),
+        userName: req.session.agentName || 'agent',
+        attestationType: 'none',
+        excludeCredentials,
+        authenticatorSelection: {
+          authenticatorAttachment: 'platform',
+          residentKey: 'preferred',
+          userVerification: 'required',
+        },
+      });
+      (req.session as any).webauthnChallenge = options.challenge;
+      req.session.save(() => {});
+      logger.info('WebAuthn register options generated', `agentId: ${req.session.agentId}`);
+      res.json(options);
+    } catch (err: any) {
+      logger.error('WebAuthn register options error', err.message);
+      res.status(500).json({ message: err.message });
+    }
   });
 
   // ── WebAuthn: register verify ─────────────────────────────────────────────
   app.post('/api/auth/webauthn/register/verify', requireAuth, async (req: any, res: any) => {
     try {
+      const challenge = (req.session as any).webauthnChallenge;
+      if (!challenge) {
+        return res.status(400).json({ message: 'No pending registration challenge' });
+      }
       const { verified, registrationInfo } = await verifyRegistrationResponse({
         response: req.body,
-        expectedChallenge: currentChallenge!,
+        expectedChallenge: challenge,
         expectedOrigin: getRpOrigin(req),
         expectedRPID: getRpId(req),
       });
       if (verified && registrationInfo) {
-        webAuthnCredential = registrationInfo.credential;
-        currentChallenge = undefined;
+        const { credential } = registrationInfo;
+        const pubKeyHex = Buffer.from(credential.publicKey).toString('hex');
+        await pool.query(
+          `INSERT INTO webauthn_credentials (agent_id, credential_id, public_key, counter)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (credential_id) DO UPDATE SET public_key=$3, counter=$4`,
+          [req.session.agentId, credential.id, pubKeyHex, credential.counter]
+        );
+        (req.session as any).webauthnChallenge = undefined;
+        req.session.save(() => {});
         logger.info('WebAuthn credential registered', `agentId: ${req.session.agentId}`);
         res.json({ verified: true });
       } else {
@@ -213,49 +218,88 @@ export function registerAuthRoutes(app: Express): void {
 
   // ── WebAuthn: login options ───────────────────────────────────────────────
   app.post('/api/auth/webauthn/login/options', async (req: any, res: any) => {
-    if (!webAuthnCredential) {
-      return res.status(400).json({ message: 'No biometric registered' });
+    try {
+      const result = await pool.query(`SELECT credential_id FROM webauthn_credentials`);
+      if (result.rows.length === 0) {
+        return res.status(400).json({ message: 'No biometric registered' });
+      }
+      const allowCredentials = result.rows.map((r: any) => ({ id: r.credential_id }));
+      const options = await generateAuthenticationOptions({
+        rpID: getRpId(req),
+        allowCredentials,
+        userVerification: 'required',
+      });
+      (req.session as any).webauthnChallenge = options.challenge;
+      req.session.save(() => {});
+      res.json(options);
+    } catch (err: any) {
+      logger.error('WebAuthn login options error', err.message);
+      res.status(500).json({ message: err.message });
     }
-    const options = await generateAuthenticationOptions({
-      rpID: getRpId(req),
-      allowCredentials: [{ id: webAuthnCredential.id }],
-      userVerification: 'required',
-    });
-    currentChallenge = options.challenge;
-    res.json(options);
   });
 
   // ── WebAuthn: login verify ────────────────────────────────────────────────
   app.post('/api/auth/webauthn/login/verify', async (req: any, res: any) => {
     try {
+      const challenge = (req.session as any).webauthnChallenge;
+      if (!challenge) {
+        return res.status(400).json({ message: 'No pending login challenge' });
+      }
+      const responseCredentialId = req.body.id;
+
+      // Look up the credential and its owning agent
+      const credRow = await pool.query(
+        `SELECT wc.credential_id, wc.public_key, wc.counter,
+                a.id AS agent_id, a.company_id, a.name AS agent_name, a.role, a.is_active
+         FROM webauthn_credentials wc
+         JOIN agents a ON a.id = wc.agent_id
+         WHERE wc.credential_id = $1`,
+        [responseCredentialId]
+      );
+      if (credRow.rows.length === 0) {
+        logger.warn('WebAuthn login — credential not found', `credentialId: ${responseCredentialId}`);
+        return res.status(401).json({ message: 'Credential not registered' });
+      }
+      const stored = credRow.rows[0];
+      if (!stored.is_active) {
+        return res.status(403).json({ message: 'Your account has been deactivated.' });
+      }
+      if (!stored.company_id) {
+        logger.error('WebAuthn login — agent has no company_id', `agentId: ${stored.agent_id}`);
+        return res.status(403).json({ message: 'Account configuration error. Please contact support.' });
+      }
+
+      const publicKeyUint8 = new Uint8Array(Buffer.from(stored.public_key, 'hex'));
       const { verified } = await verifyAuthenticationResponse({
         response: req.body,
-        expectedChallenge: currentChallenge!,
+        expectedChallenge: challenge,
         expectedOrigin: getRpOrigin(req),
         expectedRPID: getRpId(req),
-        credential: webAuthnCredential,
+        credential: {
+          id: stored.credential_id,
+          publicKey: publicKeyUint8,
+          counter: Number(stored.counter),
+        },
       });
+
       if (verified) {
-        const adminRes = await pool.query(
-          `SELECT * FROM agents WHERE role='admin' AND is_active=true ORDER BY id LIMIT 1`
+        // Increment counter to prevent replay attacks
+        await pool.query(
+          `UPDATE webauthn_credentials SET counter = counter + 1 WHERE credential_id = $1`,
+          [stored.credential_id]
         );
-        const admin = adminRes.rows[0];
-        if (!admin) {
-          logger.error('WebAuthn login — no active admin account found');
-          return res.status(403).json({ message: 'No active admin account found.' });
-        }
         req.session.authenticated = true;
-        req.session.agentId = admin.id;
-        req.session.companyId = admin.company_id ?? 1;
-        req.session.role = 'admin';
-        req.session.agentName = admin.name;
+        req.session.agentId = stored.agent_id;
+        req.session.companyId = stored.company_id;
+        req.session.role = stored.role;
+        req.session.agentName = stored.agent_name;
+        (req.session as any).webauthnChallenge = undefined;
         req.session.save((err: any) => {
           if (err) {
             logger.error('Session save failed after WebAuthn login', err.message);
             return res.status(500).json({ message: 'Session error' });
           }
-          currentChallenge = undefined;
-          logger.info('WebAuthn login success', `agentId: ${admin.id}`);
+          logger.info('WebAuthn login success', `agentId: ${stored.agent_id}, companyId: ${stored.company_id}`);
           res.json({ success: true });
         });
       } else {
@@ -269,7 +313,12 @@ export function registerAuthRoutes(app: Express): void {
   });
 
   // ── WebAuthn: check registration status ──────────────────────────────────
-  app.get('/api/auth/webauthn/registered', (_req: any, res: any) => {
-    res.json({ registered: !!webAuthnCredential });
+  app.get('/api/auth/webauthn/registered', async (_req: any, res: any) => {
+    try {
+      const result = await pool.query(`SELECT COUNT(*)::int AS n FROM webauthn_credentials`);
+      res.json({ registered: result.rows[0].n > 0 });
+    } catch {
+      res.json({ registered: false });
+    }
   });
 }
