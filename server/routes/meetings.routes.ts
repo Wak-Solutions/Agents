@@ -422,10 +422,11 @@ export function registerMeetingRoutes(app: Express): void {
     }
   });
 
-  // ── Public demo booking: get available slots (company_id = 1) ────────────
-  app.get('/api/book-demo', async (_req: any, res: any) => {
+  // ── Public demo: get available booking slots (company_id = 1) ────────────
+  app.get('/api/book-demo', async (req: any, res: any) => {
     try {
       const companyId = 1;
+
       const now = new Date();
       const ksaNow = new Date(now.getTime() + KSA_OFFSET_MS);
       const windowStart = new Date(now);
@@ -484,36 +485,36 @@ export function registerMeetingRoutes(app: Express): void {
         }
       }
 
-      res.json({ days });
+      res.json({ valid: true, days });
     } catch (err: any) {
       logger.error('getDemoSlots failed', err.message);
       res.status(500).json({ message: err.message });
     }
   });
 
-  // ── Public demo booking: confirm a demo booking (company_id = 1) ─────────
+  // ── Public demo: confirm a booking (company_id = 1) ──────────────────────
   app.post('/api/book-demo', async (req: any, res: any) => {
     try {
-      const { date, time, customerName, customerPhone } = z.object({
-        date:          z.string(),
-        time:          z.string(),
-        customerName:  z.string().min(1),
-        customerPhone: z.string().min(7),
-      }).parse(req.body);
-
       const companyId = 1;
+      const { date, time, customerName, customerPhone } = z.object({
+        date: z.string(),
+        time: z.string(),
+        customerName: z.string().min(1),
+        customerPhone: z.string().min(1),
+      }).parse(req.body);
 
       // Convert KSA date+time to UTC
       const [yr, mo, dy] = date.split('-').map(Number);
       const h = time === '00:00' ? 24 : parseInt(time.split(':')[0]);
       const scheduledUtc = new Date(Date.UTC(yr, mo - 1, dy, h - 3, 0, 0, 0));
 
-      // Verify slot still available
+      // Verify slot is still available
       const [takenRes, blockedRes] = await Promise.all([
         pool.query(
           `SELECT 1 FROM meetings
            WHERE scheduled_at >= $1 AND scheduled_at < $2
-             AND status != 'completed' AND company_id = $3`,
+             AND status != 'completed'
+             AND company_id = $3`,
           [scheduledUtc, new Date(scheduledUtc.getTime() + 3600000), companyId]
         ),
         pool.query(
@@ -532,83 +533,58 @@ export function registerMeetingRoutes(app: Express): void {
       // Create Daily.co room
       const room = await createDailyRoom();
       const meetingLink = room.url;
-
-      const rawBase = (
-        process.env.APP_URL ||
-        process.env.RAILWAY_PUBLIC_URL ||
-        process.env.RAILWAY_PUBLIC_DOMAIN ||
-        'wak-agents.up.railway.app'
-      ).replace(/\/$/, '');
-      const baseUrl = rawBase.startsWith('http') ? rawBase : `https://${rawBase}`;
-
-      const token = crypto.randomUUID();
-      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000); // 30 days
-
-      const insertRes = await pool.query(
-        `INSERT INTO meetings
-           (customer_phone, meeting_link, meeting_token, token_expires_at, scheduled_at, status, company_id, link_sent)
-         VALUES ($1, $2, $3, $4, $5, 'pending', $6, FALSE)
-         RETURNING id, meeting_token`,
-        [customerPhone, meetingLink, token, expiresAt, scheduledUtc, companyId]
-      );
-      const meetingId = insertRes.rows[0].id;
-      const meetingToken = insertRes.rows[0].meeting_token;
-      const brandedLink = `${baseUrl}/meeting/${meetingToken}`;
+      const demoToken = crypto.randomUUID();
 
       const ksaDt = new Date(scheduledUtc.getTime() + KSA_OFFSET_MS);
       const ksaLabel = formatKsaDateTime(ksaDt);
 
-      logger.info(
-        'Demo meeting booked',
-        `phone: ${maskPhone(customerPhone)}, name: ${customerName}, time: ${ksaLabel}`
+      // Insert meeting row
+      await pool.query(
+        `INSERT INTO meetings
+           (customer_phone, meeting_link, meeting_token, scheduled_at, status, created_at, company_id)
+         VALUES ($1, $2, $3, $4, 'pending', NOW(), $5)`,
+        [customerPhone, meetingLink, demoToken, scheduledUtc, companyId]
       );
 
-      // Send WhatsApp confirmation using company 1's credentials (non-blocking)
-      (async () => {
-        try {
-          const credRes = await pool.query(
-            `SELECT whatsapp_phone_number_id, whatsapp_token FROM companies WHERE id = 1`
-          );
-          const creds = credRes.rows[0];
-          if (creds?.whatsapp_phone_number_id && creds?.whatsapp_token) {
-            const confirmMsg = `Hi ${customerName}! Your demo with WAK Solutions is confirmed for ${ksaLabel} KSA time. Your meeting link will be sent to you 15 minutes before the meeting. Looking forward to speaking with you!`;
-            await fetch(
-              `https://graph.facebook.com/v19.0/${creds.whatsapp_phone_number_id}/messages`,
-              {
-                method: 'POST',
-                headers: {
-                  'Content-Type': 'application/json',
-                  'Authorization': `Bearer ${creds.whatsapp_token}`,
-                },
-                body: JSON.stringify({
-                  messaging_product: 'whatsapp',
-                  to: customerPhone,
-                  type: 'text',
-                  text: { body: confirmMsg },
-                }),
-              }
-            );
-            logger.info('Demo WhatsApp confirmation sent', `phone: ${maskPhone(customerPhone)}`);
-          } else {
-            logger.warn('Demo booking — company 1 has no WhatsApp credentials, skipping confirmation');
-          }
-        } catch (e: any) {
-          logger.error('Demo WhatsApp confirmation failed', e.message);
+      logger.info('Demo booked', `phone: ${maskPhone(customerPhone)}, time: ${ksaLabel}`);
+
+      // Send WhatsApp confirmation (non-blocking)
+      const credsRes = await pool.query(
+        `SELECT whatsapp_phone_number_id, whatsapp_token FROM companies WHERE id = $1`,
+        [companyId]
+      );
+      if (credsRes.rows.length > 0) {
+        const { whatsapp_phone_number_id: phoneNumberId, whatsapp_token: waToken } = credsRes.rows[0];
+        if (phoneNumberId && waToken) {
+          const confirmMsg = `Hi ${customerName}! Your demo with WAK Solutions is confirmed for ${ksaLabel} KSA time. We'll send you the meeting link 15 minutes before.`;
+          fetch(`https://graph.facebook.com/v19.0/${phoneNumberId}/messages`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${waToken}`,
+            },
+            body: JSON.stringify({
+              messaging_product: 'whatsapp',
+              to: customerPhone.replace(/^\+/, ''),
+              type: 'text',
+              text: { body: confirmMsg },
+            }),
+          }).catch((e: any) => logger.error('Demo WhatsApp confirmation failed', e.message));
         }
-      })();
+      }
 
       // Email manager (non-blocking)
       notifyManagerNewBooking({
-        customerPhone: `${customerName} (${customerPhone})`,
+        customerPhone,
         dateTimeLabel: ksaLabel,
-        meetingLink: brandedLink,
+        meetingLink,
         scheduledUtc,
       }).catch((e: any) => logger.error('Demo manager email failed', e.message));
 
-      // Push notification to all agents
+      // Push notification (non-blocking)
       notifyAll({
-        title: 'New demo meeting booked',
-        body: `${customerName} — ${ksaLabel}`,
+        title: 'Demo booked',
+        body: `${customerName} (${maskPhone(customerPhone)}) — ${ksaLabel}`,
         url: '/meetings',
       }).catch((e: any) => logger.error('Demo push failed', e.message));
 
