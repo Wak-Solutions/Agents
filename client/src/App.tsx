@@ -13,7 +13,6 @@ import Statistics from "./pages/statistics";
 import ChatbotConfig from "./pages/ChatbotConfig";
 import Meetings from "./pages/Meetings";
 import BookMeeting from "./pages/BookMeeting";
-import BookDemo from "./pages/BookDemo";
 import SurveyPage from "./pages/SurveyPage";
 import SurveysTab from "./pages/SurveysTab";
 import MeetingPage from "./pages/MeetingPage";
@@ -32,7 +31,6 @@ function Router() {
       <Route path="/survey/:token" component={SurveyPage} />
       <Route path="/meeting/:token" component={MeetingPage} />
       <Route path="/book/:token" component={BookMeeting} />
-      <Route path="/demo" component={BookDemo} />
       <Route path="/register" component={RegisterPage} />
       <Route path="/login" component={Login} />
       <Route path="/guide" component={Guide} />
