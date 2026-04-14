@@ -193,9 +193,15 @@ export function registerRegistrationRoutes(app: Express): void {
     }
 
     try {
+      const metaHeaders = {
+        'Authorization': `Bearer ${accessToken}`,
+      };
+
       // Step 1: Validate phoneNumberId + accessToken directly
-      const phoneUrl = `https://graph.facebook.com/v19.0/${phoneNumberId}?fields=display_phone_number,verified_name&access_token=${accessToken}`;
-      const phoneResp = await fetch(phoneUrl);
+      const phoneResp = await fetch(
+        `https://graph.facebook.com/v19.0/${phoneNumberId}?fields=display_phone_number,verified_name`,
+        { headers: metaHeaders }
+      );
       const phoneData = await phoneResp.json();
 
       if (phoneData.error) {
@@ -206,8 +212,10 @@ export function registerRegistrationRoutes(app: Express): void {
       const displayName = phoneData.verified_name || phoneData.display_phone_number || 'Verified';
 
       // Step 2: Validate wabaId by fetching its phone numbers and confirming phoneNumberId belongs to it
-      const wabaUrl = `https://graph.facebook.com/v19.0/${wabaId}/phone_numbers?fields=id&access_token=${accessToken}`;
-      const wabaResp = await fetch(wabaUrl);
+      const wabaResp = await fetch(
+        `https://graph.facebook.com/v19.0/${wabaId}/phone_numbers?fields=id`,
+        { headers: metaHeaders }
+      );
       const wabaData = await wabaResp.json();
 
       if (wabaData.error) {

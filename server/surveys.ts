@@ -86,18 +86,18 @@ export async function sendSurveyToCustomer(
   companyId: number = 1,
 ): Promise<void> {
   try {
-    const surveyRes = await pool.query(
+    // Prefer a company-scoped active survey; fall back to any active survey.
+    let surveyRes = await pool.query(
       `SELECT id FROM surveys WHERE is_active = true AND company_id = $1 LIMIT 1`,
       [companyId]
     );
     if (surveyRes.rows.length === 0) {
-      // Fall back to any active survey if no company-scoped one found
-      const fallback = await pool.query(
+      surveyRes = await pool.query(
         `SELECT id FROM surveys WHERE is_active = true LIMIT 1`
       );
-      if (fallback.rows.length === 0) return;
     }
-    const surveyId = (surveyRes.rows[0] ?? (await pool.query(`SELECT id FROM surveys WHERE is_active = true LIMIT 1`)).rows[0])?.id;
+    if (surveyRes.rows.length === 0) return;
+    const surveyId = surveyRes.rows[0].id;
     if (!surveyId) return;
 
     const token = crypto.randomUUID();
@@ -342,12 +342,31 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
   // IMPORTANT: reorder must come BEFORE /:qid
   app.put('/api/surveys/:id/questions/reorder', requireAuth, async (req: any, res: any) => {
     try {
+      const companyId: number = req.session.companyId;
+      // Verify survey belongs to this company before touching its questions.
+      const surveyCheck = await pool.query(
+        `SELECT id FROM surveys WHERE id=$1 AND company_id=$2`,
+        [req.params.id, companyId]
+      );
+      if (surveyCheck.rows.length === 0) return res.status(404).json({ message: 'Survey not found' });
+
       const items = z.array(z.object({ id: z.number(), order_index: z.number() })).parse(req.body);
-      for (const item of items) {
-        await pool.query(
-          `UPDATE survey_questions SET order_index=$1 WHERE id=$2 AND survey_id=$3`,
-          [item.order_index, item.id, req.params.id]
-        );
+      // Batch all updates in a single transaction instead of N individual queries.
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+        for (const item of items) {
+          await client.query(
+            `UPDATE survey_questions SET order_index=$1 WHERE id=$2 AND survey_id=$3`,
+            [item.order_index, item.id, req.params.id]
+          );
+        }
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
       }
       res.json({ success: true });
     } catch (err: any) {
@@ -357,6 +376,14 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
 
   app.put('/api/surveys/:id/questions/:qid', requireAuth, async (req: any, res: any) => {
     try {
+      const companyId: number = req.session.companyId;
+      // Verify survey belongs to this company before updating its questions.
+      const surveyCheck = await pool.query(
+        `SELECT id FROM surveys WHERE id=$1 AND company_id=$2`,
+        [req.params.id, companyId]
+      );
+      if (surveyCheck.rows.length === 0) return res.status(404).json({ message: 'Survey not found' });
+
       const { question_text, question_type, order_index } = z.object({
         question_text: z.string().min(1),
         question_type: z.enum(['rating', 'yes_no', 'free_text']),
@@ -377,6 +404,14 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
 
   app.delete('/api/surveys/:id/questions/:qid', requireAuth, async (req: any, res: any) => {
     try {
+      const companyId: number = req.session.companyId;
+      // Verify survey belongs to this company before deleting its questions.
+      const surveyCheck = await pool.query(
+        `SELECT id FROM surveys WHERE id=$1 AND company_id=$2`,
+        [req.params.id, companyId]
+      );
+      if (surveyCheck.rows.length === 0) return res.status(404).json({ message: 'Survey not found' });
+
       await pool.query(
         `DELETE FROM survey_questions WHERE id=$1 AND survey_id=$2`,
         [req.params.qid, req.params.id]

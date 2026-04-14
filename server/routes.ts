@@ -45,6 +45,27 @@ export async function registerRoutes(
   await pool.query(
     `CREATE INDEX IF NOT EXISTS idx_meetings_meeting_token ON meetings(meeting_token)`
   );
+
+  // Composite indexes for the hottest query patterns (company_id scoping).
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_messages_company_phone
+    ON messages(company_id, customer_phone)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_messages_company_created
+    ON messages(company_id, created_at DESC)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_escalations_company_phone
+    ON escalations(company_id, customer_phone)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_meetings_company_status
+    ON meetings(company_id, status)`);
+
+  // Drop the duplicate escalations index left by a double-migration.
+  await pool.query(`DROP INDEX IF EXISTS idx_escalations_assigned`);
+
+  // Fix the one_active_survey unique index: the original has no company_id
+  // scope, which prevents more than one company from having an active survey.
+  // Replace it with a per-company partial unique index.
+  await pool.query(`DROP INDEX IF EXISTS one_active_survey`);
+  await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS one_active_survey_per_company
+    ON surveys(company_id) WHERE is_active = true`);
+
   await ensureAgentsTable();
   await ensureSurveyTables();
   await ensureOnboardingColumns();
