@@ -117,6 +117,18 @@ app.use((req, res, next) => {
   // MemoryStore (previous) wiped sessions on every Railway deploy, causing 401s.
   const { pool } = await import("./db");
 
+  // ── Health check — registered BEFORE session/auth middleware so Railway
+  //    and external monitors can always reach it without a session cookie.
+  app.get('/health', async (_req: Request, res: Response) => {
+    try {
+      await pool.query('SELECT 1');
+      res.status(200).json({ status: 'ok', database: 'connected' });
+    } catch (err) {
+      slog('ERROR', 'health', 'Database unreachable', String(err));
+      res.status(503).json({ status: 'degraded', database: 'unreachable' });
+    }
+  });
+
   app.use(session({
     cookie: {
       maxAge: 7 * 24 * 60 * 60 * 1000,  // 7 days, rolling

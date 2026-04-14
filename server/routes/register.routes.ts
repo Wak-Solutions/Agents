@@ -343,9 +343,12 @@ export function registerRegistrationRoutes(app: Express): void {
 
           // Send invitation email with temp credentials
           if (resend) {
+            if (!process.env.RESEND_FROM_EMAIL) {
+              logger.warn('RESEND_FROM_EMAIL not set — invite email not sent', `email: ${agent.email}`);
+            } else {
             const dashboardUrl = process.env.DASHBOARD_URL || 'https://your-dashboard.up.railway.app';
             resend.emails.send({
-              from: process.env.RESEND_FROM_EMAIL || 'WAK Solutions <noreply@wak-solutions.com>',
+              from: process.env.RESEND_FROM_EMAIL,
               to: agent.email,
               subject: `You've been invited to WAK Solutions`,
               html: `
@@ -357,6 +360,7 @@ export function registerRegistrationRoutes(app: Express): void {
                 <p>— WAK Solutions</p>
               `,
             }).catch((e: any) => logger.warn('Invite email failed', `email: ${agent.email}, error: ${e.message}`));
+            } // end RESEND_FROM_EMAIL check
           } else {
             logger.warn('RESEND_API_KEY not set — invite email not sent', `email: ${agent.email}`);
           }

@@ -37,15 +37,20 @@ export async function ensureAgentsTable(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_escalations_assigned ON escalations(assigned_agent_id)
   `);
 
-  // Seed default admin from DASHBOARD_PASSWORD if no agents exist
+  // Seed default admin from DASHBOARD_PASSWORD + SEED_ADMIN_EMAIL if no agents exist
   const count = await pool.query('SELECT COUNT(*)::int AS n FROM agents');
   if (count.rows[0].n === 0 && process.env.DASHBOARD_PASSWORD) {
-    const hash = await bcrypt.hash(process.env.DASHBOARD_PASSWORD, 10);
-    await pool.query(
-      `INSERT INTO agents (name, email, password_hash, role, company_id) VALUES ($1, $2, $3, 'admin', 1)`,
-      ['Admin', 'admin@wak-solutions.com', hash]
-    );
-    logger.info('Default admin seeded', 'email: admin@wak-solutions.com');
+    const seedEmail = process.env.SEED_ADMIN_EMAIL;
+    if (!seedEmail) {
+      logger.warn('SEED_ADMIN_EMAIL not set — skipping default admin seed');
+    } else {
+      const hash = await bcrypt.hash(process.env.DASHBOARD_PASSWORD, 10);
+      await pool.query(
+        `INSERT INTO agents (name, email, password_hash, role, company_id) VALUES ($1, $2, $3, 'admin', 1)`,
+        ['Admin', seedEmail, hash]
+      );
+      logger.info('Default admin seeded', `email: ${seedEmail}`);
+    }
   }
 }
 

@@ -31,6 +31,14 @@ export async function notifyManagerNewBooking(opts: {
     console.warn("[email] RESEND_API_KEY not set — skipping manager notification email");
     return;
   }
+  if (!process.env.RESEND_FROM_EMAIL) {
+    console.error("[email] RESEND_FROM_EMAIL is not set — cannot send manager notification email");
+    return;
+  }
+  if (!process.env.MANAGER_EMAIL) {
+    console.error("[email] MANAGER_EMAIL is not set — cannot send manager notification email");
+    return;
+  }
 
   const resend = new Resend(process.env.RESEND_API_KEY);
   const calUrl = buildGoogleCalendarUrl({
@@ -121,8 +129,8 @@ export async function notifyManagerNewBooking(opts: {
 </html>`;
 
   await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
-    to: process.env.MANAGER_EMAIL || "ammarkateb323@gmail.com",
+    from: process.env.RESEND_FROM_EMAIL,
+    to: process.env.MANAGER_EMAIL,
     subject: `New Meeting Booking — ${opts.customerPhone}`,
     html,
   });

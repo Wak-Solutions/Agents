@@ -9,6 +9,7 @@
  * and consumed by the Python bot.
  */
 
+import { timingSafeEqual } from 'crypto';
 import type { Express } from 'express';
 
 import { pool } from '../db';
@@ -98,8 +99,14 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
         companyId = req.session.companyId;
       } else {
         // Python bot / unauthenticated — requires webhook secret + explicit ?company_id param
-        const secret = req.headers['x-webhook-secret'];
-        if (!secret || secret !== process.env.WEBHOOK_SECRET) {
+        const incoming = req.headers['x-webhook-secret'];
+        const expected = process.env.WEBHOOK_SECRET;
+        if (
+          typeof incoming !== 'string' ||
+          !expected ||
+          incoming.length !== expected.length ||
+          !timingSafeEqual(Buffer.from(incoming), Buffer.from(expected))
+        ) {
           return res.status(401).json({ message: 'Unauthorized' });
         }
         const parsed = parseInt(req.query.company_id);

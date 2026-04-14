@@ -22,11 +22,15 @@ const logger = createLogger('push');
 
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
 const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
-const VAPID_EMAIL = process.env.VAPID_EMAIL || 'mailto:test@example.com';
+const VAPID_EMAIL = process.env.VAPID_EMAIL || '';
 
 if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
-  webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
-  logger.info('VAPID keys configured');
+  if (!VAPID_EMAIL) {
+    logger.warn('VAPID_EMAIL not set — push notifications will be disabled');
+  } else {
+    webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+    logger.info('VAPID keys configured');
+  }
 } else {
   logger.warn('VAPID keys not set — push notifications will be disabled');
 }

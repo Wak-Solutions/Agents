@@ -6,6 +6,7 @@
  * receiving them as parameters or re-defining them.
  */
 
+import { timingSafeEqual } from 'crypto';
 import type { Request, Response, NextFunction } from 'express';
 
 /** Reject requests from unauthenticated sessions or sessions missing company_id. */
@@ -39,8 +40,14 @@ export function requireAdmin(req: Request, res: Response, next: NextFunction): v
  * Used on routes called by the Python bot to prevent unauthorised writes.
  */
 export function requireWebhookSecret(req: Request, res: Response, next: NextFunction): void {
-  const secret = req.headers['x-webhook-secret'];
-  if (secret !== process.env.WEBHOOK_SECRET) {
+  const incoming = req.headers['x-webhook-secret'];
+  const expected = process.env.WEBHOOK_SECRET;
+  if (
+    typeof incoming !== 'string' ||
+    !expected ||
+    incoming.length !== expected.length ||
+    !timingSafeEqual(Buffer.from(incoming), Buffer.from(expected))
+  ) {
     res.status(401).json({ message: 'Invalid webhook secret' });
     return;
   }
