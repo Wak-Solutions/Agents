@@ -121,8 +121,8 @@ export async function notifyManagerNewBooking(opts: {
 </html>`;
 
   await resend.emails.send({
-    from: "onboarding@resend.dev",
-    to: "ammarkateb323@gmail.com",
+    from: process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
+    to: process.env.MANAGER_EMAIL || "ammarkateb323@gmail.com",
     subject: `New Meeting Booking — ${opts.customerPhone}`,
     html,
   });

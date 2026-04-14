@@ -360,7 +360,7 @@ export function registerMeetingRoutes(app: Express): void {
         process.env.APP_URL ||
         process.env.RAILWAY_PUBLIC_URL ||
         process.env.RAILWAY_PUBLIC_DOMAIN ||
-        'wak-agents.up.railway.app'
+        'wak-agent.up.railway.app'
       ).replace(/\/$/, '');
       const baseUrl = rawBase.startsWith('http') ? rawBase : `https://${rawBase}`;
       const brandedLink = `${baseUrl}/meeting/${meeting.meeting_token}`;

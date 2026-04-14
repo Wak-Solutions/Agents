@@ -132,7 +132,7 @@ app.use((req, res, next) => {
     rolling: true,          // reset expiry on every request
     resave: false,
     saveUninitialized: false,
-    secret: process.env.SESSION_SECRET || "wak-dashboard-secret",
+    secret: process.env.SESSION_SECRET!,
   }));
 
   try {
