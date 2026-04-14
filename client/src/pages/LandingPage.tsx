@@ -729,21 +729,22 @@ export default function LandingPage() {
                 </div>
                 <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-[#25D366] transition-colors shrink-0" />
               </a>
-              <Link href="/demo">
-                <a
-                  onClick={() => setBookDemoOpen(false)}
-                  className="flex items-center gap-4 p-4 border-2 border-gray-100 hover:border-[#0F510F]/40 hover:bg-[#0F510F]/5 rounded-xl transition-colors group"
-                >
-                  <div className="w-11 h-11 rounded-full bg-[#0F510F]/10 flex items-center justify-center shrink-0">
-                    <Calendar className="w-5 h-5 text-[#0F510F]" />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-gray-900 text-sm">Pick a time</p>
-                    <p className="text-xs text-gray-500 mt-0.5">Book a live walkthrough with our team</p>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-[#0F510F] transition-colors shrink-0" />
-                </a>
-              </Link>
+              <a
+                href="https://wa.me/966544798226?text=Hi%2C%20I%27d%20like%20to%20pick%20a%20time%20for%20a%20demo%20with%20the%20WAK%20Solutions%20team"
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setBookDemoOpen(false)}
+                className="flex items-center gap-4 p-4 border-2 border-gray-100 hover:border-[#0F510F]/40 hover:bg-[#0F510F]/5 rounded-xl transition-colors group"
+              >
+                <div className="w-11 h-11 rounded-full bg-[#0F510F]/10 flex items-center justify-center shrink-0">
+                  <Calendar className="w-5 h-5 text-[#0F510F]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-gray-900 text-sm">Pick a time</p>
+                  <p className="text-xs text-gray-500 mt-0.5">Book a live walkthrough with our team</p>
+                </div>
+                <ArrowRight className="w-4 h-4 text-gray-300 group-hover:text-[#0F510F] transition-colors shrink-0" />
+              </a>
             </div>
           </div>
         </div>
