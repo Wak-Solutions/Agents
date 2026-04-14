@@ -932,8 +932,12 @@ export default function RegisterPage() {
       <div className="flex-1 flex flex-col min-h-screen">
         {/* Top bar */}
         <div className="flex items-center justify-between px-6 lg:px-10 py-4 border-b border-gray-100">
-          <div className="lg:hidden" />
-          <div className="hidden lg:block" />
+          <Link href="/">
+            <a className="flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-[#0F510F] transition-colors">
+              <ChevronLeft className="w-4 h-4" />
+              Back
+            </a>
+          </Link>
           <button
             onClick={toggleLang}
             className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
