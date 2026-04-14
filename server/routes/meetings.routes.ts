@@ -442,9 +442,8 @@ export function registerMeetingRoutes(app: Express): void {
       const [blockedRes, takenRes] = await Promise.all([
         pool.query(
           `SELECT date::text, time FROM blocked_slots
-           WHERE date >= $1::date AND date < $1::date + INTERVAL '32 days'
-             AND company_id = $2`,
-          [blockedWindowStart, companyId]
+           WHERE date >= $1::date AND date < $1::date + INTERVAL '32 days'`,
+          [blockedWindowStart]
         ),
         pool.query(
           `SELECT scheduled_at FROM meetings
@@ -518,8 +517,8 @@ export function registerMeetingRoutes(app: Express): void {
           [scheduledUtc, new Date(scheduledUtc.getTime() + 3600000), companyId]
         ),
         pool.query(
-          'SELECT 1 FROM blocked_slots WHERE date=$1::date AND time=$2 AND company_id = $3',
-          [new Date(Date.UTC(yr, mo - 1, dy) - KSA_OFFSET_MS).toISOString().slice(0, 10), time, companyId]
+          'SELECT 1 FROM blocked_slots WHERE date=$1::date AND time=$2',
+          [new Date(Date.UTC(yr, mo - 1, dy) - KSA_OFFSET_MS).toISOString().slice(0, 10), time]
         ),
       ]);
 
