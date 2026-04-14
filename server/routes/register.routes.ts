@@ -350,7 +350,7 @@ export function registerRegistrationRoutes(app: Express): void {
               `,
             }).catch((e: any) => logger.warn('Invite email failed', `email: ${agent.email}, error: ${e.message}`));
           } else {
-            logger.warn('RESEND_API_KEY not set — invite email not sent', `email: ${agent.email}, tempPass: ${tempPass}`);
+            logger.warn('RESEND_API_KEY not set — invite email not sent', `email: ${agent.email}`);
           }
         }
       }

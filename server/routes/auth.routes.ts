@@ -219,7 +219,12 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
   // ── WebAuthn: login options ───────────────────────────────────────────────
   app.post('/api/auth/webauthn/login/options', async (req: any, res: any) => {
     try {
-      const result = await pool.query(`SELECT credential_id FROM webauthn_credentials`);
+      // Only return credentials for active agents to avoid cross-tenant credential exposure
+      const result = await pool.query(
+        `SELECT wc.credential_id FROM webauthn_credentials wc
+         JOIN agents a ON a.id = wc.agent_id
+         WHERE a.is_active = true`
+      );
       if (result.rows.length === 0) {
         return res.status(400).json({ message: 'No biometric registered' });
       }

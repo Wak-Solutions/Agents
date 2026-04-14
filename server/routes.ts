@@ -19,6 +19,7 @@
 
 import type { Express } from 'express';
 import { createServer, type Server } from 'http';
+import rateLimit from 'express-rate-limit';
 import { pool } from './db';
 
 import { registerAuthRoutes }          from './routes/auth.routes';
@@ -47,6 +48,27 @@ export async function registerRoutes(
   await ensureAgentsTable();
   await ensureSurveyTables();
   await ensureOnboardingColumns();
+
+  // ── Rate limiting on public-facing endpoints ──────────────────────────────
+  // Prevents abuse of the demo booking page, registration, and login.
+  const bookingLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: 'Too many requests, please try again later.' },
+  });
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: 'Too many requests, please try again later.' },
+  });
+  app.use('/api/book-demo', bookingLimiter);
+  app.use('/api/book/', bookingLimiter);
+  app.use('/api/register', authLimiter);
+  app.use('/api/auth/login', authLimiter);
 
   // ── Route modules ─────────────────────────────────────────────────────────
   await registerAuthRoutes(app);

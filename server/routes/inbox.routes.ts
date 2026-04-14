@@ -25,10 +25,7 @@ export function registerInboxRoutes(app: Express): void {
       const companyId = req.session.companyId;
 
       // Admin sees all; agents see only their assigned + unassigned chats.
-      const visibilityFilter =
-        role === 'admin'
-          ? ''
-          : `AND (e.assigned_agent_id = ${agentId} OR e.assigned_agent_id IS NULL OR e.customer_phone IS NULL)`;
+      const isAdmin = role === 'admin';
 
       const result = await pool.query(`
         SELECT
@@ -49,9 +46,10 @@ export function registerInboxRoutes(app: Express): void {
           LIMIT 1
         ) e ON true
         LEFT JOIN agents a ON a.id = e.assigned_agent_id
-        WHERE 1=1 ${visibilityFilter}
+        WHERE 1=1
+          AND ($2 OR e.assigned_agent_id = $3 OR e.assigned_agent_id IS NULL OR e.customer_phone IS NULL)
         ORDER BY last_message_at DESC NULLS LAST
-      `, [companyId]);
+      `, [companyId, isAdmin, agentId]);
       res.json(result.rows);
     } catch (err: any) {
       logger.error('getConversations failed', err.message);

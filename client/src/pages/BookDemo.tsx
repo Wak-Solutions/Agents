@@ -24,6 +24,11 @@ export default function BookDemo() {
   const handleFormSubmit = async () => {
     if (!customerName.trim()) { setFormError("Please enter your name."); return; }
     if (!customerPhone.trim()) { setFormError("Please enter your phone number."); return; }
+    const cleanPhone = customerPhone.trim().replace(/[\s\-().]/g, '');
+    if (!/^\+?\d{7,15}$/.test(cleanPhone)) {
+      setFormError("Please enter a valid phone number (e.g. +966501234567).");
+      return;
+    }
     setFormError("");
     setState("loading");
     try {
