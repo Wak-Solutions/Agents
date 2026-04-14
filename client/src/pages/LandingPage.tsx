@@ -398,17 +398,6 @@ export default function LandingPage() {
               ))}
             </div>
 
-            {/* Desktop CTAs */}
-            <div className="hidden lg:flex items-center gap-3">
-              <button onClick={() => setBookDemoOpen(true)} className="text-sm font-medium text-[#0F510F] border border-[#0F510F]/30 hover:border-[#0F510F] px-5 py-2 rounded-xl transition-colors">
-                {t.bookDemo}
-              </button>
-              <Link href="/register">
-                <a className="text-sm font-medium text-white bg-[#0F510F] hover:bg-[#0d440d] px-5 py-2 rounded-xl transition-colors shadow-sm">
-                  {t.startTrial}
-                </a>
-              </Link>
-            </div>
 
             {/* Mobile hamburger */}
             <button onClick={() => setMobileOpen(!mobileOpen)} className="lg:hidden p-2 text-gray-700">
@@ -465,6 +454,9 @@ export default function LandingPage() {
                       {t.startTrial} <ArrowRight className="w-4 h-4" />
                     </a>
                   </Link>
+                  <button onClick={() => setBookDemoOpen(true)} className="inline-flex items-center gap-2 text-[#0F510F] font-semibold border border-[#0F510F]/30 hover:border-[#0F510F] px-7 py-3.5 rounded-xl hover:bg-[#0F510F]/5 transition-colors text-sm">
+                    {t.bookDemo}
+                  </button>
                   <button onClick={() => setDemoOpen(true)} className="inline-flex items-center gap-2 text-[#0F510F] font-semibold px-4 py-3.5 rounded-xl hover:bg-[#0F510F]/5 transition-colors text-sm">
                     <Play className="w-4 h-4" /> {t.seeDemo}
                   </button>
