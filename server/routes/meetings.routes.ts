@@ -119,9 +119,8 @@ export function registerMeetingRoutes(app: Express): void {
       const result = await pool.query(
         `SELECT date::text, time FROM blocked_slots
          WHERE date >= $1::date AND date < $1::date + INTERVAL '7 days'
-           AND company_id = $2
          ORDER BY date, time`,
-        [weekStart, companyId]
+        [weekStart]
       );
       res.json(result.rows);
     } catch (err: any) {
@@ -136,17 +135,17 @@ export function registerMeetingRoutes(app: Express): void {
       const companyId = req.session.companyId;
       const { date, time } = z.object({ date: z.string(), time: z.string() }).parse(req.body);
       const existing = await pool.query(
-        'SELECT id FROM blocked_slots WHERE date=$1::date AND time=$2 AND company_id = $3',
-        [date, time, companyId]
+        'SELECT id FROM blocked_slots WHERE date=$1::date AND time=$2',
+        [date, time]
       );
       if (existing.rows.length > 0) {
-        await pool.query('DELETE FROM blocked_slots WHERE date=$1::date AND time=$2 AND company_id = $3', [date, time, companyId]);
+        await pool.query('DELETE FROM blocked_slots WHERE date=$1::date AND time=$2', [date, time]);
         logger.info('Slot unblocked', `date: ${date}, time: ${time}`);
         res.json({ blocked: false });
       } else {
         await pool.query(
-          'INSERT INTO blocked_slots (date, time, company_id) VALUES ($1::date, $2, $3) ON CONFLICT DO NOTHING',
-          [date, time, companyId]
+          'INSERT INTO blocked_slots (date, time) VALUES ($1::date, $2) ON CONFLICT DO NOTHING',
+          [date, time]
         );
         logger.info('Slot blocked', `date: ${date}, time: ${time}`);
         res.json({ blocked: true });
@@ -253,9 +252,8 @@ export function registerMeetingRoutes(app: Express): void {
       const [blockedRes, takenRes] = await Promise.all([
         pool.query(
           `SELECT date::text, time FROM blocked_slots
-           WHERE date >= $1::date AND date < $1::date + INTERVAL '32 days'
-             AND company_id = $2`,
-          [blockedWindowStart, companyId]
+           WHERE date >= $1::date AND date < $1::date + INTERVAL '32 days'`,
+          [blockedWindowStart]
         ),
         pool.query(
           `SELECT scheduled_at FROM meetings
@@ -339,8 +337,8 @@ export function registerMeetingRoutes(app: Express): void {
           [scheduledUtc, new Date(scheduledUtc.getTime() + 3600000), meeting.id, companyId]
         ),
         pool.query(
-          'SELECT 1 FROM blocked_slots WHERE date=$1::date AND time=$2 AND company_id = $3',
-          [new Date(Date.UTC(yr, mo - 1, dy) - KSA_OFFSET_MS).toISOString().slice(0, 10), time, companyId]
+          'SELECT 1 FROM blocked_slots WHERE date=$1::date AND time=$2',
+          [new Date(Date.UTC(yr, mo - 1, dy) - KSA_OFFSET_MS).toISOString().slice(0, 10), time]
         ),
       ]);
 
