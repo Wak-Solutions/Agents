@@ -248,6 +248,28 @@ export default function ChatbotConfig() {
           setCompanyName(loaded.businessName);
           setDescription(loaded.industry);
           setServices(loaded.servicesText);
+
+          // Auto-generate preview if all three fields are present
+          if (loaded.businessName && loaded.industry && loaded.servicesText) {
+            setGenerating(true);
+            fetch("/api/chatbot-config/generate-conversation", {
+              method: "POST",
+              credentials: "include",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                companyName: loaded.businessName,
+                description: loaded.industry,
+                services:    loaded.servicesText,
+              }),
+            })
+              .then(r => r.json())
+              .then(d => {
+                setConversation(d.conversation ?? []);
+                setHasGenerated(true);
+              })
+              .catch(() => {})
+              .finally(() => setGenerating(false));
+          }
         }
         setSavedAt(data.updated_at ?? null);
       })
