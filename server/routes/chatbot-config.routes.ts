@@ -11,13 +11,13 @@
 
 import { timingSafeEqual } from 'crypto';
 import type { Express } from 'express';
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 
 import { pool } from '../db';
 import { requireAuth } from '../middleware/auth';
 import { createLogger } from '../lib/logger';
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 const logger = createLogger('chatbot-config');
 
@@ -182,12 +182,12 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
   });
 
   // POST /api/chatbot-config/generate-conversation
-  // Calls Claude to produce a realistic demo WhatsApp conversation JSON array.
+  // Calls OpenAI to produce a realistic demo WhatsApp conversation JSON array.
   app.post('/api/chatbot-config/generate-conversation', requireAuth, async (req: any, res: any) => {
     try {
       const { companyName, description, services, feedback } = req.body;
-      if (!process.env.ANTHROPIC_API_KEY) {
-        return res.status(503).json({ message: 'ANTHROPIC_API_KEY is not configured on this server.' });
+      if (!process.env.OPENAI_API_KEY) {
+        return res.status(503).json({ message: 'OPENAI_API_KEY is not configured on this server.' });
       }
 
       const feedbackLine = feedback
@@ -207,14 +207,14 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
         'The bot should be helpful, ask relevant questions about the business\'s specific services, and guide the customer naturally.',
       ].filter(Boolean).join('\n');
 
-      const message = await anthropic.messages.create({
-        model: 'claude-sonnet-4-20250514',
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
         max_tokens: 1000,
         messages: [{ role: 'user', content: userPrompt }],
       });
 
-      const raw = (message.content[0] as any)?.text ?? '[]';
-      // Strip markdown code fences if Claude wrapped the JSON anyway
+      const raw = completion.choices[0]?.message?.content ?? '[]';
+      // Strip markdown code fences if the model wrapped the JSON anyway
       const cleaned = raw.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '').trim();
       const conversation = JSON.parse(cleaned);
 
