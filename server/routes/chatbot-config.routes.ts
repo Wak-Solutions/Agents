@@ -11,10 +11,13 @@
 
 import { timingSafeEqual } from 'crypto';
 import type { Express } from 'express';
+import Anthropic from '@anthropic-ai/sdk';
 
 import { pool } from '../db';
 import { requireAuth } from '../middleware/auth';
 import { createLogger } from '../lib/logger';
+
+const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const logger = createLogger('chatbot-config');
 
@@ -174,6 +177,51 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
       return res.json(result.rows[0]);
     } catch (err: any) {
       logger.error('saveChatbotConfig failed', err.message);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // POST /api/chatbot-config/generate-conversation
+  // Calls Claude to produce a realistic demo WhatsApp conversation JSON array.
+  app.post('/api/chatbot-config/generate-conversation', requireAuth, async (req: any, res: any) => {
+    try {
+      const { companyName, description, services, feedback } = req.body;
+      if (!process.env.ANTHROPIC_API_KEY) {
+        return res.status(503).json({ message: 'ANTHROPIC_API_KEY is not configured on this server.' });
+      }
+
+      const feedbackLine = feedback
+        ? `User feedback to incorporate: ${feedback}`
+        : '';
+
+      const userPrompt = [
+        'You are generating a realistic WhatsApp demo conversation for a business chatbot.',
+        `Business: ${companyName || 'the business'}`,
+        `Description: ${description || 'a customer service business'}`,
+        `Products/Services: ${services || 'various products and services'}`,
+        feedbackLine,
+        '',
+        'Return ONLY a JSON array of message objects, no markdown, no explanation.',
+        'Each object: { "role": "bot" | "user", "text": string }',
+        'Generate 6-10 messages. Make it feel like a real customer interaction.',
+        'The bot should be helpful, ask relevant questions about the business\'s specific services, and guide the customer naturally.',
+      ].filter(Boolean).join('\n');
+
+      const message = await anthropic.messages.create({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: userPrompt }],
+      });
+
+      const raw = (message.content[0] as any)?.text ?? '[]';
+      // Strip markdown code fences if Claude wrapped the JSON anyway
+      const cleaned = raw.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '').trim();
+      const conversation = JSON.parse(cleaned);
+
+      logger.info('generateConversation', `companyId: ${req.session.companyId}, messages: ${conversation.length}`);
+      return res.json({ conversation });
+    } catch (err: any) {
+      logger.error('generateConversation failed', err.message);
       res.status(500).json({ message: err.message });
     }
   });
