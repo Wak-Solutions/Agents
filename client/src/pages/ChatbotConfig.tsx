@@ -441,21 +441,6 @@ export default function ChatbotConfig() {
                 </div>
               </div>
 
-              {/* Mobile-only preview — shown between sections, hidden on desktop */}
-              <div className="md:hidden">
-                <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2.5">
-                  Demo Conversation
-                </p>
-                <div className="h-[500px] overflow-y-auto rounded-2xl border border-gray-200 shadow-md">
-                  <WhatsAppPreview
-                    companyName={companyName}
-                    conversation={conversation}
-                    loading={generating}
-                    hasGenerated={hasGenerated}
-                  />
-                </div>
-              </div>
-
               {/* SECTION 2 — Not quite right? (only after first generation) */}
               <AnimatePresence>
                 {hasGenerated && (
@@ -508,18 +493,20 @@ export default function ChatbotConfig() {
 
             </div>
 
-            {/* ── Right column: sticky WhatsApp preview (desktop only) ─────── */}
-            <div className="hidden md:block w-[300px] shrink-0">
-              <div className="sticky top-6">
+            {/* ── Right column / mobile bottom: WhatsApp preview ────────────── */}
+            <div className="w-full md:w-[300px] md:shrink-0">
+              <div className="md:sticky md:top-6">
                 <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2.5">
                   Demo Conversation
                 </p>
-                <WhatsAppPreview
-                  companyName={companyName}
-                  conversation={conversation}
-                  loading={generating}
-                  hasGenerated={hasGenerated}
-                />
+                <div className="h-[500px] md:h-auto overflow-y-auto md:overflow-visible rounded-2xl md:rounded-none">
+                  <WhatsAppPreview
+                    companyName={companyName}
+                    conversation={conversation}
+                    loading={generating}
+                    hasGenerated={hasGenerated}
+                  />
+                </div>
               </div>
             </div>
 
