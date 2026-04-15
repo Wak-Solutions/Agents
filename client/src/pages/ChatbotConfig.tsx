@@ -4,6 +4,7 @@ import { Bot, Save, Check, ArrowRight, RefreshCw } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "@/hooks/use-auth";
 import DashboardLayout from "@/components/DashboardLayout";
+import { useLanguage } from "@/lib/language-context";
 
 // ── Types (all preserved, unchanged) ─────────────────────────────────────────
 
@@ -90,6 +91,7 @@ function WhatsAppPreview({
   hasGenerated: boolean;
 }) {
   const chatRef = useRef<HTMLDivElement>(null);
+  const { t } = useLanguage();
   const name = companyName || "Your Business";
 
   // Scroll to bottom whenever conversation updates
@@ -110,7 +112,7 @@ function WhatsAppPreview({
         </div>
         <div className="min-w-0">
           <p className="text-white text-sm font-semibold truncate">{name}</p>
-          <p className="text-white/60 text-xs">AI Assistant</p>
+          <p className="text-white/60 text-xs">{t("chatbotSetupAiAssistant")}</p>
         </div>
       </div>
 
@@ -125,8 +127,8 @@ function WhatsAppPreview({
             <div className="w-10 h-10 rounded-full bg-white/60 flex items-center justify-center">
               <Bot className="w-5 h-5 text-gray-400" />
             </div>
-            <p className="text-sm text-gray-500 font-medium">Your demo conversation will appear here</p>
-            <p className="text-xs text-gray-400">Fill in your business details and click Generate</p>
+            <p className="text-sm text-gray-500 font-medium">{t("chatbotSetupEmptyTitle")}</p>
+            <p className="text-xs text-gray-400">{t("chatbotSetupEmptyDesc")}</p>
           </div>
         )}
 
@@ -179,7 +181,7 @@ function WhatsAppPreview({
       {/* Input bar (decorative) */}
       <div className="bg-[#F0F0F0] px-3 py-2 flex items-center gap-2 border-t border-gray-200">
         <div className="flex-1 bg-white rounded-full px-4 py-1.5 border border-gray-200">
-          <p className="text-gray-400 text-xs">Type a message...</p>
+          <p className="text-gray-400 text-xs">{t("chatbotSetupTypeMessage")}</p>
         </div>
         <div className="w-8 h-8 rounded-full bg-[#075E54] flex items-center justify-center flex-shrink-0">
           <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
@@ -196,6 +198,7 @@ function WhatsAppPreview({
 export default function ChatbotConfig() {
   const [, setLocation] = useLocation();
   const { isAuthenticated, isLoading } = useAuth();
+  const { t } = useLanguage();
 
   // ── Form fields ────────────────────────────────────────────────────────────
   const [companyName, setCompanyName]   = useState("");
@@ -251,9 +254,6 @@ export default function ChatbotConfig() {
         }
 
         // Restore saved conversation — no API call needed
-        console.log('[ChatbotConfig] GET /api/chatbot-config response keys:', Object.keys(data));
-        console.log('[ChatbotConfig] demo_conversation value:', data.demo_conversation);
-        console.log('[ChatbotConfig] demo_conversation type:', typeof data.demo_conversation, Array.isArray(data.demo_conversation) ? `(array, length ${data.demo_conversation.length})` : '');
         const saved = data.demo_conversation;
         if (Array.isArray(saved) && saved.length > 0) {
           setConversation(saved);
@@ -353,7 +353,7 @@ export default function ChatbotConfig() {
           {/* Page header */}
           <div className="flex items-center gap-2 mb-6">
             <Bot className="w-5 h-5 text-[#0F510F]" />
-            <h1 className="text-xl font-bold text-gray-900">Chatbot Setup</h1>
+            <h1 className="text-xl font-bold text-gray-900">{t("chatbotSetupTitle")}</h1>
           </div>
 
           <div className="flex flex-col md:flex-row gap-8 items-start">
@@ -364,40 +364,40 @@ export default function ChatbotConfig() {
               {/* SECTION 1 — Set up your chatbot */}
               <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
                 <div className="px-5 pt-5 pb-4 border-b border-gray-100">
-                  <h2 className="text-sm font-semibold text-gray-900">Set up your chatbot</h2>
+                  <h2 className="text-sm font-semibold text-gray-900">{t("chatbotSetupSection1Title")}</h2>
                   <p className="text-xs text-gray-400 mt-0.5">
-                    Describe your business and we'll build the conversation for you
+                    {t("chatbotSetupSection1Desc")}
                   </p>
                 </div>
                 <div className="px-5 py-4 space-y-4">
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-gray-500">Company Name</label>
+                    <label className="text-xs font-medium text-gray-500">{t("chatbotSetupCompanyName")}</label>
                     <input
                       className={inputCls}
-                      placeholder="e.g. WAK Solutions"
+                      placeholder={t("chatbotSetupCompanyNamePlaceholder")}
                       value={companyName}
                       onChange={e => { setCompanyName(e.target.value); setIsDirty(true); }}
                     />
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-gray-500">Describe your company</label>
+                    <label className="text-xs font-medium text-gray-500">{t("chatbotSetupDescription")}</label>
                     <textarea
                       className={inputCls + " resize-none"}
                       rows={3}
-                      placeholder="e.g. We're a logistics company based in Saudi Arabia specialising in same-day delivery for e-commerce businesses"
+                      placeholder={t("chatbotSetupDescriptionPlaceholder")}
                       value={description}
                       onChange={e => { setDescription(e.target.value); setIsDirty(true); }}
                     />
                   </div>
 
                   <div className="space-y-1.5">
-                    <label className="text-xs font-medium text-gray-500">Products &amp; services</label>
+                    <label className="text-xs font-medium text-gray-500">{t("chatbotSetupServices")}</label>
                     <textarea
                       className={inputCls + " resize-none"}
                       rows={3}
-                      placeholder="e.g. Same-day delivery, warehousing, returns management, international shipping"
+                      placeholder={t("chatbotSetupServicesPlaceholder")}
                       value={services}
                       onChange={e => { setServices(e.target.value); setIsDirty(true); }}
                     />
@@ -418,12 +418,12 @@ export default function ChatbotConfig() {
                     {generating ? (
                       <>
                         <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        Generating...
+                        {t("chatbotSetupGenerating")}
                       </>
                     ) : (
                       <>
                         {hasGenerated ? <RefreshCw className="w-3.5 h-3.5" /> : <ArrowRight className="w-3.5 h-3.5" />}
-                        {hasGenerated ? "Regenerate" : "Generate my chatbot"}
+                        {hasGenerated ? t("chatbotSetupRegenerate") : t("chatbotSetupGenerate")}
                       </>
                     )}
                   </button>
@@ -442,18 +442,18 @@ export default function ChatbotConfig() {
                     className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden"
                   >
                     <div className="px-5 pt-5 pb-4 border-b border-gray-100">
-                      <h2 className="text-sm font-semibold text-gray-900">Not quite right?</h2>
+                      <h2 className="text-sm font-semibold text-gray-900">{t("chatbotSetupSection2Title")}</h2>
                       <p className="text-xs text-gray-400 mt-0.5">
-                        Tell us what to change in plain English
+                        {t("chatbotSetupSection2Desc")}
                       </p>
                     </div>
                     <div className="px-5 py-4 space-y-3">
                       <div className="space-y-1.5">
-                        <label className="text-xs font-medium text-gray-500">Tell us what to change</label>
+                        <label className="text-xs font-medium text-gray-500">{t("chatbotSetupFeedbackLabel")}</label>
                         <textarea
                           className={inputCls + " resize-none"}
                           rows={3}
-                          placeholder="e.g. Make it more formal, remove the part about pricing, add a question about delivery location"
+                          placeholder={t("chatbotSetupFeedbackPlaceholder")}
                           value={feedback}
                           onChange={e => setFeedback(e.target.value)}
                         />
@@ -467,12 +467,12 @@ export default function ChatbotConfig() {
                         {generating ? (
                           <>
                             <div className="w-3.5 h-3.5 border-2 border-[#0F510F]/30 border-t-[#0F510F] rounded-full animate-spin" />
-                            Updating...
+                            {t("chatbotSetupUpdating")}
                           </>
                         ) : (
                           <>
                             <ArrowRight className="w-3.5 h-3.5" />
-                            Update
+                            {t("chatbotSetupUpdate")}
                           </>
                         )}
                       </button>
@@ -487,7 +487,7 @@ export default function ChatbotConfig() {
             <div className="w-full md:w-[300px] md:shrink-0">
               <div className="md:sticky md:top-6">
                 <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2.5">
-                  Demo Conversation
+                  {t("chatbotSetupDemoLabel")}
                 </p>
                 <div className="h-[500px] md:h-auto overflow-y-auto md:overflow-visible rounded-2xl md:rounded-none">
                   <WhatsAppPreview
@@ -519,18 +519,18 @@ export default function ChatbotConfig() {
                   {isDirty && !saveSuccess && (
                     <div className="flex items-center gap-1.5 text-xs text-amber-600">
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
-                      Unsaved changes
+                      {t("chatbotSetupUnsaved")}
                     </div>
                   )}
                   {saveSuccess && (
                     <div className="flex items-center gap-1.5 text-xs text-[#0F510F]">
                       <Check className="w-3.5 h-3.5" />
-                      Saved successfully
+                      {t("chatbotSetupSavedSuccess")}
                     </div>
                   )}
                   {savedAt && !isDirty && !saveSuccess && (
                     <p className="text-xs text-gray-400 truncate">
-                      Last saved {new Date(savedAt).toLocaleString()}
+                      {t("chatbotSetupLastSaved")} {new Date(savedAt).toLocaleString()}
                     </p>
                   )}
                   {saveError && (
@@ -547,12 +547,12 @@ export default function ChatbotConfig() {
                   {saving ? (
                     <>
                       <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Saving...
+                      {t("chatbotSetupSaving")}
                     </>
                   ) : (
                     <>
                       <Save className="w-3.5 h-3.5" />
-                      Save chatbot
+                      {t("chatbotSetupSave")}
                     </>
                   )}
                 </button>
