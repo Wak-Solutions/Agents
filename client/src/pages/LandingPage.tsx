@@ -426,13 +426,10 @@ export default function LandingPage() {
                   {l.label}
                 </button>
               ))}
-              <div className="pt-3 flex flex-col gap-2">
-                <button onClick={() => { setMobileOpen(false); setBookDemoOpen(true); }} className="text-sm font-medium text-[#0F510F] border border-[#0F510F]/30 px-5 py-2.5 rounded-xl text-center">
-                  {t.bookDemo}
-                </button>
-                <Link href="/register">
-                  <a className="text-sm font-medium text-white bg-[#0F510F] px-5 py-2.5 rounded-xl text-center block">
-                    {t.startTrial}
+              <div className="pt-3">
+                <Link href="/login">
+                  <a className="text-sm font-medium text-white bg-[#0F510F] px-5 py-2.5 rounded-xl text-center block hover:bg-[#0d4510] transition-colors">
+                    Login
                   </a>
                 </Link>
               </div>
