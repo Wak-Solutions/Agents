@@ -366,10 +366,10 @@ export default function ChatbotConfig() {
             <h1 className="text-xl font-bold text-gray-900">Chatbot Setup</h1>
           </div>
 
-          <div className="flex gap-8 items-start">
+          <div className="flex flex-col md:flex-row gap-8 items-start">
 
             {/* ── Left column ──────────────────────────────────────────────── */}
-            <div className="flex-1 min-w-0 space-y-4">
+            <div className="w-full md:flex-1 md:min-w-0 space-y-4">
 
               {/* SECTION 1 — Set up your chatbot */}
               <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
@@ -441,6 +441,21 @@ export default function ChatbotConfig() {
                 </div>
               </div>
 
+              {/* Mobile-only preview — shown between sections, hidden on desktop */}
+              <div className="md:hidden">
+                <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2.5">
+                  Demo Conversation
+                </p>
+                <div className="h-[500px] overflow-y-auto rounded-2xl border border-gray-200 shadow-md">
+                  <WhatsAppPreview
+                    companyName={companyName}
+                    conversation={conversation}
+                    loading={generating}
+                    hasGenerated={hasGenerated}
+                  />
+                </div>
+              </div>
+
               {/* SECTION 2 — Not quite right? (only after first generation) */}
               <AnimatePresence>
                 {hasGenerated && (
@@ -493,8 +508,8 @@ export default function ChatbotConfig() {
 
             </div>
 
-            {/* ── Right column: sticky WhatsApp preview ─────────────────── */}
-            <div className="hidden lg:block w-[300px] shrink-0">
+            {/* ── Right column: sticky WhatsApp preview (desktop only) ─────── */}
+            <div className="hidden md:block w-[300px] shrink-0">
               <div className="sticky top-6">
                 <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2.5">
                   Demo Conversation
