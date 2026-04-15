@@ -251,6 +251,9 @@ export default function ChatbotConfig() {
         }
 
         // Restore saved conversation — no API call needed
+        console.log('[ChatbotConfig] GET /api/chatbot-config response keys:', Object.keys(data));
+        console.log('[ChatbotConfig] demo_conversation value:', data.demo_conversation);
+        console.log('[ChatbotConfig] demo_conversation type:', typeof data.demo_conversation, Array.isArray(data.demo_conversation) ? `(array, length ${data.demo_conversation.length})` : '');
         const saved = data.demo_conversation;
         if (Array.isArray(saved) && saved.length > 0) {
           setConversation(saved);
