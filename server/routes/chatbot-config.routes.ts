@@ -80,11 +80,12 @@ function compilePrompt(cfg: any): string {
 
 export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
 
-  // Idempotent migration: add structured_config + override_active columns.
+  // Idempotent migrations.
   await pool.query(`
     ALTER TABLE chatbot_config
-      ADD COLUMN IF NOT EXISTS structured_config JSONB,
-      ADD COLUMN IF NOT EXISTS override_active   BOOLEAN DEFAULT true
+      ADD COLUMN IF NOT EXISTS structured_config  JSONB,
+      ADD COLUMN IF NOT EXISTS override_active    BOOLEAN DEFAULT true,
+      ADD COLUMN IF NOT EXISTS demo_conversation  JSONB
   `).catch(() => {});
 
   // GET /api/chatbot-config — no auth required; Python bot reads this.
@@ -143,7 +144,7 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
   // POST /api/chatbot-config — save config (compiles structured → prompt)
   app.post('/api/chatbot-config', requireAuth, async (req: any, res: any) => {
     try {
-      const { structured_config, override_active, raw_prompt } = req.body;
+      const { structured_config, override_active, raw_prompt, demo_conversation } = req.body;
       const companyId: number = req.session.companyId;
 
       const activePrompt = override_active
@@ -158,15 +159,15 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
       if (existing.rows.length > 0) {
         result = await pool.query(
           `UPDATE chatbot_config
-           SET system_prompt=$1, structured_config=$2, override_active=$3, updated_at=NOW()
-           WHERE company_id=$4 RETURNING *`,
-          [activePrompt, JSON.stringify(structured_config), override_active, companyId]
+           SET system_prompt=$1, structured_config=$2, override_active=$3, demo_conversation=$4, updated_at=NOW()
+           WHERE company_id=$5 RETURNING *`,
+          [activePrompt, JSON.stringify(structured_config), override_active, JSON.stringify(demo_conversation ?? null), companyId]
         );
       } else {
         result = await pool.query(
-          `INSERT INTO chatbot_config (system_prompt, structured_config, override_active, updated_at, company_id)
-           VALUES ($1,$2,$3,NOW(),$4) RETURNING *`,
-          [activePrompt, JSON.stringify(structured_config), override_active, companyId]
+          `INSERT INTO chatbot_config (system_prompt, structured_config, override_active, demo_conversation, updated_at, company_id)
+           VALUES ($1,$2,$3,$4,NOW(),$5) RETURNING *`,
+          [activePrompt, JSON.stringify(structured_config), override_active, JSON.stringify(demo_conversation ?? null), companyId]
         );
       }
 
