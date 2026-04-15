@@ -37,6 +37,7 @@ interface StructuredConfig {
   faq: FaqItem[];
   escalationRules: EscalationRule[];
   closingMessage: string;
+  servicesText: string;
 }
 
 // ── Conversation message type ─────────────────────────────────────────────────
@@ -58,6 +59,7 @@ const DEFAULT_STRUCTURED: StructuredConfig = {
   faq: [],
   escalationRules: [],
   closingMessage: "",
+  servicesText: "",
 };
 
 // ── Shared styles ─────────────────────────────────────────────────────────────
@@ -240,9 +242,12 @@ export default function ChatbotConfig() {
             faq:             sc.faq             ?? [],
             escalationRules: sc.escalationRules ?? [],
             closingMessage:  sc.closingMessage  ?? "",
+            servicesText:    sc.servicesText    ?? "",
           };
           setLoadedConfig(loaded);
           setCompanyName(loaded.businessName);
+          setDescription(loaded.industry);
+          setServices(loaded.servicesText);
         }
         setSavedAt(data.updated_at ?? null);
       })
@@ -292,6 +297,7 @@ export default function ChatbotConfig() {
         ...loadedConfig,
         businessName: companyName,
         industry:     description,   // map description → industry for compilePrompt
+        servicesText: services,
       };
       const res = await fetch("/api/chatbot-config", {
         method: "POST",
