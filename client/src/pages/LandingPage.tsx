@@ -17,7 +17,7 @@ const copy = {
     pricing: "Pricing",
     faq: "FAQ",
     bookDemo: "Book a demo",
-    startTrial: "Start free trial",
+    startTrial: "Free Trial / Sign Up",
     seeDemo: "See it in action",
     /* hero */
     heroTitle: "AI-powered WhatsApp for businesses that can't afford to miss a message.",
@@ -114,7 +114,7 @@ const copy = {
     pricing: "الأسعار",
     faq: "الأسئلة الشائعة",
     bookDemo: "احجز عرض تجريبي",
-    startTrial: "ابدأ تجربة مجانية",
+    startTrial: "تجربة مجانية / تسجيل",
     seeDemo: "شاهده بنفسك",
     heroTitle: "واتساب بالذكاء الاصطناعي للشركات اللي ما تقدر تفوّت أي رسالة.",
     heroSub: "واك يربط واتساب شركتك بذكاء اصطناعي يرد فوراً، يحجز مواعيد، يحوّل للموظفين، ويشتغل ٢٤/٧ — بالعربي والإنجليزي.",
@@ -396,8 +396,12 @@ export default function LandingPage() {
                   {l.label}
                 </button>
               ))}
+              <Link href="/login">
+                <a className="text-sm font-medium text-[#0F510F] border border-[#0F510F]/40 px-4 py-2 rounded-lg hover:border-[#0F510F] hover:bg-[#0F510F]/5 transition-colors">
+                  Login
+                </a>
+              </Link>
             </div>
-
 
             {/* Mobile hamburger */}
             <button onClick={() => setMobileOpen(!mobileOpen)} className="lg:hidden p-2 text-gray-700">
@@ -749,12 +753,6 @@ export default function LandingPage() {
         </div>
       )}
 
-      {/* Dev login bypass */}
-      <Link href="/login">
-        <a style={{ position: "fixed", bottom: 16, left: 16, fontSize: 11, color: "#aaa", textDecoration: "none" }}>
-          Dev access
-        </a>
-      </Link>
     </div>
   );
 }
