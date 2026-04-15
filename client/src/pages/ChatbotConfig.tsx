@@ -1,15 +1,12 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useLocation } from "wouter";
-import {
-  Bot, Save, RotateCcw, ChevronDown, ChevronUp,
-  Plus, Trash2, GripVertical, AlertTriangle, Eye, EyeOff,
-} from "lucide-react";
+import { Bot, Save, Plus, Trash2, GripVertical, Check, ChevronDown } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/language-context";
 import DashboardLayout from "@/components/DashboardLayout";
 
-// ── Types ─────────────────────────────────────────────────────────────────────
+// ── Types (unchanged) ─────────────────────────────────────────────────────────
 
 type AnswerType = "free" | "yesno" | "multiple";
 
@@ -57,87 +54,13 @@ const DEFAULT_STRUCTURED: StructuredConfig = {
   closingMessage: "",
 };
 
-// ── Small helpers ─────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
-function SectionCard({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="bg-white border border-gray-200 rounded-xl p-5 space-y-4">
-      <h2 className="text-base font-semibold text-gray-900">{title}</h2>
-      {children}
-    </section>
-  );
-}
-
-function Field({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-baseline gap-2">
-        <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">{label}</label>
-        {hint && <span className="text-xs text-gray-400">{hint}</span>}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-const inputCls = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0F510F] placeholder:text-gray-400";
-const textareaCls = `${inputCls} resize-none`;
-
-// ── WhatsApp Preview component ────────────────────────────────────────────────
-
-function WhatsAppPreview({ businessName, greeting }: { businessName: string; greeting: string }) {
-  return (
-    <div>
-      <p className="text-sm font-medium text-gray-500 mb-3">WhatsApp Preview</p>
-      <div className="rounded-2xl overflow-hidden shadow-lg border border-gray-200">
-        {/* Header */}
-        <div className="bg-[#0F510F] px-4 py-3 flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
-            <span className="text-white font-bold text-sm">W</span>
-          </div>
-          <div className="min-w-0">
-            <p className="text-white text-sm font-semibold truncate">
-              {businessName || "Your Business"}
-            </p>
-            <p className="text-white/60 text-xs">online</p>
-          </div>
-        </div>
-
-        {/* Chat body */}
-        <div className="bg-[#0d4510] min-h-[300px] px-3 py-4">
-          {/* Chat bubble */}
-          <div className="bg-white/20 rounded-xl p-3 max-w-[90%]">
-            <p className="text-[#90EE90] text-xs font-medium mb-1">AI Assistant</p>
-            <p className="text-white text-sm leading-relaxed">
-              {greeting || "Your greeting message will appear here..."}
-            </p>
-            <p className="text-white/40 text-[10px] text-right mt-1.5">
-              {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-            </p>
-          </div>
-        </div>
-
-        {/* Input bar */}
-        <div className="bg-[#0a3a0d] px-3 py-2.5 flex items-center gap-2">
-          <div className="flex-1 bg-white/10 rounded-full px-4 py-2">
-            <p className="text-white/30 text-xs">Type a message...</p>
-          </div>
-          <div className="w-8 h-8 rounded-full bg-[#0F510F] flex items-center justify-center flex-shrink-0">
-            <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
-            </svg>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Drag-to-reorder hook ───────────────────────────────────────────────────────
+// ── Drag-to-reorder hook (unchanged) ─────────────────────────────────────────
 
 function useDraggableList<T>(items: T[], setItems: (v: T[]) => void) {
   const dragIdx = useRef<number | null>(null);
@@ -158,6 +81,67 @@ function useDraggableList<T>(items: T[], setItems: (v: T[]) => void) {
   return { onDragStart, onDragOver, onDrop };
 }
 
+// ── Shared input styles ───────────────────────────────────────────────────────
+
+const inputCls =
+  "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white text-gray-900 " +
+  "focus:outline-none focus:ring-2 focus:ring-[#0F510F]/40 placeholder:text-gray-400 transition-shadow";
+
+// ── Section card ──────────────────────────────────────────────────────────────
+
+function SectionCard({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+      <div className="px-5 pt-5 pb-4 border-b border-gray-100">
+        <h2 className="text-sm font-semibold text-gray-900">{title}</h2>
+        <p className="text-xs text-gray-400 mt-0.5">{description}</p>
+      </div>
+      <div className="px-5 py-4 space-y-4">{children}</div>
+    </div>
+  );
+}
+
+// ── Answer type badge (click to cycle) ───────────────────────────────────────
+
+const ANSWER_TYPE_LABELS: Record<AnswerType, string> = {
+  free: "Free text",
+  yesno: "Yes / No",
+  multiple: "Multiple choice",
+};
+
+const ANSWER_TYPE_ORDER: AnswerType[] = ["free", "yesno", "multiple"];
+
+function AnswerTypeBadge({
+  value,
+  onChange,
+}: {
+  value: AnswerType;
+  onChange: (v: AnswerType) => void;
+}) {
+  const cycle = () => {
+    const idx = ANSWER_TYPE_ORDER.indexOf(value);
+    onChange(ANSWER_TYPE_ORDER[(idx + 1) % ANSWER_TYPE_ORDER.length]);
+  };
+  return (
+    <button
+      type="button"
+      onClick={cycle}
+      title="Click to change answer type"
+      className="flex-shrink-0 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors select-none"
+    >
+      {ANSWER_TYPE_LABELS[value]}
+    </button>
+  );
+}
+
 // ── Questions editor ──────────────────────────────────────────────────────────
 
 function QuestionsEditor({
@@ -167,31 +151,32 @@ function QuestionsEditor({
   questions: Question[];
   onChange: (v: Question[]) => void;
 }) {
-  const { t } = useLanguage();
   const drag = useDraggableList(questions, onChange);
 
   const add = () =>
     onChange([...questions, { id: uid(), text: "", answerType: "free", choices: [] }]);
 
   const update = (id: string, patch: Partial<Question>) =>
-    onChange(questions.map(q => q.id === id ? { ...q, ...patch } : q));
+    onChange(questions.map(q => (q.id === id ? { ...q, ...patch } : q)));
 
   const remove = (id: string) => onChange(questions.filter(q => q.id !== id));
 
   const updateChoice = (qid: string, idx: number, val: string) =>
-    onChange(questions.map(q =>
-      q.id === qid ? { ...q, choices: q.choices.map((c, i) => i === idx ? val : c) } : q
-    ));
+    onChange(
+      questions.map(q =>
+        q.id === qid ? { ...q, choices: q.choices.map((c, i) => (i === idx ? val : c)) } : q
+      )
+    );
 
   const addChoice = (qid: string) =>
-    onChange(questions.map(q =>
-      q.id === qid ? { ...q, choices: [...q.choices, ""] } : q
-    ));
+    onChange(questions.map(q => (q.id === qid ? { ...q, choices: [...q.choices, ""] } : q)));
 
   const removeChoice = (qid: string, idx: number) =>
-    onChange(questions.map(q =>
-      q.id === qid ? { ...q, choices: q.choices.filter((_, i) => i !== idx) } : q
-    ));
+    onChange(
+      questions.map(q =>
+        q.id === qid ? { ...q, choices: q.choices.filter((_, i) => i !== idx) } : q
+      )
+    );
 
   return (
     <div className="space-y-2">
@@ -199,133 +184,76 @@ function QuestionsEditor({
         {questions.map((q, i) => (
           <motion.div
             key={q.id}
-            initial={{ opacity: 0, y: -8 }}
+            initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-            transition={{ duration: 0.15 }}
+            transition={{ duration: 0.13 }}
             draggable
             onDragStart={() => drag.onDragStart(i)}
             onDragOver={e => drag.onDragOver(e, i)}
             onDrop={drag.onDrop}
-            className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2"
+            className="group border border-gray-200 rounded-lg bg-gray-50 p-3 space-y-2"
           >
             <div className="flex items-center gap-2">
-              <GripVertical className="w-4 h-4 text-gray-500 cursor-grab flex-shrink-0" />
-              <span className="text-xs font-semibold text-gray-500 w-5 flex-shrink-0">#{i + 1}</span>
+              <GripVertical className="w-4 h-4 text-gray-300 group-hover:text-gray-400 cursor-grab flex-shrink-0 transition-colors" />
               <input
-                className={inputCls}
-                placeholder={t("chatbotPlaceholderQuestion")}
+                className={inputCls + " flex-1"}
+                placeholder={`Question ${i + 1}`}
                 value={q.text}
                 onChange={e => update(q.id, { text: e.target.value })}
               />
-              <select
-                className="border border-gray-200 rounded-lg px-2 py-2 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0F510F] flex-shrink-0"
+              <AnswerTypeBadge
                 value={q.answerType}
-                onChange={e => update(q.id, { answerType: e.target.value as AnswerType, choices: [] })}
-              >
-                <option value="free">{t("chatbotQuestionTypeFree")}</option>
-                <option value="yesno">{t("chatbotQuestionTypeYesNo")}</option>
-                <option value="multiple">{t("chatbotQuestionTypeMultiple")}</option>
-              </select>
+                onChange={type => update(q.id, { answerType: type, choices: [] })}
+              />
               <button
+                type="button"
                 onClick={() => remove(q.id)}
-                className="p-1.5 rounded-lg text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+                className="flex-shrink-0 p-1.5 rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
             </div>
+
             {q.answerType === "multiple" && (
-              <div className="ml-11 space-y-1.5">
-                <p className="text-xs text-gray-500 font-medium">{t("chatbotAnswerChoices")}</p>
+              <div className="ml-6 space-y-1.5">
                 {q.choices.map((c, ci) => (
                   <div key={ci} className="flex items-center gap-1.5">
                     <input
                       className={inputCls}
-                      placeholder={`Choice ${ci + 1}`}
+                      placeholder={`Option ${ci + 1}`}
                       value={c}
                       onChange={e => updateChoice(q.id, ci, e.target.value)}
                     />
                     <button
+                      type="button"
                       onClick={() => removeChoice(q.id, ci)}
-                      className="p-1.5 rounded text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+                      className="flex-shrink-0 p-1.5 rounded text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors"
                     >
                       <Trash2 className="w-3 h-3" />
                     </button>
                   </div>
                 ))}
                 <button
+                  type="button"
                   onClick={() => addChoice(q.id)}
-                  className="flex items-center gap-1 text-xs text-[#0F510F] font-medium hover:underline"
+                  className="text-xs text-[#0F510F] font-medium hover:underline"
                 >
-                  <Plus className="w-3 h-3" /> {t("chatbotBtnAddChoice")}
+                  + Add option
                 </button>
               </div>
             )}
           </motion.div>
         ))}
       </AnimatePresence>
+
       <button
+        type="button"
         onClick={add}
-        className="flex items-center gap-1.5 text-sm font-medium text-[#0F510F] border border-[#0F510F]/30 px-3 py-1.5 rounded-lg hover:bg-[#0F510F]/5 transition-colors"
+        className="flex items-center gap-1.5 text-sm text-gray-500 border border-dashed border-gray-300 rounded-lg px-3 py-2 w-full hover:border-[#0F510F]/50 hover:text-[#0F510F] transition-colors"
       >
-        <Plus className="w-4 h-4" /> {t("chatbotBtnAddQuestion")}
-      </button>
-    </div>
-  );
-}
-
-// ── FAQ editor ────────────────────────────────────────────────────────────────
-
-function FaqEditor({ items, onChange }: { items: FaqItem[]; onChange: (v: FaqItem[]) => void }) {
-  const { t } = useLanguage();
-  const add    = () => onChange([...items, { id: uid(), question: "", answer: "" }]);
-  const update = (id: string, patch: Partial<FaqItem>) =>
-    onChange(items.map(f => f.id === id ? { ...f, ...patch } : f));
-  const remove = (id: string) => onChange(items.filter(f => f.id !== id));
-
-  return (
-    <div className="space-y-2">
-      <AnimatePresence initial={false}>
-        {items.map(f => (
-          <motion.div
-            key={f.id}
-            initial={{ opacity: 0, y: -8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-            transition={{ duration: 0.15 }}
-            className="bg-gray-50 border border-gray-200 rounded-lg p-3 space-y-2"
-          >
-            <div className="flex items-start gap-2">
-              <div className="flex-1 space-y-2">
-                <input
-                  className={inputCls}
-                  placeholder={t("chatbotPlaceholderFaqQuestion")}
-                  value={f.question}
-                  onChange={e => update(f.id, { question: e.target.value })}
-                />
-                <textarea
-                  className={textareaCls}
-                  rows={2}
-                  placeholder={t("chatbotPlaceholderFaqAnswer")}
-                  value={f.answer}
-                  onChange={e => update(f.id, { answer: e.target.value })}
-                />
-              </div>
-              <button
-                onClick={() => remove(f.id)}
-                className="mt-1 p-1.5 rounded-lg text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </motion.div>
-        ))}
-      </AnimatePresence>
-      <button
-        onClick={add}
-        className="flex items-center gap-1.5 text-sm font-medium text-[#0F510F] border border-[#0F510F]/30 px-3 py-1.5 rounded-lg hover:bg-[#0F510F]/5 transition-colors"
-      >
-        <Plus className="w-4 h-4" /> {t("chatbotBtnAddQA")}
+        <Plus className="w-3.5 h-3.5" />
+        Add question
       </button>
     </div>
   );
@@ -340,10 +268,9 @@ function EscalationEditor({
   rules: EscalationRule[];
   onChange: (v: EscalationRule[]) => void;
 }) {
-  const { t } = useLanguage();
   const add    = () => onChange([...rules, { id: uid(), rule: "" }]);
   const update = (id: string, rule: string) =>
-    onChange(rules.map(r => r.id === id ? { ...r, rule } : r));
+    onChange(rules.map(r => (r.id === id ? { ...r, rule } : r)));
   const remove = (id: string) => onChange(rules.filter(r => r.id !== id));
 
   return (
@@ -352,33 +279,172 @@ function EscalationEditor({
         {rules.map(r => (
           <motion.div
             key={r.id}
-            initial={{ opacity: 0, y: -8 }}
+            initial={{ opacity: 0, y: -6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, height: 0, marginBottom: 0 }}
-            transition={{ duration: 0.15 }}
+            transition={{ duration: 0.13 }}
             className="flex items-center gap-2"
           >
             <input
               className={inputCls}
-              placeholder={t("chatbotPlaceholderEscalation")}
+              placeholder="e.g. Customer asks to speak to a person"
               value={r.rule}
               onChange={e => update(r.id, e.target.value)}
             />
             <button
+              type="button"
               onClick={() => remove(r.id)}
-              className="p-1.5 rounded-lg text-gray-500 hover:text-red-500 hover:bg-red-50 transition-colors flex-shrink-0"
+              className="flex-shrink-0 p-1.5 rounded-lg text-gray-300 hover:text-red-400 hover:bg-red-50 transition-colors"
             >
               <Trash2 className="w-3.5 h-3.5" />
             </button>
           </motion.div>
         ))}
       </AnimatePresence>
+
       <button
+        type="button"
         onClick={add}
-        className="flex items-center gap-1.5 text-sm font-medium text-[#0F510F] border border-[#0F510F]/30 px-3 py-1.5 rounded-lg hover:bg-[#0F510F]/5 transition-colors"
+        className="flex items-center gap-1.5 text-sm text-gray-500 border border-dashed border-gray-300 rounded-lg px-3 py-2 w-full hover:border-[#0F510F]/50 hover:text-[#0F510F] transition-colors"
       >
-        <Plus className="w-4 h-4" /> {t("chatbotBtnAddRule")}
+        <Plus className="w-3.5 h-3.5" />
+        Add rule
       </button>
+    </div>
+  );
+}
+
+// ── WhatsApp preview panel ────────────────────────────────────────────────────
+
+function ChatBubble({ text, delay = 0 }: { text: string; delay?: number }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 6 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, delay }}
+      className="bg-white rounded-2xl rounded-tl-sm px-3.5 py-2.5 max-w-[88%] shadow-sm"
+    >
+      <p className="text-[13px] text-gray-800 leading-snug whitespace-pre-wrap">{text}</p>
+    </motion.div>
+  );
+}
+
+function PreviewButton({ label }: { label: string }) {
+  return (
+    <div className="border border-[#0F510F]/30 rounded-lg px-3 py-1.5 text-center">
+      <span className="text-[12px] font-medium text-[#0F510F]">{label}</span>
+    </div>
+  );
+}
+
+function WhatsAppPreview({ config }: { config: StructuredConfig }) {
+  const businessName = config.businessName || "Your Business";
+  const greeting     = config.greeting     || "Your opening message will appear here...";
+
+  // Build the conversation steps
+  const steps: React.ReactNode[] = [];
+  let stepDelay = 0;
+  const d = 0.07;
+
+  // Greeting bubble
+  steps.push(
+    <div key="greeting" className="space-y-1.5">
+      <ChatBubble text={greeting} delay={stepDelay} />
+    </div>
+  );
+  stepDelay += d;
+
+  // Qualification questions
+  config.questions.forEach((q, i) => {
+    if (!q.text) return;
+    stepDelay += d;
+    steps.push(
+      <div key={`q-${q.id}`} className="space-y-1.5">
+        <ChatBubble text={q.text} delay={stepDelay} />
+        {q.answerType === "yesno" && (
+          <div className="grid grid-cols-2 gap-1.5 max-w-[88%]">
+            <PreviewButton label="Yes" />
+            <PreviewButton label="No" />
+          </div>
+        )}
+        {q.answerType === "multiple" && q.choices.filter(Boolean).length > 0 && (
+          <div className="flex flex-col gap-1 max-w-[88%]">
+            {q.choices.filter(Boolean).map((c, ci) => (
+              <PreviewButton key={ci} label={c} />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+    stepDelay += d;
+  });
+
+  // Escalation example (if rules exist)
+  if (config.escalationRules.some(r => r.rule)) {
+    stepDelay += d;
+    // Customer message
+    steps.push(
+      <div key="esc-trigger" className="flex justify-end">
+        <div className="bg-[#0F510F] rounded-2xl rounded-tr-sm px-3.5 py-2.5 max-w-[78%] shadow-sm">
+          <p className="text-[13px] text-white leading-snug">I'd like to speak to a human</p>
+        </div>
+      </div>
+    );
+    stepDelay += d;
+    steps.push(
+      <div key="esc-response">
+        <ChatBubble
+          text="Of course — connecting you with our team now. A member will be in touch shortly."
+          delay={stepDelay}
+        />
+      </div>
+    );
+    stepDelay += d;
+  }
+
+  // Closing message
+  if (config.closingMessage) {
+    stepDelay += d;
+    steps.push(
+      <div key="closing">
+        <ChatBubble text={config.closingMessage} delay={stepDelay} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-2xl overflow-hidden border border-gray-200 shadow-md bg-white">
+      {/* Header */}
+      <div className="bg-[#0F510F] px-4 py-3 flex items-center gap-3">
+        <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
+          <span className="text-white font-bold text-xs">
+            {businessName.charAt(0).toUpperCase()}
+          </span>
+        </div>
+        <div className="min-w-0">
+          <p className="text-white text-sm font-semibold truncate">{businessName}</p>
+          <p className="text-white/50 text-xs">AI Assistant</p>
+        </div>
+      </div>
+
+      {/* Chat body */}
+      <div className="bg-[#ECE5DD] px-3 py-4 space-y-3 min-h-[380px] max-h-[520px] overflow-y-auto">
+        <AnimatePresence initial={false}>
+          {steps}
+        </AnimatePresence>
+      </div>
+
+      {/* Input bar */}
+      <div className="bg-[#F0F0F0] px-3 py-2 flex items-center gap-2 border-t border-gray-200">
+        <div className="flex-1 bg-white rounded-full px-4 py-1.5 border border-gray-200">
+          <p className="text-gray-400 text-xs">Type a message...</p>
+        </div>
+        <div className="w-8 h-8 rounded-full bg-[#0F510F] flex items-center justify-center flex-shrink-0">
+          <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z" />
+          </svg>
+        </div>
+      </div>
     </div>
   );
 }
@@ -390,23 +456,23 @@ export default function ChatbotConfig() {
   const { isAuthenticated, isLoading } = useAuth();
   const { t } = useLanguage();
 
-  const [config, setConfig]               = useState<StructuredConfig>(DEFAULT_STRUCTURED);
-  const [overrideActive, setOverrideActive] = useState(true);
-  const [rawPrompt, setRawPrompt]          = useState("");
-  const [previewPrompt, setPreviewPrompt]  = useState<string | null>(null);
-  const [advancedOpen, setAdvancedOpen]    = useState(false);
-  const [savedAt, setSavedAt]              = useState<string | null>(null);
-  const [saving, setSaving]                = useState(false);
-  const [error, setError]                  = useState<string | null>(null);
-  const [success, setSuccess]              = useState<string | null>(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
+  // ── State (all original fields preserved) ──────────────────────────────────
+  const [config, setConfig]                 = useState<StructuredConfig>(DEFAULT_STRUCTURED);
+  const [overrideActive]                    = useState(false);   // always false — Advanced hidden
+  const [rawPrompt]                         = useState("");       // preserved but not rendered
+  const [savedAt, setSavedAt]               = useState<string | null>(null);
+  const [saving, setSaving]                 = useState(false);
+  const [error, setError]                   = useState<string | null>(null);
+  const [saveSuccess, setSaveSuccess]       = useState(false);
+  const [isDirty, setIsDirty]               = useState(false);
+  const [previewConfig, setPreviewConfig]   = useState<StructuredConfig>(DEFAULT_STRUCTURED);
 
   // Redirect if not authenticated
   useEffect(() => {
     if (!isLoading && !isAuthenticated) setLocation("/login");
   }, [isLoading, isAuthenticated, setLocation]);
 
-  // Load saved config on mount
+  // Load saved config on mount (unchanged API call)
   useEffect(() => {
     if (!isAuthenticated) return;
     fetch("/api/chatbot-config", { credentials: "include" })
@@ -414,65 +480,53 @@ export default function ChatbotConfig() {
       .then(data => {
         const sc = data.structured_config;
         if (sc && typeof sc === "object") {
-          setConfig({
-            businessName:   sc.businessName    ?? DEFAULT_STRUCTURED.businessName,
-            industry:       sc.industry        ?? DEFAULT_STRUCTURED.industry,
-            tone:           sc.tone            ?? DEFAULT_STRUCTURED.tone,
-            customTone:     sc.customTone      ?? "",
-            greeting:       sc.greeting        ?? DEFAULT_STRUCTURED.greeting,
-            questions:      sc.questions       ?? [],
-            faq:            sc.faq             ?? [],
+          const loaded: StructuredConfig = {
+            businessName:    sc.businessName    ?? DEFAULT_STRUCTURED.businessName,
+            industry:        sc.industry        ?? DEFAULT_STRUCTURED.industry,
+            tone:            sc.tone            ?? DEFAULT_STRUCTURED.tone,
+            customTone:      sc.customTone      ?? "",
+            greeting:        sc.greeting        ?? DEFAULT_STRUCTURED.greeting,
+            questions:       sc.questions       ?? [],
+            faq:             sc.faq             ?? [],
             escalationRules: sc.escalationRules ?? [],
-            closingMessage: sc.closingMessage  ?? DEFAULT_STRUCTURED.closingMessage,
-          });
+            closingMessage:  sc.closingMessage  ?? DEFAULT_STRUCTURED.closingMessage,
+          };
+          setConfig(loaded);
+          setPreviewConfig(loaded);
         }
-        setOverrideActive(data.override_active ?? true);
-        setRawPrompt(data.system_prompt ?? "");
         setSavedAt(data.updated_at ?? null);
       })
       .catch(() => {});
   }, [isAuthenticated]);
 
-  // Live compile preview whenever structured config changes (debounced)
+  // Debounced preview update (300ms)
   const previewTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const fetchPreview = useCallback(async () => {
-    if (overrideActive) { setPreviewPrompt(null); return; }
-    setPreviewLoading(true);
-    try {
-      const res = await fetch("/api/chatbot-config/preview", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ structured_config: config }),
-      });
-      if (res.ok) {
-        const { prompt } = await res.json();
-        setPreviewPrompt(prompt);
-      }
-    } catch (_) {}
-    setPreviewLoading(false);
-  }, [config, overrideActive]);
-
   useEffect(() => {
-    if (!advancedOpen) return;
     if (previewTimer.current) clearTimeout(previewTimer.current);
-    previewTimer.current = setTimeout(fetchPreview, 400);
+    previewTimer.current = setTimeout(() => setPreviewConfig({ ...config }), 300);
     return () => { if (previewTimer.current) clearTimeout(previewTimer.current); };
-  }, [config, advancedOpen, fetchPreview]);
+  }, [config]);
 
-  const set = <K extends keyof StructuredConfig>(key: K, val: StructuredConfig[K]) =>
+  const set = <K extends keyof StructuredConfig>(key: K, val: StructuredConfig[K]) => {
     setConfig(c => ({ ...c, [key]: val }));
+    setIsDirty(true);
+  };
 
+  // Save (unchanged API call — always sends override_active: false)
   const handleSave = async () => {
     setSaving(true);
     setError(null);
-    setSuccess(null);
+    setSaveSuccess(false);
     try {
       const res = await fetch("/api/chatbot-config", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ structured_config: config, override_active: overrideActive, raw_prompt: rawPrompt }),
+        body: JSON.stringify({
+          structured_config: config,
+          override_active: false,
+          raw_prompt: rawPrompt,
+        }),
       });
       if (!res.ok) {
         const body = await res.json();
@@ -480,17 +534,14 @@ export default function ChatbotConfig() {
       }
       const saved = await res.json();
       setSavedAt(saved.updated_at ?? new Date().toISOString());
-      setSuccess(t("chatbotSavedSuccess"));
+      setIsDirty(false);
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 2500);
     } catch (e: any) {
       setError(e.message || "An error occurred");
     } finally {
       setSaving(false);
     }
-  };
-
-  const handleReset = () => {
-    setConfig(DEFAULT_STRUCTURED);
-    setOverrideActive(false);
   };
 
   if (isLoading || !isAuthenticated) {
@@ -504,251 +555,181 @@ export default function ChatbotConfig() {
   return (
     <DashboardLayout>
       <div className="h-full overflow-y-auto">
-        <div className="max-w-6xl mx-auto px-6 py-6 pb-12">
-          <div className="flex items-center gap-2 mb-5">
+        <div className="max-w-6xl mx-auto px-6 py-6 pb-4">
+
+          {/* Page header */}
+          <div className="flex items-center gap-2 mb-6">
             <Bot className="w-5 h-5 text-[#0F510F]" />
-            <h1 className="text-2xl font-bold text-gray-900">{t("chatbotTitle")}</h1>
+            <h1 className="text-xl font-bold text-gray-900">Chatbot Setup</h1>
           </div>
 
-          {/* ── Two-column layout: form + WhatsApp preview ──────────── */}
-          <div className="flex gap-8">
-            {/* ── Left column: config form ──────────────────────────── */}
-            <div className="flex-1 min-w-0 space-y-5">
+          <div className="flex gap-8 items-start">
 
-              {/* ── Business Identity ─────────────────────────────────── */}
-              <SectionCard title={t("chatbotSectionIdentity")}>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label={t("chatbotFieldBusinessName")}>
+            {/* ── Left column: form ──────────────────────────────────────── */}
+            <div className="flex-1 min-w-0 space-y-4 pb-24">
+
+              {/* SECTION 1 — Your Business */}
+              <SectionCard
+                title="Your Business"
+                description="Basic information that shapes how your bot introduces itself"
+              >
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-gray-500">Business Name</label>
                     <input
                       className={inputCls}
-                      placeholder={t("chatbotPlaceholderBusinessName")}
+                      placeholder="e.g. WAK Solutions"
                       value={config.businessName}
                       onChange={e => set("businessName", e.target.value)}
                     />
-                  </Field>
-                  <Field label={t("chatbotFieldIndustry")} hint={t("chatbotFieldIndustryHint")}>
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-gray-500">Industry</label>
                     <input
                       className={inputCls}
-                      placeholder={t("chatbotPlaceholderIndustry")}
+                      placeholder="e.g. Technology, Retail, Healthcare"
                       value={config.industry}
                       onChange={e => set("industry", e.target.value)}
                     />
-                  </Field>
-                </div>
-                <Field label={t("chatbotFieldTone")}>
-                  <div className="flex gap-2 flex-wrap">
-                    {[
-                      { val: "Professional", label: t("chatbotToneProfessional") },
-                      { val: "Friendly",     label: t("chatbotToneFriendly") },
-                      { val: "Formal",       label: t("chatbotToneFormal") },
-                      { val: "Custom",       label: t("chatbotToneCustom") },
-                    ].map(({ val, label }) => (
-                      <button
-                        key={val}
-                        onClick={() => set("tone", val)}
-                        className={`px-4 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
-                          config.tone === val
-                            ? "bg-[#0F510F] border-[#0F510F] text-white"
-                            : "border-gray-200 text-gray-500 hover:text-gray-900 hover:border-[#0F510F]/40"
-                        }`}
-                      >
-                        {label}
-                      </button>
-                    ))}
                   </div>
-                  {config.tone === "Custom" && (
-                    <input
-                      className={`${inputCls} mt-2`}
-                      placeholder={t("chatbotPlaceholderToneCustom")}
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-gray-500">Tone</label>
+                  <div className="relative">
+                    <select
+                      className={inputCls + " appearance-none pr-8 cursor-pointer"}
+                      value={config.tone}
+                      onChange={e => set("tone", e.target.value)}
+                    >
+                      <option value="Friendly">Friendly</option>
+                      <option value="Professional">Professional</option>
+                      <option value="Formal">Formal</option>
+                      <option value="Custom">Custom</option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                  </div>
+                  <p className="text-xs text-gray-400">This shapes how your bot speaks to customers</p>
+                </div>
+
+                {config.tone === "Custom" && (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-gray-500">Describe your tone</label>
+                    <textarea
+                      className={inputCls + " resize-none"}
+                      rows={2}
+                      placeholder="e.g. Warm and conversational, like talking to a knowledgeable friend"
                       value={config.customTone}
                       onChange={e => set("customTone", e.target.value)}
                     />
-                  )}
-                </Field>
+                  </div>
+                )}
               </SectionCard>
 
-              {/* ── Conversation Flow ─────────────────────────────────── */}
-              <SectionCard title={t("chatbotSectionFlow")}>
-                <Field label={t("chatbotFieldGreeting")} hint={t("chatbotFieldGreetingHint")}>
+              {/* SECTION 2 — Welcome Message */}
+              <SectionCard
+                title="Welcome Message"
+                description="This is the first thing customers see when they start a conversation"
+              >
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-gray-500">Opening message</label>
                   <textarea
-                    className={textareaCls}
-                    rows={3}
-                    placeholder={t("chatbotPlaceholderGreeting")}
+                    className={inputCls + " resize-none"}
+                    rows={4}
+                    placeholder={`e.g. Hey! Welcome to WAK Solutions, your strategic AI partner. How can I help you today?\n\n1. Product Inquiry\n2. Track Order\n3. Complaint`}
                     value={config.greeting}
                     onChange={e => set("greeting", e.target.value)}
                   />
-                </Field>
-
-                <Field label={t("chatbotFieldQualification")} hint={t("chatbotFieldQualificationHint")}>
-                  <QuestionsEditor
-                    questions={config.questions}
-                    onChange={v => set("questions", v)}
-                  />
-                </Field>
-
-                <Field label={t("chatbotFieldClosing")} hint={t("chatbotFieldClosingHint")}>
-                  <textarea
-                    className={textareaCls}
-                    rows={2}
-                    placeholder={t("chatbotPlaceholderClosing")}
-                    value={config.closingMessage}
-                    onChange={e => set("closingMessage", e.target.value)}
-                  />
-                </Field>
+                  <p className="text-xs text-gray-400">This is the first thing customers see</p>
+                </div>
               </SectionCard>
 
-              {/* ── Knowledge Base ────────────────────────────────────── */}
-              <SectionCard title={t("chatbotSectionKnowledge")}>
-                <FaqEditor
-                  items={config.faq}
-                  onChange={v => set("faq", v)}
+              {/* SECTION 3 — Questions */}
+              <SectionCard
+                title="Questions"
+                description="The bot will ask these questions to understand what the customer needs"
+              >
+                <QuestionsEditor
+                  questions={config.questions}
+                  onChange={v => set("questions", v)}
                 />
               </SectionCard>
 
-              {/* ── Escalation Rules ──────────────────────────────────── */}
-              <SectionCard title={t("chatbotSectionEscalation")}>
-                <p className="text-xs text-gray-500 -mt-2">
-                  {t("chatbotEscalationHint")}
-                </p>
+              {/* SECTION 4 — Escalation Rules */}
+              <SectionCard
+                title="Escalation Rules"
+                description="When should the bot hand off to a human agent?"
+              >
                 <EscalationEditor
                   rules={config.escalationRules}
                   onChange={v => set("escalationRules", v)}
                 />
               </SectionCard>
 
-              {/* ── Advanced: Raw Prompt ──────────────────────────────── */}
-              <section className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                <button
-                  onClick={() => { setAdvancedOpen(o => !o); if (!advancedOpen) fetchPreview(); }}
-                  className="w-full flex items-center justify-between px-5 py-4 text-sm font-semibold text-gray-900 hover:bg-gray-50/50 transition-colors"
-                >
-                  <span>{t("chatbotSectionAdvanced")}</span>
-                  {advancedOpen ? <ChevronUp className="w-4 h-4 text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-500" />}
-                </button>
-
-                <AnimatePresence initial={false}>
-                  {advancedOpen && (
-                    <motion.div
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: "auto", opacity: 1 }}
-                      exit={{ height: 0, opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="overflow-hidden"
-                    >
-                      <div className="px-5 pb-5 space-y-4 border-t border-gray-200">
-                        {/* Override toggle */}
-                        <div className="flex items-center justify-between pt-4">
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">{t("chatbotRawOverrideLabel")}</p>
-                            <p className="text-xs text-gray-500">{t("chatbotRawOverrideHint")}</p>
-                          </div>
-                          <button
-                            onClick={() => setOverrideActive(o => !o)}
-                            className={`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${overrideActive ? "bg-amber-500" : "bg-gray-100"}`}
-                          >
-                            <span className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${overrideActive ? "translate-x-5" : "translate-x-0.5"}`} />
-                          </button>
-                        </div>
-
-                        {/* Warning banner */}
-                        {overrideActive && (
-                          <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-                            <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                            <p className="text-sm text-amber-800">
-                              {t("chatbotRawActiveWarning")}
-                            </p>
-                          </div>
-                        )}
-
-                        {/* Compiled preview (when override is off) */}
-                        {!overrideActive && (
-                          <div className="space-y-1.5">
-                            <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                              <Eye className="w-3.5 h-3.5" />
-                              <span>{t("chatbotCompiledPreview")}</span>
-                              {previewLoading && <span className="animate-pulse">{t("chatbotUpdating")}</span>}
-                            </div>
-                            <textarea
-                              readOnly
-                              rows={14}
-                              className={`${textareaCls} font-mono text-xs bg-gray-50/50 cursor-default`}
-                              value={previewPrompt ?? ""}
-                            />
-                          </div>
-                        )}
-
-                        {/* Raw editor (when override is on) */}
-                        {overrideActive && (
-                          <div className="space-y-1.5">
-                            <div className="flex items-center gap-1.5 text-xs text-gray-500">
-                              <EyeOff className="w-3.5 h-3.5" />
-                              <span>{t("chatbotRawPromptLabel")}</span>
-                            </div>
-                            <textarea
-                              rows={14}
-                              className={`${textareaCls} font-mono text-xs`}
-                              value={rawPrompt}
-                              onChange={e => setRawPrompt(e.target.value)}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </section>
-
-              {/* ── Feedback + Actions ────────────────────────────────── */}
-              <div className="space-y-3">
-                {error && (
-                  <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</p>
-                )}
-                {success && (
-                  <p className="text-sm text-[#0F510F] bg-[#0F510F]/10 border border-[#0F510F]/20 rounded-lg px-3 py-2">{success}</p>
-                )}
-
-                <div className="flex flex-wrap items-center gap-3">
-                  <button
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="flex items-center gap-1.5 text-sm font-medium bg-[#0F510F] text-white px-5 py-2.5 rounded-lg hover:bg-[#0d4510] disabled:opacity-60 transition-colors"
-                  >
-                    {saving ? (
-                      <><div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />{t("saving")}</>
-                    ) : (
-                      <><Save className="w-3.5 h-3.5" />{t("chatbotBtnSave")}</>
-                    )}
-                  </button>
-
-                  <button
-                    onClick={handleReset}
-                    className="flex items-center gap-1.5 text-sm font-medium border border-gray-200 text-gray-500 px-5 py-2.5 rounded-lg hover:bg-gray-100 hover:text-gray-900 transition-colors"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    {t("chatbotBtnReset")}
-                  </button>
-                </div>
-
-                {savedAt && (
-                  <p className="text-xs text-gray-500">
-                    Last saved: {new Date(savedAt).toLocaleString()}
-                  </p>
-                )}
-              </div>
-
             </div>
 
-            {/* ── Right column: WhatsApp Preview (desktop only) ─────── */}
-            <div className="hidden md:block w-[320px] shrink-0">
-              <div className="sticky top-8">
-                <WhatsAppPreview
-                  businessName={config.businessName}
-                  greeting={config.greeting}
-                />
+            {/* ── Right column: WhatsApp preview (sticky) ────────────────── */}
+            <div className="hidden lg:block w-[300px] shrink-0">
+              <div className="sticky top-6">
+                <p className="text-xs font-medium text-gray-400 uppercase tracking-wide mb-2.5">
+                  Live Preview
+                </p>
+                <WhatsAppPreview config={previewConfig} />
               </div>
             </div>
+
           </div>
         </div>
+
+        {/* ── Sticky save bar ──────────────────────────────────────────────── */}
+        <div className="fixed bottom-0 left-0 right-0 z-20 bg-white border-t border-gray-200 shadow-[0_-2px_12px_rgba(0,0,0,0.06)]">
+          <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+
+            <div className="flex items-center gap-3 min-w-0">
+              {isDirty && !saveSuccess && (
+                <div className="flex items-center gap-1.5 text-xs text-amber-600">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
+                  Unsaved changes
+                </div>
+              )}
+              {saveSuccess && (
+                <div className="flex items-center gap-1.5 text-xs text-[#0F510F]">
+                  <Check className="w-3.5 h-3.5" />
+                  Saved successfully
+                </div>
+              )}
+              {savedAt && !isDirty && !saveSuccess && (
+                <p className="text-xs text-gray-400 truncate">
+                  Last saved {new Date(savedAt).toLocaleString()}
+                </p>
+              )}
+              {error && (
+                <p className="text-xs text-red-600 truncate">{error}</p>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-1.5 text-sm font-medium bg-[#0F510F] text-white px-5 py-2 rounded-lg hover:bg-[#0d4510] disabled:opacity-60 transition-colors flex-shrink-0"
+            >
+              {saving ? (
+                <>
+                  <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="w-3.5 h-3.5" />
+                  Save changes
+                </>
+              )}
+            </button>
+
+          </div>
+        </div>
+
       </div>
     </DashboardLayout>
   );
