@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation } from "wouter";
-import { Bot, Save, Check, ArrowRight, RefreshCw } from "lucide-react";
+import { Bot, ArrowRight, RefreshCw } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "@/hooks/use-auth";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -208,7 +208,6 @@ export default function ChatbotConfig() {
 
   // ── Config state (loaded from DB on mount, passed through on save) ─────────
   const [loadedConfig, setLoadedConfig] = useState<StructuredConfig>(DEFAULT_STRUCTURED);
-  const [savedAt, setSavedAt]           = useState<string | null>(null);
 
   // ── Generation state ───────────────────────────────────────────────────────
   const [conversation, setConversation] = useState<ConvMessage[]>([]);
@@ -216,18 +215,26 @@ export default function ChatbotConfig() {
   const [hasGenerated, setHasGenerated] = useState(false);
   const [genError, setGenError]         = useState<string | null>(null);
 
-  // ── Save state ─────────────────────────────────────────────────────────────
-  const [saving, setSaving]             = useState(false);
-  const [saveSuccess, setSaveSuccess]   = useState(false);
-  const [saveError, setSaveError]       = useState<string | null>(null);
-  const [isDirty, setIsDirty]           = useState(false);
+  // ── Autosave state ─────────────────────────────────────────────────────────
+  type SaveStatus = "idle" | "saving" | "saved" | "error";
+  const [saveStatus, setSaveStatus]     = useState<SaveStatus>("idle");
+
+  // Refs to always have latest values available inside debounced callbacks
+  const savePayloadRef = useRef({ companyName, description, services, loadedConfig, conversation });
+  savePayloadRef.current = { companyName, description, services, loadedConfig, conversation };
+
+  // Set to true only when the user makes a change — prevents autosave on initial DB population
+  const userEditedRef = useRef(false);
+
+  // Timer ref for the "saved" fade-out
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Redirect if not authenticated
   useEffect(() => {
     if (!isLoading && !isAuthenticated) setLocation("/login");
   }, [isLoading, isAuthenticated, setLocation]);
 
-  // Load saved config on mount — pre-fill company name from existing config
+  // Load saved config on mount — pre-fill fields from existing config
   useEffect(() => {
     if (!isAuthenticated) return;
     fetch("/api/chatbot-config", { credentials: "include" })
@@ -259,13 +266,53 @@ export default function ChatbotConfig() {
           setConversation(saved);
           setHasGenerated(true);
         }
-
-        setSavedAt(data.updated_at ?? null);
       })
       .catch(() => {});
   }, [isAuthenticated]);
 
-  // Generate conversation via backend (calls Claude)
+  // ── Core save function — reads from savePayloadRef to avoid stale closures ──
+  const doSave = async (convOverride?: ConvMessage[]) => {
+    const { companyName, description, services, loadedConfig, conversation } = savePayloadRef.current;
+    const convToSave = convOverride ?? conversation;
+    setSaveStatus("saving");
+    try {
+      const structured_config: StructuredConfig = {
+        ...loadedConfig,
+        businessName: companyName,
+        industry:     description,
+        servicesText: services,
+      };
+      const res = await fetch("/api/chatbot-config", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          structured_config,
+          override_active: false,
+          raw_prompt: "",
+          demo_conversation: convToSave,
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.message || "Failed to save");
+      }
+      setSaveStatus("saved");
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      savedTimerRef.current = setTimeout(() => setSaveStatus("idle"), 3000);
+    } catch {
+      setSaveStatus("error");
+    }
+  };
+
+  // ── Debounced autosave on field changes (2s after user stops typing) ────────
+  useEffect(() => {
+    if (!userEditedRef.current) return;
+    const timer = setTimeout(() => doSave(), 2000);
+    return () => clearTimeout(timer);
+  }, [companyName, description, services]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Generate conversation via backend
   const generate = async (isFeedback = false) => {
     setGenerating(true);
     setGenError(null);
@@ -286,54 +333,16 @@ export default function ChatbotConfig() {
         throw new Error(body.message || "Generation failed");
       }
       const data = await res.json();
-      setConversation(data.conversation ?? []);
+      const newConversation: ConvMessage[] = data.conversation ?? [];
+      setConversation(newConversation);
       setHasGenerated(true);
-      setIsDirty(true);
       if (isFeedback) setFeedback("");
+      // Save immediately after generation — pass conversation directly to avoid stale state
+      await doSave(newConversation);
     } catch (e: any) {
       setGenError(e.message || "Something went wrong. Please try again.");
     } finally {
       setGenerating(false);
-    }
-  };
-
-  // Save config — builds a structured_config from form fields,
-  // preserves all fields loaded from DB that aren't shown in the UI
-  const handleSave = async () => {
-    setSaving(true);
-    setSaveError(null);
-    setSaveSuccess(false);
-    try {
-      const structured_config: StructuredConfig = {
-        ...loadedConfig,
-        businessName: companyName,
-        industry:     description,   // map description → industry for compilePrompt
-        servicesText: services,
-      };
-      const res = await fetch("/api/chatbot-config", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          structured_config,
-          override_active: false,
-          raw_prompt: "",
-          demo_conversation: conversation,
-        }),
-      });
-      if (!res.ok) {
-        const body = await res.json();
-        throw new Error(body.message || "Failed to save");
-      }
-      const saved = await res.json();
-      setSavedAt(saved.updated_at ?? new Date().toISOString());
-      setIsDirty(false);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 2500);
-    } catch (e: any) {
-      setSaveError(e.message || "An error occurred");
-    } finally {
-      setSaving(false);
     }
   };
 
@@ -348,7 +357,7 @@ export default function ChatbotConfig() {
   return (
     <DashboardLayout>
       <div className="h-full overflow-y-auto">
-        <div className="max-w-6xl mx-auto px-6 py-6 pb-28">
+        <div className="max-w-6xl mx-auto px-6 py-6">
 
           {/* Page header */}
           <div className="flex items-center gap-2 mb-6">
@@ -363,11 +372,25 @@ export default function ChatbotConfig() {
 
               {/* SECTION 1 — Set up your chatbot */}
               <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
-                <div className="px-5 pt-5 pb-4 border-b border-gray-100">
-                  <h2 className="text-sm font-semibold text-gray-900">{t("chatbotSetupSection1Title")}</h2>
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    {t("chatbotSetupSection1Desc")}
-                  </p>
+                <div className="px-5 pt-5 pb-4 border-b border-gray-100 flex items-start justify-between gap-4">
+                  <div>
+                    <h2 className="text-sm font-semibold text-gray-900">{t("chatbotSetupSection1Title")}</h2>
+                    <p className="text-xs text-gray-400 mt-0.5">
+                      {t("chatbotSetupSection1Desc")}
+                    </p>
+                  </div>
+                  {/* Autosave status indicator */}
+                  <div className="flex-shrink-0 flex items-center gap-1.5 text-xs mt-0.5 min-w-[80px] justify-end">
+                    {saveStatus === "saving" && (
+                      <><span className="w-1.5 h-1.5 rounded-full bg-gray-400 flex-shrink-0" /><span className="text-gray-400">{t("chatbotSetupSaving")}</span></>
+                    )}
+                    {saveStatus === "saved" && (
+                      <><span className="w-1.5 h-1.5 rounded-full bg-[#0F510F] flex-shrink-0" /><span className="text-[#0F510F]">{t("chatbotSetupSavedSuccess")}</span></>
+                    )}
+                    {saveStatus === "error" && (
+                      <><span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" /><span className="text-red-500">Save failed</span></>
+                    )}
+                  </div>
                 </div>
                 <div className="px-5 py-4 space-y-4">
 
@@ -377,7 +400,7 @@ export default function ChatbotConfig() {
                       className={inputCls}
                       placeholder={t("chatbotSetupCompanyNamePlaceholder")}
                       value={companyName}
-                      onChange={e => { setCompanyName(e.target.value); setIsDirty(true); }}
+                      onChange={e => { setCompanyName(e.target.value); userEditedRef.current = true; }}
                     />
                   </div>
 
@@ -388,7 +411,7 @@ export default function ChatbotConfig() {
                       rows={3}
                       placeholder={t("chatbotSetupDescriptionPlaceholder")}
                       value={description}
-                      onChange={e => { setDescription(e.target.value); setIsDirty(true); }}
+                      onChange={e => { setDescription(e.target.value); userEditedRef.current = true; }}
                     />
                   </div>
 
@@ -399,7 +422,7 @@ export default function ChatbotConfig() {
                       rows={3}
                       placeholder={t("chatbotSetupServicesPlaceholder")}
                       value={services}
-                      onChange={e => { setServices(e.target.value); setIsDirty(true); }}
+                      onChange={e => { setServices(e.target.value); userEditedRef.current = true; }}
                     />
                   </div>
 
@@ -502,65 +525,6 @@ export default function ChatbotConfig() {
 
           </div>
         </div>
-
-        {/* ── Sticky save bar (only after first generation) ─────────────────── */}
-        <AnimatePresence>
-          {hasGenerated && (
-            <motion.div
-              initial={{ y: 80, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 80, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="fixed bottom-0 left-0 right-0 z-20 bg-white border-t border-gray-200 shadow-[0_-2px_12px_rgba(0,0,0,0.06)]"
-            >
-              <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
-
-                <div className="flex items-center gap-3 min-w-0">
-                  {isDirty && !saveSuccess && (
-                    <div className="flex items-center gap-1.5 text-xs text-amber-600">
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
-                      {t("chatbotSetupUnsaved")}
-                    </div>
-                  )}
-                  {saveSuccess && (
-                    <div className="flex items-center gap-1.5 text-xs text-[#0F510F]">
-                      <Check className="w-3.5 h-3.5" />
-                      {t("chatbotSetupSavedSuccess")}
-                    </div>
-                  )}
-                  {savedAt && !isDirty && !saveSuccess && (
-                    <p className="text-xs text-gray-400 truncate">
-                      {t("chatbotSetupLastSaved")} {new Date(savedAt).toLocaleString()}
-                    </p>
-                  )}
-                  {saveError && (
-                    <p className="text-xs text-red-600 truncate">{saveError}</p>
-                  )}
-                </div>
-
-                <button
-                  type="button"
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="flex items-center gap-1.5 text-sm font-medium bg-[#0F510F] text-white px-5 py-2 rounded-lg hover:bg-[#0d4510] disabled:opacity-60 transition-colors flex-shrink-0"
-                >
-                  {saving ? (
-                    <>
-                      <div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      {t("chatbotSetupSaving")}
-                    </>
-                  ) : (
-                    <>
-                      <Save className="w-3.5 h-3.5" />
-                      {t("chatbotSetupSave")}
-                    </>
-                  )}
-                </button>
-
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
 
       </div>
     </DashboardLayout>
