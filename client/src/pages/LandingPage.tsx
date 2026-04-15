@@ -403,10 +403,17 @@ export default function LandingPage() {
               </Link>
             </div>
 
-            {/* Mobile hamburger */}
-            <button onClick={() => setMobileOpen(!mobileOpen)} className="lg:hidden p-2 text-gray-700">
-              {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
-            </button>
+            {/* Mobile: Login + hamburger */}
+            <div className="lg:hidden flex items-center gap-2">
+              <Link href="/login">
+                <a className="text-sm font-medium text-[#0F510F] border border-[#0F510F]/40 px-3 py-1.5 rounded-lg hover:bg-[#0F510F]/5 transition-colors">
+                  Login
+                </a>
+              </Link>
+              <button onClick={() => setMobileOpen(!mobileOpen)} className="p-2 text-gray-700">
+                {mobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+              </button>
+            </div>
           </div>
         </div>
 
