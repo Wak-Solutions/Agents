@@ -156,4 +156,51 @@ describe('GET /api/availability', () => {
     const res = await request(app).get('/api/availability');
     expect(res.status).toBe(200);
   });
+
+  // Multi-tenant isolation: blocked_slots must be scoped to company_id
+  it('queries blocked_slots with company_id — no cross-tenant leak', async () => {
+    const { app, setSession } = await buildMeetingApp();
+    (pool.query as any).mockResolvedValue({ rows: [] });
+    setSession(adminSession);
+    await request(app).get('/api/availability?weekStart=2026-04-21');
+    const calls: any[][] = (pool.query as any).mock.calls;
+    const blockedSlotCall = calls.find(
+      ([sql]) => typeof sql === 'string' && sql.includes('blocked_slots')
+    );
+    expect(blockedSlotCall).toBeDefined();
+    // company_id (1 from adminSession) must appear in the query params
+    expect(blockedSlotCall![1]).toContain(1);
+  });
+});
+
+describe('POST /api/availability/toggle', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('returns 401 without session', async () => {
+    const { app } = await buildMeetingApp();
+    const res = await request(app)
+      .post('/api/availability/toggle')
+      .send({ date: '2026-04-21', time: '10:00' });
+    expect(res.status).toBe(401);
+  });
+
+  // Multi-tenant isolation: INSERT/DELETE must carry company_id
+  it('includes company_id when blocking a slot', async () => {
+    const { app, setSession } = await buildMeetingApp();
+    // First call = SELECT existing (returns empty → will INSERT)
+    (pool.query as any)
+      .mockResolvedValueOnce({ rows: [] })   // SELECT id FROM blocked_slots
+      .mockResolvedValueOnce({ rows: [] });   // INSERT
+    setSession(adminSession);
+    const res = await request(app)
+      .post('/api/availability/toggle')
+      .send({ date: '2026-04-21', time: '10:00' });
+    expect(res.status).toBe(200);
+    expect(res.body.blocked).toBe(true);
+    const calls: any[][] = (pool.query as any).mock.calls;
+    // All blocked_slots queries must reference companyId (1)
+    calls
+      .filter(([sql]) => typeof sql === 'string' && sql.includes('blocked_slots'))
+      .forEach(([, params]) => expect(params).toContain(1));
+  });
 });

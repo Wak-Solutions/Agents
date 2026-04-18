@@ -23,6 +23,27 @@ import { createLogger, maskPhone } from '../lib/logger';
 
 const logger = createLogger('meetings');
 
+export async function ensureBlockedSlotsCompanyId(): Promise<void> {
+  // Multi-tenant isolation: blocked_slots must be scoped to company_id.
+  // Safe to run on every startup (IF NOT EXISTS / UPDATE WHERE NULL).
+  await pool.query(
+    `ALTER TABLE blocked_slots ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id) ON DELETE CASCADE`
+  ).catch(() => {});
+  await pool.query(
+    `UPDATE blocked_slots SET company_id = 1 WHERE company_id IS NULL`
+  ).catch(() => {});
+  await pool.query(
+    `ALTER TABLE blocked_slots ALTER COLUMN company_id SET NOT NULL`
+  ).catch(() => {});
+  // Replace old per-slot unique constraint with per-company-slot constraint
+  await pool.query(
+    `ALTER TABLE blocked_slots DROP CONSTRAINT IF EXISTS blocked_slots_date_time_key`
+  ).catch(() => {});
+  await pool.query(
+    `ALTER TABLE blocked_slots ADD CONSTRAINT blocked_slots_company_date_time_key UNIQUE (company_id, date, time)`
+  ).catch(() => {});
+}
+
 export function registerMeetingRoutes(app: Express): void {
 
   // ── Internal: create booking token (called by Python bot) ────────────────
@@ -114,13 +135,15 @@ export function registerMeetingRoutes(app: Express): void {
   // ── Availability: get blocked slots ───────────────────────────────────────
   app.get('/api/availability', requireAuth, async (req: any, res: any) => {
     try {
+      // Multi-tenant isolation: always filter by company_id
       const companyId = req.session.companyId;
       const weekStart = (req.query.weekStart as string) || new Date().toISOString().slice(0, 10);
       const result = await pool.query(
         `SELECT date::text, time FROM blocked_slots
-         WHERE date >= $1::date AND date < $1::date + INTERVAL '7 days'
+         WHERE company_id = $1
+           AND date >= $2::date AND date < $2::date + INTERVAL '7 days'
          ORDER BY date, time`,
-        [weekStart]
+        [companyId, weekStart]
       );
       res.json(result.rows);
     } catch (err: any) {
@@ -132,22 +155,26 @@ export function registerMeetingRoutes(app: Express): void {
   // ── Availability: toggle a blocked slot ───────────────────────────────────
   app.post('/api/availability/toggle', requireAuth, async (req: any, res: any) => {
     try {
+      // Multi-tenant isolation: scope all blocked_slots reads/writes to company_id
       const companyId = req.session.companyId;
       const { date, time } = z.object({ date: z.string(), time: z.string() }).parse(req.body);
       const existing = await pool.query(
-        'SELECT id FROM blocked_slots WHERE date=$1::date AND time=$2',
-        [date, time]
+        'SELECT id FROM blocked_slots WHERE company_id=$1 AND date=$2::date AND time=$3',
+        [companyId, date, time]
       );
       if (existing.rows.length > 0) {
-        await pool.query('DELETE FROM blocked_slots WHERE date=$1::date AND time=$2', [date, time]);
-        logger.info('Slot unblocked', `date: ${date}, time: ${time}`);
+        await pool.query(
+          'DELETE FROM blocked_slots WHERE company_id=$1 AND date=$2::date AND time=$3',
+          [companyId, date, time]
+        );
+        logger.info('Slot unblocked', `companyId: ${companyId}, date: ${date}, time: ${time}`);
         res.json({ blocked: false });
       } else {
         await pool.query(
-          'INSERT INTO blocked_slots (date, time) VALUES ($1::date, $2) ON CONFLICT DO NOTHING',
-          [date, time]
+          'INSERT INTO blocked_slots (company_id, date, time) VALUES ($1, $2::date, $3) ON CONFLICT (company_id, date, time) DO NOTHING',
+          [companyId, date, time]
         );
-        logger.info('Slot blocked', `date: ${date}, time: ${time}`);
+        logger.info('Slot blocked', `companyId: ${companyId}, date: ${date}, time: ${time}`);
         res.json({ blocked: true });
       }
     } catch (err: any) {
@@ -250,10 +277,12 @@ export function registerMeetingRoutes(app: Express): void {
       ).toISOString().slice(0, 10);
 
       const [blockedRes, takenRes] = await Promise.all([
+        // Multi-tenant isolation: scope blocked_slots to this meeting's company
         pool.query(
           `SELECT date::text, time FROM blocked_slots
-           WHERE date >= $1::date AND date < $1::date + INTERVAL '32 days'`,
-          [blockedWindowStart]
+           WHERE company_id = $1
+             AND date >= $2::date AND date < $2::date + INTERVAL '32 days'`,
+          [companyId, blockedWindowStart]
         ),
         pool.query(
           `SELECT scheduled_at FROM meetings
@@ -336,9 +365,10 @@ export function registerMeetingRoutes(app: Express): void {
              AND company_id = $4`,
           [scheduledUtc, new Date(scheduledUtc.getTime() + 3600000), meeting.id, companyId]
         ),
+        // Multi-tenant isolation: check only this company's blocked slots
         pool.query(
-          'SELECT 1 FROM blocked_slots WHERE date=$1::date AND time=$2',
-          [new Date(Date.UTC(yr, mo - 1, dy) - KSA_OFFSET_MS).toISOString().slice(0, 10), time]
+          'SELECT 1 FROM blocked_slots WHERE company_id=$1 AND date=$2::date AND time=$3',
+          [companyId, new Date(Date.UTC(yr, mo - 1, dy) - KSA_OFFSET_MS).toISOString().slice(0, 10), time]
         ),
       ]);
 
@@ -438,10 +468,12 @@ export function registerMeetingRoutes(app: Express): void {
       ).toISOString().slice(0, 10);
 
       const [blockedRes, takenRes] = await Promise.all([
+        // Multi-tenant isolation: scope blocked_slots to company 1 (demo endpoint)
         pool.query(
           `SELECT date::text, time FROM blocked_slots
-           WHERE date >= $1::date AND date < $1::date + INTERVAL '32 days'`,
-          [blockedWindowStart]
+           WHERE company_id = $1
+             AND date >= $2::date AND date < $2::date + INTERVAL '32 days'`,
+          [companyId, blockedWindowStart]
         ),
         pool.query(
           `SELECT scheduled_at FROM meetings
@@ -514,9 +546,10 @@ export function registerMeetingRoutes(app: Express): void {
              AND company_id = $3`,
           [scheduledUtc, new Date(scheduledUtc.getTime() + 3600000), companyId]
         ),
+        // Multi-tenant isolation: check only this company's blocked slots
         pool.query(
-          'SELECT 1 FROM blocked_slots WHERE date=$1::date AND time=$2',
-          [new Date(Date.UTC(yr, mo - 1, dy) - KSA_OFFSET_MS).toISOString().slice(0, 10), time]
+          'SELECT 1 FROM blocked_slots WHERE company_id=$1 AND date=$2::date AND time=$3',
+          [companyId, new Date(Date.UTC(yr, mo - 1, dy) - KSA_OFFSET_MS).toISOString().slice(0, 10), time]
         ),
       ]);
 

@@ -26,7 +26,7 @@ import { registerAuthRoutes }          from './routes/auth.routes';
 import { registerEscalationRoutes }    from './routes/escalations.routes';
 import { registerMessageRoutes }       from './routes/messages.routes';
 import { registerInboxRoutes }         from './routes/inbox.routes';
-import { registerMeetingRoutes }       from './routes/meetings.routes';
+import { registerMeetingRoutes, ensureBlockedSlotsCompanyId } from './routes/meetings.routes';
 import { registerChatbotConfigRoutes } from './routes/chatbot-config.routes';
 import { registerStatisticsRoutes }    from './routes/statistics.routes';
 import { registerCustomerRoutes }      from './routes/customers.routes';
@@ -69,6 +69,7 @@ export async function registerRoutes(
   await ensureAgentsTable();
   await ensureSurveyTables();
   await ensureOnboardingColumns();
+  await ensureBlockedSlotsCompanyId(); // multi-tenant isolation: scope blocked_slots to company
 
   // ── Rate limiting on public-facing endpoints ──────────────────────────────
   // Prevents abuse of the demo booking page, registration, and login.
