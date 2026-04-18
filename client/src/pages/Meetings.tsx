@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useLocation } from "wouter";
-import { Video, ChevronLeft, ChevronRight, Ban } from "lucide-react";
+import { Video, ChevronLeft, ChevronRight, Ban, Clock } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/language-context";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -39,6 +39,199 @@ function formatTime(iso: string): string {
 
 const SLOT_HOURS = ["07:00","08:00","09:00","10:00","11:00","12:00","13:00","14:00","15:00","16:00","17:00","18:00","19:00","20:00","21:00","22:00","23:00","00:00"];
 const DAY_LABELS = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+
+// ── Work hours types + constants ──────────────────────────────────────────────
+
+interface WorkHours {
+  days: string[];
+  start: string;
+  end: string;
+  timezone: string;
+}
+
+const ALL_WEEK_DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+const DEFAULT_WORK_HOURS: WorkHours = {
+  days: ["Sun","Mon","Tue","Wed","Thu"],
+  start: "09:00",
+  end: "18:00",
+  timezone: "Asia/Riyadh",
+};
+
+// Generate time options in 30-minute increments from 00:00 to 23:30
+const TIME_OPTIONS: string[] = [];
+for (let h = 0; h < 24; h++) {
+  TIME_OPTIONS.push(`${String(h).padStart(2,"0")}:00`);
+  TIME_OPTIONS.push(`${String(h).padStart(2,"0")}:30`);
+}
+
+const COMMON_TIMEZONES = [
+  "Asia/Riyadh",
+  "Asia/Dubai",
+  "Asia/Kuwait",
+  "Asia/Bahrain",
+  "Asia/Qatar",
+  "Africa/Cairo",
+  "Europe/London",
+  "Europe/Paris",
+  "America/New_York",
+  "America/Los_Angeles",
+  "Asia/Karachi",
+  "Asia/Kolkata",
+  "Asia/Singapore",
+  "Asia/Tokyo",
+  "UTC",
+];
+
+// ── WorkHoursPanel component ──────────────────────────────────────────────────
+
+function WorkHoursPanel() {
+  const { t } = useLanguage();
+  const [wh, setWh] = useState<WorkHours>(DEFAULT_WORK_HOURS);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveStatus, setSaveStatus] = useState<"idle"|"saving"|"saved"|"error">("idle");
+  const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const userEditedRef = useRef(false);
+  const whRef = useRef(wh);
+  whRef.current = wh;
+
+  // Load on mount
+  useEffect(() => {
+    fetch("/api/settings/work-hours", { credentials: "include" })
+      .then(r => r.json())
+      .then(data => {
+        if (data.days && data.start && data.end && data.timezone) setWh(data as WorkHours);
+      })
+      .catch(() => setLoadError(t("workHoursErrorLoad")));
+  }, []);
+
+  // Autosave 800ms after change
+  const doSave = useCallback(async () => {
+    setSaveStatus("saving");
+    try {
+      const res = await fetch("/api/settings/work-hours", {
+        method: "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(whRef.current),
+      });
+      if (!res.ok) throw new Error();
+      setSaveStatus("saved");
+      if (savedTimer.current) clearTimeout(savedTimer.current);
+      savedTimer.current = setTimeout(() => setSaveStatus("idle"), 2500);
+    } catch {
+      setSaveStatus("error");
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!userEditedRef.current) return;
+    const t = setTimeout(doSave, 800);
+    return () => clearTimeout(t);
+  }, [wh, doSave]);
+
+  const update = (patch: Partial<WorkHours>) => {
+    userEditedRef.current = true;
+    setWh(prev => ({ ...prev, ...patch }));
+  };
+
+  const toggleDay = (day: string) => {
+    const next = wh.days.includes(day)
+      ? wh.days.filter(d => d !== day)
+      : [...wh.days, day];
+    update({ days: next });
+  };
+
+  const inputCls = "border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-[#0F510F]/40 transition-shadow";
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+      <div className="px-5 pt-5 pb-4 border-b border-gray-100 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Clock className="w-4 h-4 text-[#0F510F]" />
+          <div>
+            <h2 className="text-sm font-semibold text-gray-900">{t("workHoursTitle")}</h2>
+            <p className="text-xs text-gray-400 mt-0.5">{t("workHoursDesc")}</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-1.5 text-xs min-w-[80px] justify-end">
+          {saveStatus === "saving" && <><span className="w-1.5 h-1.5 rounded-full bg-gray-400 flex-shrink-0" /><span className="text-gray-400">{t("workHoursSaving")}</span></>}
+          {saveStatus === "saved"  && <><span className="w-1.5 h-1.5 rounded-full bg-[#0F510F] flex-shrink-0" /><span className="text-[#0F510F]">{t("workHoursSaved")}</span></>}
+          {saveStatus === "error"  && <><span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" /><span className="text-red-500">{t("workHoursErrorSave")}</span></>}
+        </div>
+      </div>
+
+      {loadError && (
+        <p className="mx-5 mt-3 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{loadError}</p>
+      )}
+
+      <div className="px-5 py-4 space-y-5">
+        {/* Day pills */}
+        <div>
+          <p className="text-xs font-medium text-gray-500 mb-2">{t("workHoursDays")}</p>
+          <div className="flex flex-wrap gap-2">
+            {ALL_WEEK_DAYS.map(day => (
+              <button
+                key={day}
+                type="button"
+                onClick={() => toggleDay(day)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors ${
+                  wh.days.includes(day)
+                    ? "bg-[#0F510F] text-white border-[#0F510F]"
+                    : "bg-white text-gray-500 border-gray-200 hover:border-[#0F510F]/40"
+                }`}
+              >
+                {day}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Time range */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1.5">{t("workHoursStartTime")}</label>
+            <select
+              className={inputCls + " w-full"}
+              value={wh.start}
+              onChange={e => update({ start: e.target.value })}
+            >
+              {TIME_OPTIONS.map(opt => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-500 mb-1.5">{t("workHoursEndTime")}</label>
+            <select
+              className={inputCls + " w-full"}
+              value={wh.end}
+              onChange={e => update({ end: e.target.value })}
+            >
+              {TIME_OPTIONS.map(opt => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Timezone */}
+        <div>
+          <label className="block text-xs font-medium text-gray-500 mb-1.5">{t("workHoursTimezone")}</label>
+          <select
+            className={inputCls + " w-full"}
+            value={wh.timezone}
+            onChange={e => update({ timezone: e.target.value })}
+          >
+            {COMMON_TIMEZONES.map(tz => (
+              <option key={tz} value={tz}>{tz}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function getMondayOf(d: Date): Date {
   const x = new Date(d);
@@ -383,6 +576,10 @@ export default function Meetings() {
             )}
           </div>
         </div>
+      </div>
+      {/* Work Hours */}
+      <div className="mb-10">
+        <WorkHoursPanel />
       </div>
     </DashboardLayout>
   );

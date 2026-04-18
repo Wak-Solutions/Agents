@@ -27,6 +27,7 @@ import { registerEscalationRoutes }    from './routes/escalations.routes';
 import { registerMessageRoutes }       from './routes/messages.routes';
 import { registerInboxRoutes }         from './routes/inbox.routes';
 import { registerMeetingRoutes, ensureBlockedSlotsCompanyId } from './routes/meetings.routes';
+import { registerSettingsRoutes, ensureWorkHoursColumn } from './routes/settings.routes';
 import { registerChatbotConfigRoutes } from './routes/chatbot-config.routes';
 import { registerStatisticsRoutes }    from './routes/statistics.routes';
 import { registerCustomerRoutes }      from './routes/customers.routes';
@@ -70,6 +71,7 @@ export async function registerRoutes(
   await ensureSurveyTables();
   await ensureOnboardingColumns();
   await ensureBlockedSlotsCompanyId(); // multi-tenant isolation: scope blocked_slots to company
+  await ensureWorkHoursColumn();       // per-company working hours
 
   // ── Rate limiting on public-facing endpoints ──────────────────────────────
   // Prevents abuse of the demo booking page, registration, and login.
@@ -103,6 +105,7 @@ export async function registerRoutes(
   registerStatisticsRoutes(app);
   registerCustomerRoutes(app);
   registerPushRoutes(app);
+  registerSettingsRoutes(app);
   registerSurveyRoutes(app, requireAuth);
   registerAgentRoutes(app, requireAdmin, requireAuth);
 

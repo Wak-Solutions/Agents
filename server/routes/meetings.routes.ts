@@ -18,7 +18,8 @@ import { notifyManagerNewBooking } from '../email';
 import { sendSurveyToCustomer } from '../surveys';
 import { createDailyRoom } from '../integrations/daily';
 import { KSA_OFFSET_MS, formatKsaDate, formatKsaDateTime } from '../lib/timezone';
-import { getSlotsForDay } from '../lib/slots';
+import { getSlotsForDay, isWithinWorkHours } from '../lib/slots';
+import { getWorkHours } from './settings.routes';
 import { createLogger, maskPhone } from '../lib/logger';
 
 const logger = createLogger('meetings');
@@ -293,6 +294,7 @@ export function registerMeetingRoutes(app: Express): void {
         ),
       ]);
 
+      const workHours = await getWorkHours(companyId);
       const blockedSet = new Set(blockedRes.rows.map((r: any) => `${r.date}T${r.time}`));
       const takenMs = new Set(takenRes.rows.map((r: any) => new Date(r.scheduled_at).getTime()));
 
@@ -308,7 +310,8 @@ export function registerMeetingRoutes(app: Express): void {
         ).toISOString().slice(0, 10);
 
         const availableSlots: string[] = [];
-        const daySlots = getSlotsForDay(d.getUTCDay());
+        // Use company work hours to generate slots for this day
+        const daySlots = getSlotsForDay(d.getUTCDay(), workHours);
         for (const slot of daySlots) {
           if (blockedSet.has(`${blockedDate}T${slot}`)) continue;
           const h = slot === '00:00' ? 24 : parseInt(slot.split(':')[0]);
@@ -349,6 +352,12 @@ export function registerMeetingRoutes(app: Express): void {
       }
       if (meeting.scheduled_at) {
         return res.status(409).json({ message: 'This meeting is already booked.' });
+      }
+
+      // Validate requested slot is within company work hours
+      const workHours = await getWorkHours(companyId);
+      if (!isWithinWorkHours(date, time, workHours)) {
+        return res.status(400).json({ message: 'This time slot is outside working hours. Please choose another.' });
       }
 
       // Convert KSA date+time to UTC
@@ -485,6 +494,7 @@ export function registerMeetingRoutes(app: Express): void {
         ),
       ]);
 
+      const workHoursDemoGet = await getWorkHours(companyId);
       const blockedSet = new Set(blockedRes.rows.map((r: any) => `${r.date}T${r.time}`));
       const takenMs = new Set(takenRes.rows.map((r: any) => new Date(r.scheduled_at).getTime()));
 
@@ -500,7 +510,8 @@ export function registerMeetingRoutes(app: Express): void {
         ).toISOString().slice(0, 10);
 
         const availableSlots: string[] = [];
-        const daySlots = getSlotsForDay(d.getUTCDay());
+        // Use company work hours for slot generation
+        const daySlots = getSlotsForDay(d.getUTCDay(), workHoursDemoGet);
         for (const slot of daySlots) {
           if (blockedSet.has(`${blockedDate}T${slot}`)) continue;
           const h = slot === '00:00' ? 24 : parseInt(slot.split(':')[0]);
@@ -532,6 +543,12 @@ export function registerMeetingRoutes(app: Express): void {
         customerName: z.string().min(1),
         customerPhone: z.string().min(1),
       }).parse(req.body);
+
+      // Validate requested slot is within company work hours
+      const workHoursDemo = await getWorkHours(companyId);
+      if (!isWithinWorkHours(date, time, workHoursDemo)) {
+        return res.status(400).json({ message: 'This time slot is outside working hours. Please choose another.' });
+      }
 
       // Convert KSA date+time to UTC
       const [yr, mo, dy] = date.split('-').map(Number);

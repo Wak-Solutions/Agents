@@ -179,6 +179,18 @@ export const en = {
   meetingsSlotClickBlock: "Click to block",
   meetingsSlotClickUnblock: "Click to unblock",
 
+  // ── Work hours settings ───────────────────────────────────────────────────
+  workHoursTitle: "Work Hours",
+  workHoursDesc: "Only allow bookings within these hours",
+  workHoursDays: "Working Days",
+  workHoursStartTime: "Start Time",
+  workHoursEndTime: "End Time",
+  workHoursTimezone: "Timezone",
+  workHoursSaving: "Saving...",
+  workHoursSaved: "Saved",
+  workHoursErrorLoad: "Failed to load work hours",
+  workHoursErrorSave: "Failed to save work hours",
+
   // ── Surveys page ──────────────────────────────────────────────────────────
   surveysTitle: "Surveys",
   surveysNewSurvey: "New Survey",
@@ -776,6 +788,18 @@ export const ar: Record<keyof typeof en, string> = {
   meetingsSlotBookedTitle: "هذه الخانة محجوزة من قبل عميل",
   meetingsSlotClickBlock: "انقر للحجب",
   meetingsSlotClickUnblock: "انقر لإلغاء الحجب",
+
+  // ── Work hours settings ───────────────────────────────────────────────────
+  workHoursTitle: "ساعات العمل",
+  workHoursDesc: "السماح بالحجوزات خلال هذه الساعات فقط",
+  workHoursDays: "أيام العمل",
+  workHoursStartTime: "وقت البدء",
+  workHoursEndTime: "وقت الانتهاء",
+  workHoursTimezone: "المنطقة الزمنية",
+  workHoursSaving: "جارٍ الحفظ...",
+  workHoursSaved: "تم الحفظ",
+  workHoursErrorLoad: "فشل تحميل ساعات العمل",
+  workHoursErrorSave: "فشل حفظ ساعات العمل",
 
   // ── Surveys page ──────────────────────────────────────────────────────────
   surveysTitle: "الاستطلاعات",
