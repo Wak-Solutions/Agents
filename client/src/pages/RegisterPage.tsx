@@ -5,6 +5,7 @@ import {
   User, Building2, MessageSquare, Bot, Users, Rocket,
   Check, ChevronRight, ChevronLeft, Eye, EyeOff, Globe,
   Plus, Trash2, Sparkles, Briefcase, MessageCircle, Zap,
+  AlertTriangle,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -34,6 +35,7 @@ interface FormData {
   accessToken: string;
   whatsappVerified: boolean;
   whatsappDisplayName: string;
+  whatsappNumberConfirmed: boolean;
   // Step 4
   botName: string;
   greeting: string;
@@ -46,7 +48,7 @@ interface FormData {
 const INITIAL_FORM: FormData = {
   firstName: "", lastName: "", email: "", password: "", confirmPassword: "", phone: "",
   businessName: "", industry: "", country: "", website: "", teamSize: "",
-  phoneNumberId: "", wabaId: "", accessToken: "", whatsappVerified: false, whatsappDisplayName: "",
+  phoneNumberId: "", wabaId: "", accessToken: "", whatsappVerified: false, whatsappDisplayName: "", whatsappNumberConfirmed: false,
   botName: "", greeting: "", tone: "friendly", faqs: [{ question: "", answer: "" }],
   agents: [{ name: "", email: "" }],
 };
@@ -480,6 +482,23 @@ function Step3({ form, setForm, t }: { form: FormData; setForm: (f: FormData) =>
         />
       </FormField>
 
+      {/* WhatsApp number warning */}
+      <div className="flex gap-2.5 bg-amber-50 border border-amber-200 rounded-xl p-3.5">
+        <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+        <p className="text-xs text-amber-800 leading-relaxed">{t("regWhatsAppNumberWarning")}</p>
+      </div>
+
+      {/* Confirmation checkbox */}
+      <label className="flex items-start gap-2.5 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          className="mt-0.5 w-4 h-4 rounded border-gray-300 text-[#0F510F] accent-[#0F510F] shrink-0"
+          checked={form.whatsappNumberConfirmed}
+          onChange={(e) => setForm({ ...form, whatsappNumberConfirmed: e.target.checked })}
+        />
+        <span className="text-sm text-gray-700">{t("regWhatsAppNumberConfirm")}</span>
+      </label>
+
       <FormField label={t("regWabaId")}>
         <input
           className={wabaError ? `${inputClass} border-red-300 focus:ring-red-200 focus:border-red-400` : inputClass}
@@ -778,7 +797,7 @@ export default function RegisterPage() {
       case 2:
         return !!(form.businessName && form.industry && form.country);
       case 3:
-        return true; // skippable
+        return form.whatsappNumberConfirmed;
       case 4:
         return true; // minimal config is fine
       case 5:
@@ -1008,8 +1027,11 @@ export default function RegisterPage() {
                 <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{t("regSaving")}</>
               ) : step === 6 ? (
                 <>{t("regOpenDashboard")} {isRtl ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</>
-              ) : step === 3 || step === 5 ? (
-                // Show skip or continue
+              ) : step === 3 ? (
+                (!form.phoneNumberId && !form.wabaId && !form.accessToken)
+                  ? <>{t("regSkipForNow")} {isRtl ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</>
+                  : <>{t("regContinue")} {isRtl ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</>
+              ) : step === 5 ? (
                 canContinue() ? (
                   <>{t("regContinue")} {isRtl ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</>
                 ) : (
