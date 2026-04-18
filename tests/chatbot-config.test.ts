@@ -30,21 +30,63 @@ describe('GET /api/chatbot-config', () => {
     expect(res.status).toBe(401);
   });
 
-  it('returns prompt with authenticated session', async () => {
+  it('returns prompt and system_prompt_preview with authenticated session', async () => {
     const { app, setSession } = await buildConfigApp();
+    const structuredConfig = {
+      businessName: 'ACME Corp',
+      tone: 'Professional',
+      menuConfig: [{ label: 'Product Inquiry', subItems: ['Robots', 'AI'] }],
+    };
     (pool.query as any).mockResolvedValue({
-      rows: [{ system_prompt: 'You are a helpful assistant.', structured_config: null }],
+      rows: [{
+        system_prompt: 'You are a helpful assistant.',
+        structured_config: structuredConfig,
+        menu_config: structuredConfig.menuConfig,
+        override_active: false,
+        demo_conversation: null,
+      }],
     });
     setSession(adminSession);
     const res = await request(app).get('/api/chatbot-config');
     expect(res.status).toBe(200);
+    expect(typeof res.body.system_prompt_preview).toBe('string');
+    expect(res.body.system_prompt_preview).toContain('ACME Corp');
+  });
+
+  it('includes numbered main menu in system_prompt_preview', async () => {
+    const { app, setSession } = await buildConfigApp();
+    const menuConfig = [
+      { label: 'Product Inquiry', subItems: ['Robots', 'AI Services'] },
+      { label: 'Track Order', subItems: [] },
+    ];
+    (pool.query as any).mockResolvedValue({
+      rows: [{
+        system_prompt: '',
+        structured_config: { businessName: 'WAK', menuConfig },
+        menu_config: menuConfig,
+        override_active: false,
+        demo_conversation: null,
+      }],
+    });
+    setSession(adminSession);
+    const res = await request(app).get('/api/chatbot-config');
+    expect(res.status).toBe(200);
+    expect(res.body.system_prompt_preview).toContain('1. Product Inquiry');
+    expect(res.body.system_prompt_preview).toContain('1.1. Robots');
+    expect(res.body.system_prompt_preview).toContain('2. Track Order');
   });
 
   it('returns prompt with valid webhook secret (Python bot access)', async () => {
     process.env.WEBHOOK_SECRET = 'test-secret';
     const { app } = await buildConfigApp();
     (pool.query as any).mockResolvedValue({
-      rows: [{ system_prompt: 'Prompt for bot.', structured_config: null }],
+      rows: [{
+        system_prompt: 'Prompt for bot.',
+        structured_config: null,
+        menu_config: [],
+        override_active: false,
+        demo_conversation: null,
+      }],
     });
     const res = await request(app)
       .get('/api/chatbot-config?company_id=1')
@@ -65,7 +107,6 @@ describe('POST /api/chatbot-config/preview', () => {
   });
 
   it('returns compiled prompt text with session', async () => {
-    // Route reads req.body.structured_config, not flat body fields
     const { app, setSession } = await buildConfigApp();
     setSession(adminSession);
     const res = await request(app)
@@ -74,6 +115,27 @@ describe('POST /api/chatbot-config/preview', () => {
     expect(res.status).toBe(200);
     expect(typeof res.body.prompt).toBe('string');
     expect(res.body.prompt).toContain('ACME Corp');
+  });
+
+  it('compiles menuConfig into numbered menu in preview', async () => {
+    const { app, setSession } = await buildConfigApp();
+    setSession(adminSession);
+    const res = await request(app)
+      .post('/api/chatbot-config/preview')
+      .send({
+        structured_config: {
+          businessName: 'Demo Co',
+          menuConfig: [
+            { label: 'Services', subItems: ['Consulting', 'Support'] },
+            { label: 'Billing', subItems: [] },
+          ],
+        },
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.prompt).toContain('1. Services');
+    expect(res.body.prompt).toContain('1.1. Consulting');
+    expect(res.body.prompt).toContain('2. Billing');
+    expect(res.body.prompt).toContain('Never fabricate');
   });
 });
 
@@ -88,13 +150,33 @@ describe('POST /api/chatbot-config', () => {
     expect(res.status).toBe(401);
   });
 
-  it('saves config and returns success', async () => {
+  it('saves config and returns system_prompt_preview', async () => {
     const { app, setSession } = await buildConfigApp();
-    (pool.query as any).mockResolvedValue({ rows: [] });
+    const savedRow = {
+      id: 1,
+      system_prompt: '',
+      structured_config: { businessName: 'WAK', menuConfig: [] },
+      override_active: false,
+      demo_conversation: null,
+      updated_at: new Date().toISOString(),
+    };
+    // First call (SELECT existing): return empty, then INSERT: return savedRow
+    (pool.query as any)
+      .mockResolvedValueOnce({ rows: [] })    // migration ALTER TABLE calls
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })    // SELECT existing
+      .mockResolvedValueOnce({ rows: [savedRow] }); // INSERT
     setSession(adminSession);
     const res = await request(app)
       .post('/api/chatbot-config')
-      .send({ system_prompt: 'Updated prompt', businessName: 'WAK' });
+      .send({
+        structured_config: { businessName: 'WAK', menuConfig: [] },
+        override_active: false,
+        raw_prompt: '',
+        demo_conversation: null,
+      });
     expect(res.status).toBe(200);
+    expect(typeof res.body.system_prompt_preview).toBe('string');
   });
 });

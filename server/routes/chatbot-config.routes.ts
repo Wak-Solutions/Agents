@@ -152,8 +152,11 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
       }
       const row = result.rows[0];
       const structuredCfg = row.structured_config ?? {};
-      // Merge top-level menu_config into structured config for compilation
-      if (row.menu_config) structuredCfg.menuConfig = row.menu_config;
+      // menu_config column is the authoritative source; always prefer it for compilation
+      const menuForCompile = Array.isArray(row.menu_config) && row.menu_config.length > 0
+        ? row.menu_config
+        : (structuredCfg.menuConfig ?? []);
+      structuredCfg.menuConfig = menuForCompile;
       const system_prompt_preview = compilePrompt(structuredCfg);
       return res.json({ ...row, system_prompt_preview });
     } catch (err: any) {
@@ -196,7 +199,8 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
         'Chatbot config saved',
         `companyId: ${companyId}, override_active: ${override_active}, prompt_length: ${activePrompt.length}`
       );
-      return res.json(result.rows[0]);
+      const system_prompt_preview = compilePrompt(structured_config || {});
+      return res.json({ ...result.rows[0], system_prompt_preview });
     } catch (err: any) {
       logger.error('saveChatbotConfig failed', err.message);
       res.status(500).json({ message: err.message });
