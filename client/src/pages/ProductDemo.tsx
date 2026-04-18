@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Link } from "wouter";
 import {
   X, ArrowRight, ArrowLeft, Inbox, MessageCircle, Calendar,
@@ -69,10 +69,114 @@ const inboxMessages = [
   ],
 ];
 
-function ScreenInbox() {
+function ScreenInbox({ portrait = false }: { portrait?: boolean }) {
   const [selected, setSelected] = useState(0);
+  const [chatOpen, setChatOpen] = useState(false);
   const msgs = inboxMessages[selected] ?? inboxMessages[0];
 
+  const chatMessages = msgs.map((m, i) => (
+    <div key={i} className={`flex ${m.from === "customer" ? "justify-start" : "justify-end"}`}>
+      <div className={`max-w-[75%] rounded-xl px-3 py-2 shadow-sm ${
+        m.from === "customer" ? "bg-white text-gray-800" :
+        m.from === "bot" ? "bg-gray-100 text-gray-800 border border-gray-200" :
+        "bg-[#DCF8C6] text-gray-800"
+      }`}>
+        {m.label && (
+          <div className={`text-[10px] font-semibold mb-0.5 ${m.from === "bot" ? "text-[#408440]" : "text-blue-600"}`}>
+            {m.from === "bot" && <Bot className="w-3 h-3 inline mr-0.5 -mt-0.5" />}
+            {m.label}
+          </div>
+        )}
+        {m.voice ? (
+          <div>
+            <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 mb-1.5">
+              <Mic className="w-4 h-4 text-[#0F510F] shrink-0" />
+              <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+                <div className="h-full w-[70%] bg-[#0F510F] rounded-full" />
+              </div>
+              <span className="text-[10px] text-gray-500">0:12</span>
+            </div>
+            <div className="text-[10px] text-gray-500 italic bg-gray-50 rounded px-2 py-1">
+              <FileText className="w-3 h-3 inline mr-0.5 -mt-0.5" /> Transcription: {m.transcription}
+            </div>
+          </div>
+        ) : (
+          <p className="text-[13px] leading-relaxed">{m.text}</p>
+        )}
+        <div className="flex items-center justify-end gap-1 mt-0.5">
+          <span className="text-[10px] text-gray-400">{m.time}</span>
+          {m.from !== "customer" && <CheckCheck className="w-3 h-3 text-blue-400" />}
+        </div>
+      </div>
+    </div>
+  ));
+
+  const chatInput = (
+    <div className="bg-white border-t border-gray-200 px-4 py-2 flex items-center gap-2">
+      <div className="flex-1 bg-gray-100 rounded-full px-4 py-2 text-xs text-gray-400">Type a message...</div>
+      <div className="w-8 h-8 bg-[#0F510F] rounded-full flex items-center justify-center">
+        <Send className="w-3.5 h-3.5 text-white" />
+      </div>
+    </div>
+  );
+
+  /* ── Portrait mobile: single-panel (list → chat) ── */
+  if (portrait) {
+    if (chatOpen) {
+      return (
+        <div className="flex flex-col h-full bg-[#F0EDE8]">
+          <div className="px-4 py-3 bg-white border-b border-gray-200 flex items-center gap-3">
+            <button
+              onClick={() => setChatOpen(false)}
+              className="w-11 h-11 flex items-center justify-center -ms-2 text-[#0F510F]"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <div className="w-8 h-8 rounded-full bg-[#0F510F]/10 flex items-center justify-center">
+              <span className="text-xs font-bold text-[#0F510F]">{inboxConvos[selected]?.name?.charAt(0)}</span>
+            </div>
+            <div>
+              <div className="text-sm font-semibold text-gray-800">{inboxConvos[selected]?.name}</div>
+              <div className="text-[10px] text-gray-400">{inboxConvos[selected]?.phone}</div>
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">{chatMessages}</div>
+          {chatInput}
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex flex-col h-full bg-white">
+        <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/80">
+          <div className="text-sm font-semibold text-gray-800">
+            Inbox <span className="text-gray-400 font-normal">· 6 active conversations</span>
+          </div>
+        </div>
+        <div className="flex-1 overflow-y-auto">
+          {inboxConvos.map((c, i) => (
+            <button
+              key={i}
+              onClick={() => { setSelected(Math.min(i, 1)); setChatOpen(true); }}
+              className="w-full text-start px-4 py-4 border-b border-gray-50 hover:bg-gray-50 transition-colors active:bg-gray-100"
+            >
+              <div className="flex items-center justify-between mb-0.5">
+                <span className="text-sm font-medium text-gray-900 truncate">{c.name}</span>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <span className="text-[10px] text-gray-400">{c.time}</span>
+                  {c.unread > 0 && <Badge>{c.unread}</Badge>}
+                </div>
+              </div>
+              <div className="text-xs text-gray-500 truncate">{c.last}</div>
+              <div className="text-[10px] text-gray-400 mt-0.5">{c.phone}</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Desktop / landscape: two-panel ── */
   return (
     <div className="flex h-full">
       {/* Conversation list */}
@@ -113,50 +217,8 @@ function ScreenInbox() {
             <div className="text-[10px] text-gray-400">{inboxConvos[selected]?.phone}</div>
           </div>
         </div>
-        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">
-          {msgs.map((m, i) => (
-            <div key={i} className={`flex ${m.from === "customer" ? "justify-start" : "justify-end"}`}>
-              <div className={`max-w-[75%] rounded-xl px-3 py-2 shadow-sm ${
-                m.from === "customer" ? "bg-white text-gray-800" :
-                m.from === "bot" ? "bg-gray-100 text-gray-800 border border-gray-200" :
-                "bg-[#DCF8C6] text-gray-800"
-              }`}>
-                {m.label && (
-                  <div className={`text-[10px] font-semibold mb-0.5 ${m.from === "bot" ? "text-[#408440]" : "text-blue-600"}`}>
-                    {m.from === "bot" && <Bot className="w-3 h-3 inline mr-0.5 -mt-0.5" />}
-                    {m.label}
-                  </div>
-                )}
-                {m.voice ? (
-                  <div>
-                    <div className="flex items-center gap-2 bg-gray-50 rounded-lg px-3 py-2 mb-1.5">
-                      <Mic className="w-4 h-4 text-[#0F510F] shrink-0" />
-                      <div className="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-                        <div className="h-full w-[70%] bg-[#0F510F] rounded-full" />
-                      </div>
-                      <span className="text-[10px] text-gray-500">0:12</span>
-                    </div>
-                    <div className="text-[10px] text-gray-500 italic bg-gray-50 rounded px-2 py-1">
-                      <FileText className="w-3 h-3 inline mr-0.5 -mt-0.5" /> Transcription: {m.transcription}
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-[13px] leading-relaxed">{m.text}</p>
-                )}
-                <div className="flex items-center justify-end gap-1 mt-0.5">
-                  <span className="text-[10px] text-gray-400">{m.time}</span>
-                  {m.from !== "customer" && <CheckCheck className="w-3 h-3 text-blue-400" />}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="bg-white border-t border-gray-200 px-4 py-2 flex items-center gap-2">
-          <div className="flex-1 bg-gray-100 rounded-full px-4 py-2 text-xs text-gray-400">Type a message...</div>
-          <div className="w-8 h-8 bg-[#0F510F] rounded-full flex items-center justify-center">
-            <Send className="w-3.5 h-3.5 text-white" />
-          </div>
-        </div>
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-2">{chatMessages}</div>
+        {chatInput}
       </div>
     </div>
   );
@@ -406,7 +468,7 @@ function ScreenJourney() {
 }
 
 /* ─── Screen 5: Statistics ────────────────────────────────────── */
-function ScreenStats() {
+function ScreenStats({ portrait = false }: { portrait?: boolean }) {
   const metrics = [
     { label: "Total Conversations", value: "1,247", change: "+12%", up: true },
     { label: "Resolved", value: "1,089", change: "+8%", up: true },
@@ -436,7 +498,7 @@ function ScreenStats() {
         <p className="text-sm text-gray-500">Last 30 days performance overview</p>
       </div>
       {/* Metric cards */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className={`grid gap-4 mb-6 ${portrait ? "grid-cols-2" : "grid-cols-4"}`}>
         {metrics.map((m, i) => (
           <div key={i} className="bg-white rounded-xl border border-gray-200 p-4">
             <div className="text-xs text-gray-500 mb-1">{m.label}</div>
@@ -647,9 +709,15 @@ export default function ProductDemo({ open, onClose }: { open: boolean; onClose:
   const [current, setCurrent] = useState(0);
   const [fade, setFade] = useState(true);
   const [isMobile, setIsMobile] = useState(false);
+  const [isLandscape, setIsLandscape] = useState(false);
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
 
   useEffect(() => {
-    const check = () => setIsMobile(window.innerWidth < 768);
+    const check = () => {
+      setIsMobile(window.innerWidth < 768);
+      setIsLandscape(window.innerWidth > window.innerHeight);
+    };
     check();
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
@@ -692,13 +760,144 @@ export default function ProductDemo({ open, onClose }: { open: boolean; onClose:
   if (!open) return null;
 
   const mobileScreens = SCREENS.filter(s => s.mobile);
-  const mobileComponents = [ScreenInbox, ScreenStats];
   const visibleScreens = isMobile ? mobileScreens : SCREENS;
-  const visibleComponents = isMobile ? mobileComponents : SCREEN_COMPONENTS;
+  const visibleComponents = isMobile ? [ScreenInbox, ScreenStats] : SCREEN_COMPONENTS;
   const maxIdx = visibleScreens.length - 1;
   const screen = visibleScreens[current] ?? visibleScreens[0];
   const ScreenComponent = visibleComponents[current] ?? visibleComponents[0];
 
+  const isPortrait = isMobile && !isLandscape;
+  const isMobileLandscape = isMobile && isLandscape;
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+  };
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    const diffX = touchStartX.current - e.changedTouches[0].clientX;
+    const diffY = touchStartY.current - e.changedTouches[0].clientY;
+    if (Math.abs(diffX) > Math.abs(diffY) && Math.abs(diffX) > 50) {
+      if (diffX > 0) goTo(Math.min(current + 1, maxIdx));
+      else goTo(Math.max(current - 1, 0));
+    }
+  };
+
+  const navArrows = (
+    <div className="flex items-center gap-1 shrink-0">
+      <button
+        onClick={() => goTo(Math.max(current - 1, 0))}
+        disabled={current === 0}
+        className="w-11 h-11 flex items-center justify-center rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+      >
+        <ArrowLeft className="w-4 h-4" />
+      </button>
+      <span className="text-xs text-gray-400 font-mono tabular-nums min-w-[36px] text-center">
+        {current + 1} / {visibleScreens.length}
+      </span>
+      <button
+        onClick={() => goTo(Math.min(current + 1, maxIdx))}
+        disabled={current === maxIdx}
+        className="w-11 h-11 flex items-center justify-center rounded-lg text-gray-600 hover:text-gray-900 hover:bg-gray-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+      >
+        <ArrowRight className="w-4 h-4" />
+      </button>
+    </div>
+  );
+
+  /* ══════════════════════════════════════════════════════════
+     PORTRAIT MOBILE — full-screen, no chrome bar, swipeable
+     ══════════════════════════════════════════════════════════ */
+  if (isPortrait) {
+    return (
+      <div className="fixed inset-0 z-[100]">
+        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+        <div
+          className="relative w-full h-full flex flex-col bg-gray-100 animate-in fade-in duration-200"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
+          {/* Floating close button */}
+          <button
+            onClick={onClose}
+            className="absolute top-3 end-3 z-20 w-11 h-11 flex items-center justify-center bg-black/30 backdrop-blur-sm rounded-full text-white"
+          >
+            <X className="w-5 h-5" />
+          </button>
+
+          {/* Screen content */}
+          <div className={`flex-1 min-h-0 transition-opacity duration-150 ${fade ? "opacity-100" : "opacity-0"}`}>
+            <div className="h-full overflow-hidden">
+              {current === 0 ? <ScreenInbox portrait /> : <ScreenStats portrait />}
+            </div>
+          </div>
+
+          {/* Slimmed bottom bar */}
+          <div className="bg-white border-t border-gray-200 px-3 py-1.5 flex items-center gap-2 shrink-0">
+            {navArrows}
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-gray-800 truncate">{screen.title}</div>
+              <div className="text-[10px] text-gray-400 flex items-center gap-1">
+                <Monitor className="w-3 h-3" /> View full demo on desktop
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ══════════════════════════════════════════════════════════
+     LANDSCAPE MOBILE — compact chrome, no sidebar, swipeable
+     ══════════════════════════════════════════════════════════ */
+  if (isMobileLandscape) {
+    return (
+      <div className="fixed inset-0 z-[100]">
+        <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+        <div
+          className="relative w-full h-full flex flex-col bg-gray-100 animate-in fade-in duration-200"
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+        >
+          {/* Compact browser chrome */}
+          <div className="bg-[#E8E6E3] px-3 py-1 flex items-center gap-3 shrink-0 border-b border-gray-300">
+            <div className="flex gap-1.5">
+              <button onClick={onClose} className="w-3 h-3 rounded-full bg-[#FF5F57] hover:brightness-90 transition-all" title="Close" />
+              <div className="w-3 h-3 rounded-full bg-[#FEBC2E]" />
+              <div className="w-3 h-3 rounded-full bg-[#28C840]" />
+            </div>
+            <div className="flex-1 max-w-xs mx-auto bg-white/80 rounded px-3 py-0.5 text-[10px] text-gray-500 text-center font-mono">
+              app.waksolutions.com/{screen.id}
+            </div>
+            <button
+              onClick={onClose}
+              className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 transition-colors"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Screen content — full width, no sidebar */}
+          <div className={`flex-1 min-h-0 transition-opacity duration-150 ${fade ? "opacity-100" : "opacity-0"}`}>
+            <div className="h-full overflow-hidden">
+              <ScreenComponent />
+            </div>
+          </div>
+
+          {/* Bottom bar */}
+          <div className="bg-white border-t border-gray-200 px-3 py-1 flex items-center gap-2 shrink-0">
+            <div className="flex-1 min-w-0">
+              <div className="text-sm font-semibold text-gray-800 truncate">{screen.title}</div>
+            </div>
+            {navArrows}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ══════════════════════════════════════════════════════════
+     DESKTOP — original layout, fully unchanged
+     ══════════════════════════════════════════════════════════ */
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-6"
@@ -764,16 +963,10 @@ export default function ProductDemo({ open, onClose }: { open: boolean; onClose:
 
         {/* ── Bottom bar ── */}
         <div className="bg-white border-t border-gray-200 px-4 py-2.5 flex items-center gap-3 shrink-0">
-          <div className="flex-1 min-w-0 hidden sm:block">
+          <div className="flex-1 min-w-0">
             <div className="text-sm font-semibold text-gray-800 truncate">{screen.title}</div>
             <div className="text-[11px] text-gray-500 truncate">{screen.desc}</div>
           </div>
-
-          {isMobile && (
-            <div className="flex-1 text-[11px] text-gray-400 flex items-center gap-1">
-              <Monitor className="w-3.5 h-3.5" /> View full demo on desktop
-            </div>
-          )}
 
           <div className="flex items-center gap-2 shrink-0">
             <button
@@ -781,7 +974,7 @@ export default function ProductDemo({ open, onClose }: { open: boolean; onClose:
               disabled={current === 0}
               className="flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900 disabled:opacity-30 disabled:cursor-not-allowed px-2.5 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
             >
-              <ArrowLeft className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Previous</span>
+              <ArrowLeft className="w-3.5 h-3.5" /> Previous
             </button>
             <span className="text-xs text-gray-400 font-mono tabular-nums min-w-[36px] text-center">
               {current + 1} / {visibleScreens.length}
@@ -791,7 +984,7 @@ export default function ProductDemo({ open, onClose }: { open: boolean; onClose:
               disabled={current === maxIdx}
               className="flex items-center gap-1 text-xs text-gray-600 hover:text-gray-900 disabled:opacity-30 disabled:cursor-not-allowed px-2.5 py-1.5 rounded-lg hover:bg-gray-100 transition-colors"
             >
-              <span className="hidden sm:inline">Next</span> <ArrowRight className="w-3.5 h-3.5" />
+              Next <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
 
