@@ -108,7 +108,7 @@ export default function DashboardLayout({
       <aside className="hidden md:flex flex-col w-[232px] bg-[#0F510F] shrink-0">
         {/* Logo */}
         <div className="px-4 py-5 flex items-center gap-2.5 border-b border-white/10">
-          <div className="w-9 h-9 bg-white/15 rounded-xl flex items-center justify-center text-white font-bold text-sm shadow-sm shadow-black/20">W</div>
+          <img src="/logo.png" alt="WAK Solutions" className="h-9 w-auto brightness-0 invert" />
           <span className="text-white/90 font-semibold text-sm tracking-tight">WAK Solutions</span>
         </div>
 
@@ -179,7 +179,7 @@ export default function DashboardLayout({
       {/* ─── Mobile header + menu ─── */}
       <div className="md:hidden fixed top-0 inset-x-0 z-50 bg-[#0F510F] h-[56px] flex items-center justify-between px-4 shadow-sm">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-white/15 rounded-xl flex items-center justify-center text-white font-bold text-xs shadow-sm shadow-black/20">W</div>
+          <img src="/logo.png" alt="WAK Solutions" className="h-8 w-auto brightness-0 invert" />
           <span className="text-white/90 font-semibold text-sm">WAK Solutions</span>
         </div>
         <div className="flex items-center gap-2">

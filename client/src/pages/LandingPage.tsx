@@ -387,7 +387,7 @@ export default function LandingPage() {
           <div className="flex items-center justify-between h-16 lg:h-20">
             {/* Logo */}
             <button onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })} className="flex items-center gap-2.5">
-              <div className="w-9 h-9 bg-[#0F510F] rounded-xl flex items-center justify-center text-white font-bold text-lg shadow-sm">W</div>
+              <img src="/logo.png" alt="WAK Solutions" className="h-9 w-auto" />
               <span className="font-bold text-lg text-[#0F510F] hidden sm:inline">WAK Solutions</span>
             </button>
 
