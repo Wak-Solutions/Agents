@@ -3,7 +3,7 @@ import { useLocation, Link } from "wouter";
 import {
   Inbox, Users, BookUser, ContactRound, BarChart3, Video, Bot,
   ClipboardList, BookOpen, LogOut, Globe, Fingerprint, Menu, X,
-  Bell, Share, TrendingUp, Settings,
+  Bell, Share, Headphones, Settings,
 } from "lucide-react";
 import { startRegistration } from "@simplewebauthn/browser";
 import { useAuth, useLogout } from "@/hooks/use-auth";
@@ -79,7 +79,7 @@ export default function DashboardLayout({
 
   const navItems: NavItem[] = [
     { href: "/dashboard",     icon: <Inbox className="w-[18px] h-[18px]" />,        label: t("inbox") },
-    { href: "/inbox",         icon: <TrendingUp className="w-[18px] h-[18px]" />,   label: t("inboxTitle") ?? "Escalations" },
+    { href: "/inbox",         icon: <Headphones className="w-[18px] h-[18px]" />,  label: t("inboxTitle") ?? "Escalations" },
     { href: "/agents",        icon: <Users className="w-[18px] h-[18px]" />,        label: t("agents"),    adminOnly: true },
     { href: "/contacts",      icon: <BookUser className="w-[18px] h-[18px]" />,     label: t("contacts"),  adminOnly: true },
     { href: "/customers",     icon: <ContactRound className="w-[18px] h-[18px]" />, label: t("customers"), adminOnly: true },

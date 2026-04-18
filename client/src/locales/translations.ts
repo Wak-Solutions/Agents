@@ -67,7 +67,7 @@ export const en = {
   periodCustom: "Custom",
 
   // ── Inbox page ────────────────────────────────────────────────────────────
-  inboxTitle: "Inbox",
+  inboxTitle: "Escalations",
   inboxTabShared: "Shared Inbox",
   inboxTabMy: "My Chats",
   inboxTabAll: "All",
@@ -699,7 +699,7 @@ export const ar: Record<keyof typeof en, string> = {
   periodCustom: "مخصص",
 
   // ── Inbox page ────────────────────────────────────────────────────────────
-  inboxTitle: "البريد الوارد",
+  inboxTitle: "التصعيدات",
   inboxTabShared: "البريد المشترك",
   inboxTabMy: "محادثاتي",
   inboxTabAll: "الكل",

@@ -79,9 +79,7 @@ function StepSidebar({
     <div className="hidden lg:flex flex-col w-[40%] bg-[#0F510F] text-white p-8 min-h-screen relative">
       {/* Logo */}
       <div className="flex items-center gap-3 mb-12">
-        <div className="w-10 h-10 bg-white/15 rounded-xl flex items-center justify-center text-white font-bold text-lg">
-          W
-        </div>
+        <img src="/logo.png" alt="WAK Solutions" className="h-10 w-auto brightness-0 invert" />
         <span className="font-bold text-lg">WAK Solutions</span>
       </div>
 
@@ -151,9 +149,7 @@ function MobileStepBar({ currentStep, t }: { currentStep: number; t: (key: strin
   return (
     <div className="lg:hidden bg-[#0F510F] px-4 py-4">
       <div className="flex items-center gap-2 mb-3">
-        <div className="w-8 h-8 bg-white/15 rounded-lg flex items-center justify-center text-white font-bold text-sm">
-          W
-        </div>
+        <img src="/logo.png" alt="WAK Solutions" className="h-8 w-auto brightness-0 invert" />
         <span className="font-semibold text-white text-sm">WAK Solutions</span>
       </div>
       <div className="flex gap-1.5">

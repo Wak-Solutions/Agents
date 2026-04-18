@@ -134,7 +134,7 @@ export default function Login() {
       <div className="w-full max-w-md relative z-10">
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-14 h-14 bg-[#0F510F] rounded-2xl flex items-center justify-center text-white font-bold text-2xl shadow-lg shadow-[#0F510F]/20 mb-4">W</div>
+          <img src="/logo.png" alt="WAK Solutions" className="h-14 w-auto mb-4" />
           <h1 className="text-xl font-bold text-gray-900 tracking-tight">WAK Solutions</h1>
           <p className="text-sm text-gray-500 mt-1">{t("loginTagline")}</p>
         </div>
