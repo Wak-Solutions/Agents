@@ -419,8 +419,9 @@ export function registerMeetingRoutes(app: Express): void {
         }).catch((e: any) => logger.error('WhatsApp confirmation failed', e.message));
       }
 
-      // Email manager (non-blocking)
+      // Email all active admins for this company (non-blocking)
       notifyManagerNewBooking({
+        companyId,
         customerPhone: meeting.customer_phone,
         dateTimeLabel: ksaLabel,
         meetingLink: brandedLink,
@@ -603,8 +604,9 @@ export function registerMeetingRoutes(app: Express): void {
         }
       }
 
-      // Email manager (non-blocking)
+      // Email all active admins for this company (non-blocking)
       notifyManagerNewBooking({
+        companyId,
         customerPhone,
         dateTimeLabel: ksaLabel,
         meetingLink,

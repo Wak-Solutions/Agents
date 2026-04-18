@@ -1,4 +1,16 @@
+/**
+ * email.ts — Transactional email via Resend.
+ *
+ * Recipients are resolved from the agents table (all active admins for the
+ * company) so that MANAGER_EMAIL env var is no longer required. MANAGER_EMAIL
+ * is still supported as an extra recipient override if set.
+ */
+
 import { Resend } from "resend";
+import { pool } from "./db";
+import { createLogger } from "./lib/logger";
+
+const logger = createLogger("email");
 
 function buildGoogleCalendarUrl(opts: {
   title: string;
@@ -21,22 +33,86 @@ function buildGoogleCalendarUrl(opts: {
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
+/** Mask an email for safe logging: user@domain → u***@domain */
+function maskEmail(email: string): string {
+  const [local, domain] = email.split("@");
+  if (!domain) return "***";
+  return `${local.charAt(0)}***@${domain}`;
+}
+
+/**
+ * Resolve the list of admin email addresses for a company.
+ * Falls back to MANAGER_EMAIL env var if the DB returns no rows, or
+ * appends MANAGER_EMAIL as an extra recipient if it is set.
+ */
+async function resolveAdminEmails(companyId: number): Promise<string[]> {
+  const emails: string[] = [];
+
+  try {
+    const result = await pool.query(
+      `SELECT email FROM agents
+       WHERE company_id = $1 AND role = 'admin' AND is_active = true AND email IS NOT NULL`,
+      [companyId]
+    );
+    for (const row of result.rows) {
+      if (row.email && !emails.includes(row.email)) emails.push(row.email);
+    }
+    if (emails.length > 0) {
+      logger.info(
+        "resolveAdminEmails",
+        `companyId: ${companyId}, found: ${emails.length} admin(s)`
+      );
+    } else {
+      logger.warn(
+        "resolveAdminEmails — no admin emails found in DB",
+        `companyId: ${companyId}`
+      );
+    }
+  } catch (err: any) {
+    logger.error(
+      "resolveAdminEmails — DB lookup failed",
+      `companyId: ${companyId}, error: ${err.message}`
+    );
+  }
+
+  // MANAGER_EMAIL is a supplementary override (useful in dev / single-tenant setups)
+  const override = process.env.MANAGER_EMAIL;
+  if (override && !emails.includes(override)) {
+    emails.push(override);
+    logger.info("resolveAdminEmails — appended MANAGER_EMAIL override", maskEmail(override));
+  }
+
+  return emails;
+}
+
 export async function notifyManagerNewBooking(opts: {
+  companyId: number;
   customerPhone: string;
   dateTimeLabel: string;
   meetingLink: string;
   scheduledUtc: Date;
 }): Promise<void> {
   if (!process.env.RESEND_API_KEY) {
-    console.warn("[email] RESEND_API_KEY not set — skipping manager notification email");
+    logger.error(
+      "notifyManagerNewBooking — RESEND_API_KEY not set",
+      "email will not be sent"
+    );
     return;
   }
   if (!process.env.RESEND_FROM_EMAIL) {
-    console.error("[email] RESEND_FROM_EMAIL is not set — cannot send manager notification email");
+    logger.error(
+      "notifyManagerNewBooking — RESEND_FROM_EMAIL not set",
+      "email will not be sent"
+    );
     return;
   }
-  if (!process.env.MANAGER_EMAIL) {
-    console.error("[email] MANAGER_EMAIL is not set — cannot send manager notification email");
+
+  const recipients = await resolveAdminEmails(opts.companyId);
+  if (recipients.length === 0) {
+    logger.error(
+      "notifyManagerNewBooking — no recipient email found",
+      `companyId: ${opts.companyId} — set MANAGER_EMAIL env var or ensure at least one admin has an email address`
+    );
     return;
   }
 
@@ -128,10 +204,34 @@ export async function notifyManagerNewBooking(opts: {
 </body>
 </html>`;
 
-  await resend.emails.send({
-    from: process.env.RESEND_FROM_EMAIL,
-    to: process.env.MANAGER_EMAIL,
-    subject: `New Meeting Booking — ${opts.customerPhone}`,
-    html,
-  });
+  for (const to of recipients) {
+    logger.info(
+      "notifyManagerNewBooking — sending",
+      `to: ${maskEmail(to)}, companyId: ${opts.companyId}, customer: ${opts.customerPhone}`
+    );
+    try {
+      const result = await resend.emails.send({
+        from: process.env.RESEND_FROM_EMAIL!,
+        to,
+        subject: `New Meeting Booking — ${opts.customerPhone}`,
+        html,
+      });
+      if ((result as any).error) {
+        logger.error(
+          "notifyManagerNewBooking — Resend rejected",
+          `to: ${maskEmail(to)}, error: ${JSON.stringify((result as any).error)}`
+        );
+      } else {
+        logger.info(
+          "notifyManagerNewBooking — sent",
+          `to: ${maskEmail(to)}, id: ${(result as any).data?.id ?? "unknown"}`
+        );
+      }
+    } catch (err: any) {
+      logger.error(
+        "notifyManagerNewBooking — send threw",
+        `to: ${maskEmail(to)}, error: ${err.message}`
+      );
+    }
+  }
 }
