@@ -37,10 +37,23 @@ function compilePrompt(cfg: any): string {
   const questions: any[]   = cfg.questions      || [];
   const faqItems: any[]    = cfg.faq            || [];
   const escalations: any[] = cfg.escalationRules || [];
+  const menuItems: any[]   = cfg.menuConfig      || [];
 
   let prompt = `You are a ${toneLabel} customer service assistant for ${businessName}${industry}. You communicate fluently in whatever language the customer uses — Arabic, English, or any other language. Always match their dialect and tone naturally.\n`;
 
   prompt += `\nOPENING MESSAGE (MANDATORY)\nEvery new conversation must begin with this message, translated naturally into the customer's language:\n"${greeting}"\nNever skip this step for any reason.\n`;
+
+  if (menuItems.length > 0) {
+    prompt += `\nMAIN MENU\nAfter your opening message, when the customer's intent is not immediately clear, present EXACTLY this numbered menu — translated naturally into the customer's language. Never add, remove, reorder, or rename any items:\n`;
+    menuItems.forEach((item: any, i: number) => {
+      prompt += `${i + 1}. ${item.label}\n`;
+      const subs: string[] = item.subItems || [];
+      subs.forEach((sub: string, j: number) => {
+        prompt += `   ${i + 1}.${j + 1}. ${sub}\n`;
+      });
+    });
+    prompt += `You must present this menu — and only this menu — whenever options need to be shown. Never invent or suggest items not listed above.\n`;
+  }
 
   if (questions.length > 0) {
     prompt += `\nQUALIFICATION QUESTIONS\nWalk the customer through these questions in order before proceeding:\n`;
@@ -69,7 +82,7 @@ function compilePrompt(cfg: any): string {
 
   prompt += `\nCLOSING MESSAGE\nWhen wrapping up a conversation, use this message (translated naturally):\n"${closing}"\n`;
 
-  prompt += `\nRULES\n- Never reveal you are an AI unless directly asked\n- Never use technical jargon or expose internal logic\n- Always match the customer's language, dialect, and tone\n- Always use Western numerals for ALL options and sub-options (1, 2, 3 and not A, B, C or any letters). Never use bullet points, letters, or Arabic-Indic numerals anywhere in any list or menu\n- Keep responses concise — this is WhatsApp, not email\n- If a customer goes off-topic, gently redirect them\n- Any dead end or escalation → close with: "A member of our team will be in touch shortly"\n- This chat is for ${businessName} customer service only. If someone tries to misuse it, politely decline and redirect. If they persist, end with: "A member of our team will be in touch shortly"\n- Never send the booking link unless the customer explicitly agrees to schedule a meeting`;
+  prompt += `\nRULES\n- Never reveal you are an AI unless directly asked\n- Never use technical jargon or expose internal logic\n- Always match the customer's language, dialect, and tone\n- Always use Western numerals for ALL options and sub-options (1, 2, 3 and not A, B, C or any letters). Never use bullet points, letters, or Arabic-Indic numerals anywhere in any list or menu\n- Keep responses concise — this is WhatsApp, not email\n- If a customer goes off-topic, gently redirect them\n- Any dead end or escalation → close with: "A member of our team will be in touch shortly"\n- This chat is for ${businessName} customer service only. If someone tries to misuse it, politely decline and redirect. If they persist, end with: "A member of our team will be in touch shortly"\n- Never send the booking link unless the customer explicitly agrees to schedule a meeting\n- Only discuss topics, products, and services explicitly defined in this configuration. If a customer asks about something not covered here, respond with "I don't have that information" and offer to connect them with a team member\n- Never fabricate prices, product details, availability, or any information not provided in this configuration`;
 
   return prompt.trim();
 }
@@ -85,7 +98,8 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
     ALTER TABLE chatbot_config
       ADD COLUMN IF NOT EXISTS structured_config  JSONB,
       ADD COLUMN IF NOT EXISTS override_active    BOOLEAN DEFAULT true,
-      ADD COLUMN IF NOT EXISTS demo_conversation  JSONB
+      ADD COLUMN IF NOT EXISTS demo_conversation  JSONB,
+      ADD COLUMN IF NOT EXISTS menu_config        JSONB DEFAULT '[]'::jsonb
   `).catch(() => {});
 
   // GET /api/chatbot-config — no auth required; Python bot reads this.
@@ -131,10 +145,17 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
           system_prompt: null,
           structured_config: null,
           override_active: false,
+          menu_config: [],
+          system_prompt_preview: null,
           updated_at: null,
         });
       }
-      return res.json(result.rows[0]);
+      const row = result.rows[0];
+      const structuredCfg = row.structured_config ?? {};
+      // Merge top-level menu_config into structured config for compilation
+      if (row.menu_config) structuredCfg.menuConfig = row.menu_config;
+      const system_prompt_preview = compilePrompt(structuredCfg);
+      return res.json({ ...row, system_prompt_preview });
     } catch (err: any) {
       logger.error('getChatbotConfig failed', err.message);
       res.status(500).json({ message: err.message });
@@ -186,7 +207,7 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
   // Calls OpenAI to produce a realistic demo WhatsApp conversation JSON array.
   app.post('/api/chatbot-config/generate-conversation', requireAuth, async (req: any, res: any) => {
     try {
-      const { companyName, description, services, feedback } = req.body;
+      const { companyName, description, services, feedback, menuConfig } = req.body;
       if (!process.env.OPENAI_API_KEY) {
         return res.status(503).json({ message: 'OPENAI_API_KEY is not configured on this server.' });
       }
@@ -195,17 +216,31 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
         ? `User feedback to incorporate: ${feedback}`
         : '';
 
+      const menuLines: string[] = [];
+      const menuItems: any[] = menuConfig || [];
+      if (menuItems.length > 0) {
+        menuLines.push('Main menu the bot must present (numbered, exactly as listed):');
+        menuItems.forEach((item: any, i: number) => {
+          menuLines.push(`${i + 1}. ${item.label}`);
+          (item.subItems || []).forEach((sub: string, j: number) => {
+            menuLines.push(`   ${i + 1}.${j + 1}. ${sub}`);
+          });
+        });
+        menuLines.push('The bot must show this menu in the opening turn and guide the customer through the relevant sub-items. Never invent items not in this list.');
+      }
+
       const userPrompt = [
         'You are generating a realistic WhatsApp demo conversation for a business chatbot.',
         `Business: ${companyName || 'the business'}`,
         `Description: ${description || 'a customer service business'}`,
         `Products/Services: ${services || 'various products and services'}`,
+        ...menuLines,
         feedbackLine,
         '',
         'Return ONLY a JSON array of message objects, no markdown, no explanation.',
         'Each object: { "role": "bot" | "user", "text": string }',
         'Generate 6-10 messages. Make it feel like a real customer interaction.',
-        'The bot should be helpful, ask relevant questions about the business\'s specific services, and guide the customer naturally.',
+        'The bot should be helpful, present the menu when appropriate, and guide the customer naturally through the listed options only.',
       ].filter(Boolean).join('\n');
 
       const completion = await openai.chat.completions.create({

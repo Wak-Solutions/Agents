@@ -243,73 +243,23 @@ export function registerRegistrationRoutes(app: Express): void {
     }
   });
 
-  // ── Step 4: Chatbot config ──────────────────────────────────────────────
+  // ── Step 4: Chatbot config (removed from signup flow) ──────────────────
+  // Chatbot configuration is now only accessible from the Agents Dashboard
+  // after account creation. A blank config row is created in Step 1.
+  // This endpoint is kept as a no-op so in-flight frontend calls don't 404
+  // during the transition period; it will be removed once the UI is updated.
   app.put('/api/register/chatbot', requireAuth, async (req: any, res: any) => {
-    const { botName, greeting, tone, faqs } = req.body;
     const companyId = req.session.companyId;
-
     try {
-      // Build a simple system prompt from the onboarding inputs
-      let systemPrompt = `You are a friendly, professional customer service assistant for ${botName || 'our company'}.`;
-      if (tone) systemPrompt += ` Your tone is ${tone}.`;
-      if (greeting) systemPrompt += `\n\nGREETING:\nStart every new conversation with: "${greeting}"`;
-
-      if (faqs && faqs.length > 0) {
-        systemPrompt += '\n\nFREQUENTLY ASKED QUESTIONS:';
-        for (const faq of faqs) {
-          if (faq.question && faq.answer) {
-            systemPrompt += `\nQ: ${faq.question}\nA: ${faq.answer}`;
-          }
-        }
-      }
-
-      systemPrompt += '\n\nTONE & STYLE:\n- Conversational and warm — this is WhatsApp, not email\n- Keep messages short and clear — 2-4 lines maximum per message\n- Use Western numerals only (1, 2, 3)';
-
-      // Upsert chatbot_config for this company
-      const existingConfig = await pool.query(
-        'SELECT id FROM chatbot_config WHERE company_id = $1',
-        [companyId]
-      );
-
-      // Build structured_config so the dashboard can read individual fields back
-      const structuredConfig = JSON.stringify({
-        businessName: botName || '',
-        industry: '',
-        tone: tone || 'Professional',
-        customTone: '',
-        greeting: greeting || '',
-        questions: [],
-        faq: faqs && faqs.length > 0 ? faqs.map((f: any) => ({ question: f.question, answer: f.answer })) : [],
-        escalationRules: [],
-        closingMessage: '',
-      });
-
-      if (existingConfig.rows.length > 0) {
-        await pool.query(
-          `UPDATE chatbot_config
-           SET system_prompt = $1, business_name = $2, tone = $3, greeting = $4,
-               structured_config = $5, updated_at = NOW()
-           WHERE company_id = $6`,
-          [systemPrompt, botName, tone, greeting, structuredConfig, companyId]
-        );
-      } else {
-        await pool.query(
-          `INSERT INTO chatbot_config (system_prompt, business_name, tone, greeting, structured_config, company_id, override_active)
-           VALUES ($1, $2, $3, $4, $5, $6, false)`,
-          [systemPrompt, botName, tone, greeting, structuredConfig, companyId]
-        );
-      }
-
       await pool.query(
         `UPDATE companies SET onboarding_step = GREATEST(onboarding_step, 5) WHERE id = $1`,
         [companyId]
       );
-
-      logger.info('Chatbot config saved', `companyId: ${companyId}`);
+      logger.info('Register chatbot step skipped (no-op)', `companyId: ${companyId}`);
       res.json({ success: true });
     } catch (err: any) {
-      logger.error('Chatbot config failed', `companyId: ${companyId}, error: ${err.message}`);
-      res.status(500).json({ error: 'Failed to save chatbot config' });
+      logger.error('Register chatbot no-op failed', `companyId: ${companyId}, error: ${err.message}`);
+      res.status(500).json({ error: 'Failed to advance onboarding step' });
     }
   });
 
