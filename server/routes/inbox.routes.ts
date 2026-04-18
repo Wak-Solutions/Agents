@@ -47,7 +47,7 @@ export function registerInboxRoutes(app: Express): void {
         ) e ON true
         LEFT JOIN agents a ON a.id = e.assigned_agent_id
         WHERE 1=1
-          AND ($2 OR e.assigned_agent_id = $3 OR e.assigned_agent_id IS NULL OR e.customer_phone IS NULL)
+          AND ($2 OR e.assigned_agent_id = $3 OR e.assigned_agent_id IS NULL OR m.customer_phone IS NULL)
         ORDER BY last_message_at DESC NULLS LAST
       `, [companyId, isAdmin, agentId]);
       res.json(result.rows);
