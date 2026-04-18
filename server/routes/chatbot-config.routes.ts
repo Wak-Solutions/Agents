@@ -76,9 +76,10 @@ function compilePrompt(cfg: any): string {
         const subLabel = typeof sub === 'string' ? sub : (sub.label || '');
         const subLetter = SUB_LABELS[j] || String(j + 1);
         prompt += `   ${subLetter}. ${subLabel}\n`;
-        const subsubs: string[] = (typeof sub === 'object' && sub !== null) ? (sub.subItems || []) : [];
-        subsubs.forEach((ss: string) => {
-          prompt += `      - ${ss}\n`;
+        const subsubs: any[] = (typeof sub === 'object' && sub !== null) ? (sub.subItems || []) : [];
+        subsubs.forEach((ss: any) => {
+          const ssLabel = typeof ss === 'string' ? ss : (ss?.label || '');
+          prompt += `      - ${ssLabel}\n`;
         });
       });
     });
@@ -90,7 +91,7 @@ function compilePrompt(cfg: any): string {
     questions.forEach((q: any, i: number) => {
       const typeHint =
         q.answerType === 'yesno'    ? '[Yes/No]' :
-        q.answerType === 'multiple' ? `[One of: ${(q.choices || []).join(', ')}]` :
+        q.answerType === 'multiple' ? `[One of: ${(q.choices || []).map((c: any) => typeof c === 'string' ? c : (c?.label || c?.text || '')).join(', ')}]` :
         '[Free text]';
       prompt += `${i + 1}. ${q.text} ${typeHint}\n`;
     });
