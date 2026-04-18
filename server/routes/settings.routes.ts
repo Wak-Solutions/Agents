@@ -1,8 +1,10 @@
 /**
  * settings.routes.ts — Company-scoped settings.
  *
- * GET  /api/settings/work-hours  — return work hours for the authenticated company
- * PUT  /api/settings/work-hours  — update work hours for the authenticated company
+ * GET  /api/settings/work-hours   — return work hours for the authenticated company
+ * PUT  /api/settings/work-hours   — update work hours for the authenticated company
+ * GET  /api/settings/whatsapp     — return WhatsApp credentials for the authenticated company
+ * PUT  /api/settings/whatsapp     — update WhatsApp credentials for the authenticated company
  *
  * work_hours column shape:
  *   { days: string[], start: string, end: string, timezone: string }
@@ -11,7 +13,7 @@
 
 import type { Express } from 'express';
 import { pool } from '../db';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, requireAdmin } from '../middleware/auth';
 import { createLogger } from '../lib/logger';
 
 const logger = createLogger('settings');
@@ -105,6 +107,55 @@ export function registerSettingsRoutes(app: Express): void {
       res.json(wh);
     } catch (err: any) {
       logger.error('setWorkHours failed', err.message);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // GET /api/settings/whatsapp — return WhatsApp credentials for the company (admin only)
+  app.get('/api/settings/whatsapp', requireAuth, requireAdmin, async (req: any, res: any) => {
+    try {
+      const companyId: number = req.session.companyId;
+      const result = await pool.query(
+        `SELECT whatsapp_phone_number_id, whatsapp_waba_id, whatsapp_token
+         FROM companies WHERE id = $1`,
+        [companyId]
+      );
+      const row = result.rows[0] ?? {};
+      logger.info('getWhatsAppSettings', `companyId: ${companyId}`);
+      res.json({
+        phoneNumberId: row.whatsapp_phone_number_id ?? '',
+        wabaId:        row.whatsapp_waba_id         ?? '',
+        accessToken:   row.whatsapp_token            ?? '',
+      });
+    } catch (err: any) {
+      logger.error('getWhatsAppSettings failed', err.message);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // PUT /api/settings/whatsapp — save WhatsApp credentials for the company (admin only)
+  app.put('/api/settings/whatsapp', requireAuth, requireAdmin, async (req: any, res: any) => {
+    try {
+      const companyId: number = req.session.companyId;
+      const { phoneNumberId, wabaId, accessToken } = req.body;
+
+      if (!phoneNumberId || !wabaId || !accessToken) {
+        return res.status(400).json({ message: 'phoneNumberId, wabaId, and accessToken are required' });
+      }
+
+      await pool.query(
+        `UPDATE companies
+         SET whatsapp_phone_number_id = $1,
+             whatsapp_waba_id         = $2,
+             whatsapp_token           = $3
+         WHERE id = $4`,
+        [String(phoneNumberId).trim(), String(wabaId).trim(), String(accessToken).trim(), companyId]
+      );
+
+      logger.info('setWhatsAppSettings', `companyId: ${companyId}, phoneNumberId: ${phoneNumberId}`);
+      res.json({ success: true });
+    } catch (err: any) {
+      logger.error('setWhatsAppSettings failed', err.message);
       res.status(500).json({ message: err.message });
     }
   });

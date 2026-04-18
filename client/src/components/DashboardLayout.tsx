@@ -3,7 +3,7 @@ import { useLocation, Link } from "wouter";
 import {
   Inbox, Users, BookUser, ContactRound, BarChart3, Video, Bot,
   ClipboardList, BookOpen, LogOut, Globe, Fingerprint, Menu, X,
-  Bell, Share, TrendingUp,
+  Bell, Share, TrendingUp, Settings,
 } from "lucide-react";
 import { startRegistration } from "@simplewebauthn/browser";
 import { useAuth, useLogout } from "@/hooks/use-auth";
@@ -88,6 +88,7 @@ export default function DashboardLayout({
     { href: "/chatbot-config",icon: <Bot className="w-[18px] h-[18px]" />,          label: t("chatbotConfig") },
     { href: "/surveys",       icon: <ClipboardList className="w-[18px] h-[18px]" />,label: t("surveys") },
     { href: "/guide",         icon: <BookOpen className="w-[18px] h-[18px]" />,     label: t("guide") },
+    { href: "/settings",      icon: <Settings className="w-[18px] h-[18px]" />,     label: t("settings"), adminOnly: true },
   ];
 
   const visibleNav = navItems.filter(n => !n.adminOnly || isAdmin);
