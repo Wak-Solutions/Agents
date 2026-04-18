@@ -30,10 +30,21 @@ interface EscalationRule {
   rule: string;
 }
 
+interface SubSubItem {
+  id: string;
+  label: string;
+}
+
+interface SubItem {
+  id: string;
+  label: string;
+  subItems: SubSubItem[];   // level 3 — max depth
+}
+
 interface MenuItem {
   id: string;
   label: string;
-  subItems: string[];
+  subItems: SubItem[];      // level 2
 }
 
 interface Config {
@@ -117,6 +128,8 @@ function StepCard({
 
 // ── Menu editor ───────────────────────────────────────────────────────────────
 
+const SUB_LABELS = "abcdefghijklmnopqrstuvwxyz";
+
 function MenuEditor({
   items,
   onChange,
@@ -125,43 +138,66 @@ function MenuEditor({
   onChange: (items: MenuItem[]) => void;
 }) {
   const { t } = useLanguage();
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedL1, setExpandedL1] = useState<string | null>(null);
+  const [expandedL2, setExpandedL2] = useState<string | null>(null); // key = `${itemId}:${subIdx}`
 
+  // ── Level 1 helpers ──────────────────────────────────────────────────────
   const addItem = () => {
-    const newItem: MenuItem = { id: uid(), label: "", subItems: [] };
-    onChange([...items, newItem]);
-    setExpandedId(newItem.id);
+    const n: MenuItem = { id: uid(), label: "", subItems: [] };
+    onChange([...items, n]);
+    setExpandedL1(n.id);
   };
 
   const removeItem = (id: string) => {
     onChange(items.filter(it => it.id !== id));
-    if (expandedId === id) setExpandedId(null);
+    if (expandedL1 === id) setExpandedL1(null);
   };
 
-  const updateLabel = (id: string, label: string) => {
+  const updateItemLabel = (id: string, label: string) =>
     onChange(items.map(it => it.id === id ? { ...it, label } : it));
+
+  // ── Level 2 helpers ──────────────────────────────────────────────────────
+  const addSubItem = (itemId: string) => {
+    const n: SubItem = { id: uid(), label: "", subItems: [] };
+    onChange(items.map(it => it.id === itemId
+      ? { ...it, subItems: [...it.subItems, n] }
+      : it));
+    setExpandedL2(`${itemId}:${n.id}`);
   };
 
-  const addSubItem = (id: string) => {
-    onChange(items.map(it => it.id === id ? { ...it, subItems: [...it.subItems, ""] } : it));
+  const removeSubItem = (itemId: string, subId: string) =>
+    onChange(items.map(it => it.id === itemId
+      ? { ...it, subItems: it.subItems.filter(s => s.id !== subId) }
+      : it));
+
+  const updateSubLabel = (itemId: string, subId: string, label: string) =>
+    onChange(items.map(it => it.id === itemId
+      ? { ...it, subItems: it.subItems.map(s => s.id === subId ? { ...s, label } : s) }
+      : it));
+
+  // ── Level 3 helpers ──────────────────────────────────────────────────────
+  const addSubSubItem = (itemId: string, subId: string) => {
+    const n: SubSubItem = { id: uid(), label: "" };
+    onChange(items.map(it => it.id === itemId
+      ? { ...it, subItems: it.subItems.map(s => s.id === subId
+          ? { ...s, subItems: [...s.subItems, n] }
+          : s) }
+      : it));
   };
 
-  const updateSubItem = (id: string, idx: number, val: string) => {
-    onChange(items.map(it => {
-      if (it.id !== id) return it;
-      const subs = [...it.subItems];
-      subs[idx] = val;
-      return { ...it, subItems: subs };
-    }));
-  };
+  const removeSubSubItem = (itemId: string, subId: string, ssId: string) =>
+    onChange(items.map(it => it.id === itemId
+      ? { ...it, subItems: it.subItems.map(s => s.id === subId
+          ? { ...s, subItems: s.subItems.filter(ss => ss.id !== ssId) }
+          : s) }
+      : it));
 
-  const removeSubItem = (id: string, idx: number) => {
-    onChange(items.map(it => {
-      if (it.id !== id) return it;
-      const subs = it.subItems.filter((_, i) => i !== idx);
-      return { ...it, subItems: subs };
-    }));
-  };
+  const updateSubSubLabel = (itemId: string, subId: string, ssId: string, label: string) =>
+    onChange(items.map(it => it.id === itemId
+      ? { ...it, subItems: it.subItems.map(s => s.id === subId
+          ? { ...s, subItems: s.subItems.map(ss => ss.id === ssId ? { ...ss, label } : ss) }
+          : s) }
+      : it));
 
   return (
     <div className="space-y-2">
@@ -170,9 +206,10 @@ function MenuEditor({
       )}
 
       {items.map((item, idx) => {
-        const isOpen = expandedId === item.id;
+        const l1Open = expandedL1 === item.id;
         return (
           <div key={item.id} className="border border-gray-200 rounded-lg overflow-hidden">
+            {/* Level 1 row */}
             <div className="flex items-center gap-2 px-3 py-2.5 bg-gray-50">
               <GripVertical className="w-3.5 h-3.5 text-gray-300 flex-shrink-0" />
               <span className="text-xs font-medium text-gray-400 w-5 flex-shrink-0">{idx + 1}.</span>
@@ -180,28 +217,27 @@ function MenuEditor({
                 className={inputCls + " flex-1 py-1.5 text-xs"}
                 placeholder={t("chatbotSetupMenuItemPlaceholder")}
                 value={item.label}
-                onChange={e => updateLabel(item.id, e.target.value)}
+                onChange={e => updateItemLabel(item.id, e.target.value)}
               />
               <button
                 type="button"
-                onClick={() => setExpandedId(isOpen ? null : item.id)}
+                onClick={() => setExpandedL1(l1Open ? null : item.id)}
                 className="text-gray-400 hover:text-gray-600 p-1"
-                aria-label="toggle sub-items"
               >
-                {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                {l1Open ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
               </button>
               <button
                 type="button"
                 onClick={() => removeItem(item.id)}
                 className="text-gray-300 hover:text-red-500 p-1"
-                aria-label="remove item"
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
             </div>
 
+            {/* Level 2 sub-items */}
             <AnimatePresence initial={false}>
-              {isOpen && (
+              {l1Open && (
                 <motion.div
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: "auto", opacity: 1 }}
@@ -209,28 +245,88 @@ function MenuEditor({
                   transition={{ duration: 0.15 }}
                   className="overflow-hidden"
                 >
-                  <div className="px-4 py-3 space-y-2 border-t border-gray-100">
+                  <div className="bg-white border-t border-gray-100 px-4 py-3 space-y-2">
                     <p className="text-[11px] font-medium text-gray-400 uppercase tracking-wide">
                       {t("chatbotSetupMenuSubItems")}
                     </p>
-                    {item.subItems.map((sub, si) => (
-                      <div key={si} className="flex items-center gap-2">
-                        <span className="text-xs text-gray-400 w-8 flex-shrink-0 text-right">{idx + 1}.{si + 1}.</span>
-                        <input
-                          className={inputCls + " flex-1 py-1.5 text-xs"}
-                          placeholder={t("chatbotSetupMenuSubItemPlaceholder")}
-                          value={sub}
-                          onChange={e => updateSubItem(item.id, si, e.target.value)}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => removeSubItem(item.id, si)}
-                          className="text-gray-300 hover:text-red-500 p-1"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
+
+                    {item.subItems.map((sub, si) => {
+                      const l2Key = `${item.id}:${sub.id}`;
+                      const l2Open = expandedL2 === l2Key;
+                      return (
+                        <div key={sub.id} className="border border-gray-100 rounded-lg overflow-hidden">
+                          {/* Level 2 row */}
+                          <div className="flex items-center gap-2 px-3 py-2 bg-gray-50/60">
+                            <span className="text-xs text-gray-400 w-5 flex-shrink-0">
+                              {SUB_LABELS[si] ?? si + 1}.
+                            </span>
+                            <input
+                              className={inputCls + " flex-1 py-1 text-xs"}
+                              placeholder={t("chatbotSetupMenuSubItemPlaceholder")}
+                              value={sub.label}
+                              onChange={e => updateSubLabel(item.id, sub.id, e.target.value)}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => setExpandedL2(l2Open ? null : l2Key)}
+                              className="text-gray-400 hover:text-gray-600 p-0.5"
+                            >
+                              {l2Open ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeSubItem(item.id, sub.id)}
+                              className="text-gray-300 hover:text-red-500 p-0.5"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
+
+                          {/* Level 3 sub-sub-items */}
+                          <AnimatePresence initial={false}>
+                            {l2Open && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: "auto", opacity: 1 }}
+                                exit={{ height: 0, opacity: 0 }}
+                                transition={{ duration: 0.12 }}
+                                className="overflow-hidden"
+                              >
+                                <div className="bg-gray-50/40 border-t border-gray-100 px-4 py-2.5 space-y-1.5">
+                                  {sub.subItems.map((ss) => (
+                                    <div key={ss.id} className="flex items-center gap-2">
+                                      <span className="text-xs text-gray-300 w-3 flex-shrink-0">–</span>
+                                      <input
+                                        className={inputCls + " flex-1 py-1 text-xs bg-white"}
+                                        placeholder={t("chatbotSetupMenuSubSubItemPlaceholder")}
+                                        value={ss.label}
+                                        onChange={e => updateSubSubLabel(item.id, sub.id, ss.id, e.target.value)}
+                                      />
+                                      <button
+                                        type="button"
+                                        onClick={() => removeSubSubItem(item.id, sub.id, ss.id)}
+                                        className="text-gray-300 hover:text-red-500 p-0.5"
+                                      >
+                                        <Trash2 className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                  <button
+                                    type="button"
+                                    onClick={() => addSubSubItem(item.id, sub.id)}
+                                    className="flex items-center gap-1 text-xs text-[#0F510F] hover:underline mt-0.5"
+                                  >
+                                    <Plus className="w-3 h-3" />
+                                    {t("chatbotSetupMenuAddSubSubItem")}
+                                  </button>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </div>
+                      );
+                    })}
+
                     <button
                       type="button"
                       onClick={() => addSubItem(item.id)}
@@ -269,6 +365,19 @@ function SkeletonBubble({ wide = false }: { wide?: boolean }) {
 
 // ── First message preview ─────────────────────────────────────────────────────
 
+function ChatBubble({ text, isUser = false }: { text: string; isUser?: boolean }) {
+  return (
+    <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
+      <div className={`max-w-[85%] px-3.5 py-2 rounded-2xl shadow-sm ${isUser ? "bg-[#DCF8C6] rounded-tr-sm" : "bg-white rounded-tl-sm"}`}>
+        <p className="text-[13px] text-gray-800 leading-snug whitespace-pre-wrap">{text}</p>
+        <p className="text-[10px] text-gray-400 text-right mt-1">
+          {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function FirstMessagePreview({
   companyName,
   menuItems,
@@ -278,13 +387,29 @@ function FirstMessagePreview({
 }) {
   const { t } = useLanguage();
   const name = companyName || "Your Business";
-  const menuText = menuItems
-    .filter(it => it.label.trim())
-    .map((it, i) => `${i + 1}. ${it.label}`)
-    .join("\n");
-  const previewText = menuText
-    ? `Welcome to ${name}! How can I help you today?\n\n${menuText}`
+
+  const filtered = menuItems.filter(it => it.label.trim());
+  const mainMenuText = filtered.length > 0
+    ? `Welcome to ${name}! How can I help you today?\n\n` + filtered.map((it, i) => `${i + 1}. ${it.label}`).join("\n")
     : `Welcome to ${name}! How can I help you today?`;
+
+  // Show sub-menu demo for the first item that has sub-items
+  const firstWithSubs = filtered.find(it => it.subItems.some(s => s.label.trim()));
+  const subMenuText = firstWithSubs
+    ? firstWithSubs.subItems
+        .filter(s => s.label.trim())
+        .map((s, j) => `${SUB_LABELS[j] ?? j + 1}. ${s.label}`)
+        .join("\n")
+    : null;
+
+  // Show sub-sub-menu demo for the first sub-item that has sub-sub-items
+  const firstSubWithSubs = firstWithSubs?.subItems.find(s => s.subItems.some(ss => ss.label.trim()));
+  const subSubMenuText = firstSubWithSubs
+    ? firstSubWithSubs.subItems
+        .filter(ss => ss.label.trim())
+        .map(ss => `- ${ss.label}`)
+        .join("\n")
+    : null;
 
   return (
     <div className="rounded-xl overflow-hidden border border-gray-200 shadow-sm bg-white">
@@ -297,13 +422,20 @@ function FirstMessagePreview({
           <p className="text-white/60 text-xs">{t("chatbotSetupAiAssistant")}</p>
         </div>
       </div>
-      <div className="bg-[#ECE5DD] px-3 py-4">
-        <div className="max-w-[85%] bg-white rounded-2xl rounded-tl-sm px-3.5 py-2 shadow-sm">
-          <p className="text-[13px] text-gray-800 leading-snug whitespace-pre-wrap">{previewText}</p>
-          <p className="text-[10px] text-gray-400 text-right mt-1">
-            {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-          </p>
-        </div>
+      <div className="bg-[#ECE5DD] px-3 py-4 space-y-2">
+        <ChatBubble text={mainMenuText} />
+        {subMenuText && (
+          <>
+            <ChatBubble text={`1`} isUser />
+            <ChatBubble text={`Here are the options for ${firstWithSubs!.label}:\n\n${subMenuText}`} />
+          </>
+        )}
+        {subSubMenuText && firstSubWithSubs && (
+          <>
+            <ChatBubble text={`${SUB_LABELS[firstWithSubs!.subItems.indexOf(firstSubWithSubs)]}`} isUser />
+            <ChatBubble text={`For ${firstSubWithSubs.label}, choose one:\n\n${subSubMenuText}`} />
+          </>
+        )}
       </div>
       <div className="bg-[#F0F0F0] px-3 py-2 flex items-center gap-2 border-t border-gray-200">
         <div className="flex-1 bg-white rounded-full px-4 py-1.5 border border-gray-200">
@@ -464,9 +596,28 @@ export default function ChatbotConfig() {
         const sc = data.structured_config;
         if (sc && typeof sc === "object") {
           // Prefer menu_config column over menuConfig inside structured_config
-          const menuConfig: MenuItem[] = Array.isArray(data.menu_config) && data.menu_config.length > 0
+          // Normalise menu items: ensure every sub-item is an object with {id, label, subItems}
+        // (old data may have plain strings if saved before this migration)
+        const rawMenu: any[] = Array.isArray(data.menu_config) && data.menu_config.length > 0
             ? data.menu_config
             : (sc.menuConfig ?? []);
+        const menuConfig: MenuItem[] = rawMenu.map((it: any) => ({
+            id: it.id ?? uid(),
+            label: it.label ?? "",
+            subItems: (it.subItems ?? []).map((sub: any) =>
+              typeof sub === "string"
+                ? { id: uid(), label: sub, subItems: [] }
+                : {
+                    id: sub.id ?? uid(),
+                    label: sub.label ?? "",
+                    subItems: (sub.subItems ?? []).map((ss: any) =>
+                      typeof ss === "string"
+                        ? { id: uid(), label: ss }
+                        : { id: ss.id ?? uid(), label: ss.label ?? "" }
+                    ),
+                  }
+            ),
+        }));
           setConfig({
             businessName:    sc.businessName    ?? "",
             industry:        sc.industry        ?? "",

@@ -22,8 +22,32 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const logger = createLogger('chatbot-config');
 
 // ---------------------------------------------------------------------------
+// Depth validator — rejects menuConfig payloads deeper than 3 levels
+// ---------------------------------------------------------------------------
+
+function menuDepthValid(items: any[]): boolean {
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue;
+    const subs: any[] = item.subItems || [];
+    for (const sub of subs) {
+      if (!sub || typeof sub !== 'object') continue;
+      const subsubs: any[] = sub.subItems || [];
+      for (const ss of subsubs) {
+        // Level 3 items must be plain strings — no further subItems allowed
+        if (typeof ss === 'object' && ss !== null && Array.isArray(ss.subItems) && ss.subItems.length > 0) {
+          return false;
+        }
+      }
+    }
+  }
+  return true;
+}
+
+// ---------------------------------------------------------------------------
 // Prompt compiler
 // ---------------------------------------------------------------------------
+
+const SUB_LABELS = 'abcdefghijklmnopqrstuvwxyz';
 
 function compilePrompt(cfg: any): string {
   const businessName = cfg.businessName || 'the business';
@@ -47,12 +71,18 @@ function compilePrompt(cfg: any): string {
     prompt += `\nMAIN MENU\nAfter your opening message, when the customer's intent is not immediately clear, present EXACTLY this numbered menu — translated naturally into the customer's language. Never add, remove, reorder, or rename any items:\n`;
     menuItems.forEach((item: any, i: number) => {
       prompt += `${i + 1}. ${item.label}\n`;
-      const subs: string[] = item.subItems || [];
-      subs.forEach((sub: string, j: number) => {
-        prompt += `   ${i + 1}.${j + 1}. ${sub}\n`;
+      const subs: any[] = item.subItems || [];
+      subs.forEach((sub: any, j: number) => {
+        const subLabel = typeof sub === 'string' ? sub : (sub.label || '');
+        const subLetter = SUB_LABELS[j] || String(j + 1);
+        prompt += `   ${subLetter}. ${subLabel}\n`;
+        const subsubs: string[] = (typeof sub === 'object' && sub !== null) ? (sub.subItems || []) : [];
+        subsubs.forEach((ss: string) => {
+          prompt += `      - ${ss}\n`;
+        });
       });
     });
-    prompt += `You must present this menu — and only this menu — whenever options need to be shown. Never invent or suggest items not listed above.\n`;
+    prompt += `You must present this menu — and only this menu — whenever options need to be shown. Never invent or suggest items not listed above.\nNever skip levels. Always wait for the customer to choose before going deeper.\n`;
   }
 
   if (questions.length > 0) {
@@ -170,6 +200,12 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
     try {
       const { structured_config, override_active, raw_prompt, demo_conversation } = req.body;
       const companyId: number = req.session.companyId;
+
+      // Reject payloads with menu nesting deeper than 3 levels
+      const menuItems: any[] = (structured_config || {}).menuConfig || [];
+      if (!menuDepthValid(menuItems)) {
+        return res.status(400).json({ message: 'Menu nesting exceeds maximum depth of 3 levels' });
+      }
 
       const activePrompt = override_active
         ? (raw_prompt || '')

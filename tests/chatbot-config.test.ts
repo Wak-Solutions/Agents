@@ -117,7 +117,7 @@ describe('POST /api/chatbot-config/preview', () => {
     expect(res.body.prompt).toContain('ACME Corp');
   });
 
-  it('compiles menuConfig into numbered menu in preview', async () => {
+  it('compiles 3-level menuConfig with letters for sub-items and dashes for sub-sub-items', async () => {
     const { app, setSession } = await buildConfigApp();
     setSession(adminSession);
     const res = await request(app)
@@ -126,15 +126,25 @@ describe('POST /api/chatbot-config/preview', () => {
         structured_config: {
           businessName: 'Demo Co',
           menuConfig: [
-            { label: 'Services', subItems: ['Consulting', 'Support'] },
-            { label: 'Billing', subItems: [] },
+            {
+              label: 'Robotics',
+              subItems: [
+                { label: 'TrolleyGo', subItems: [{ label: 'Standard' }, { label: 'Pro' }] },
+                { label: 'NaviBot', subItems: [] },
+              ],
+            },
+            { label: 'Consulting', subItems: [] },
           ],
         },
       });
     expect(res.status).toBe(200);
-    expect(res.body.prompt).toContain('1. Services');
-    expect(res.body.prompt).toContain('1.1. Consulting');
-    expect(res.body.prompt).toContain('2. Billing');
+    expect(res.body.prompt).toContain('1. Robotics');
+    expect(res.body.prompt).toContain('   a. TrolleyGo');
+    expect(res.body.prompt).toContain('      - Standard');
+    expect(res.body.prompt).toContain('      - Pro');
+    expect(res.body.prompt).toContain('   b. NaviBot');
+    expect(res.body.prompt).toContain('2. Consulting');
+    expect(res.body.prompt).toContain('Never skip levels');
     expect(res.body.prompt).toContain('Never fabricate');
   });
 });
@@ -148,6 +158,31 @@ describe('POST /api/chatbot-config', () => {
       .post('/api/chatbot-config')
       .send({ system_prompt: 'New prompt' });
     expect(res.status).toBe(401);
+  });
+
+  it('rejects menuConfig deeper than 3 levels with 400', async () => {
+    const { app, setSession } = await buildConfigApp();
+    setSession(adminSession);
+    const res = await request(app)
+      .post('/api/chatbot-config')
+      .send({
+        structured_config: {
+          businessName: 'WAK',
+          menuConfig: [{
+            label: 'L1',
+            subItems: [{
+              label: 'L2',
+              subItems: [{
+                label: 'L3',
+                subItems: [{ label: 'L4_too_deep', subItems: ['even_deeper'] }],
+              }],
+            }],
+          }],
+        },
+        override_active: false,
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/depth/i);
   });
 
   it('saves config and returns system_prompt_preview', async () => {
