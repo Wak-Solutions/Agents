@@ -16,6 +16,7 @@ const copy = {
     howItWorks: "How it works",
     pricing: "Pricing",
     faq: "FAQ",
+    login: "Login",
     bookDemo: "Book a demo",
     startTrial: "Free Trial / Sign Up",
     seeDemo: "See it in action",
@@ -113,6 +114,7 @@ const copy = {
     howItWorks: "طريقة العمل",
     pricing: "الأسعار",
     faq: "الأسئلة الشائعة",
+    login: "تسجيل الدخول",
     bookDemo: "احجز عرض تجريبي",
     startTrial: "تجربة مجانية / تسجيل",
     seeDemo: "شاهده بنفسك",
@@ -396,9 +398,13 @@ export default function LandingPage() {
                   {l.label}
                 </button>
               ))}
+              <button onClick={toggleLang} className="flex items-center gap-1.5 text-sm font-medium text-gray-600 hover:text-[#0F510F] transition-colors">
+                <Globe className="w-4 h-4" />
+                {t.switchLang}
+              </button>
               <Link href="/login">
                 <a className="text-sm font-medium text-[#0F510F] border border-[#0F510F]/40 px-4 py-2 rounded-lg hover:border-[#0F510F] hover:bg-[#0F510F]/5 transition-colors">
-                  Login
+                  {t.login}
                 </a>
               </Link>
             </div>
@@ -407,7 +413,7 @@ export default function LandingPage() {
             <div className="lg:hidden flex items-center gap-2">
               <Link href="/login">
                 <a className="text-sm font-medium text-[#0F510F] border border-[#0F510F]/40 px-3 py-1.5 rounded-lg hover:bg-[#0F510F]/5 transition-colors">
-                  Login
+                  {t.login}
                 </a>
               </Link>
               <button onClick={() => setMobileOpen(!mobileOpen)} className="p-2 text-gray-700">
@@ -426,12 +432,11 @@ export default function LandingPage() {
                   {l.label}
                 </button>
               ))}
-              <div className="pt-3">
-                <Link href="/login">
-                  <a className="text-sm font-medium text-white bg-[#0F510F] px-5 py-2.5 rounded-xl text-center block hover:bg-[#0d4510] transition-colors">
-                    Login
-                  </a>
-                </Link>
+              <div className="pt-3 border-t border-gray-100">
+                <button onClick={toggleLang} className="flex items-center gap-2 w-full px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 rounded-lg font-medium">
+                  <Globe className="w-4 h-4 text-[#0F510F]" />
+                  {t.switchLang}
+                </button>
               </div>
             </div>
           </div>
