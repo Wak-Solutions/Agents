@@ -3,7 +3,7 @@ export const en = {
   agentDashboard: "Agent Dashboard",
   online: "Online",
   connecting: "Connecting...",
-  inbox: "Inbox",
+  inbox: "Chats",
   agents: "Agents",
   statistics: "Statistics",
   meetings: "Meetings",
@@ -67,7 +67,7 @@ export const en = {
   periodCustom: "Custom",
 
   // ── Inbox page ────────────────────────────────────────────────────────────
-  inboxTitle: "Escalations",
+  inboxTitle: "Inbox",
   inboxTabShared: "Shared Inbox",
   inboxTabMy: "My Chats",
   inboxTabAll: "All",
@@ -635,7 +635,7 @@ export const ar: Record<keyof typeof en, string> = {
   agentDashboard: "لوحة تحكم الوكيل",
   online: "متصل",
   connecting: "جارٍ الاتصال...",
-  inbox: "البريد الوارد",
+  inbox: "المحادثات",
   agents: "الوكلاء",
   statistics: "الإحصائيات",
   meetings: "الاجتماعات",
@@ -699,7 +699,7 @@ export const ar: Record<keyof typeof en, string> = {
   periodCustom: "مخصص",
 
   // ── Inbox page ────────────────────────────────────────────────────────────
-  inboxTitle: "التصعيدات",
+  inboxTitle: "صندوق الوارد",
   inboxTabShared: "البريد المشترك",
   inboxTabMy: "محادثاتي",
   inboxTabAll: "الكل",
