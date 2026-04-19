@@ -793,7 +793,7 @@ export default function RegisterPage() {
       case 2:
         return !!(form.businessName && form.industry && form.country);
       case 3:
-        return form.whatsappNumberConfirmed;
+        return true; // skip is always allowed; checkbox is advisory only
       case 4:
         return true; // minimal config is fine
       case 5:
