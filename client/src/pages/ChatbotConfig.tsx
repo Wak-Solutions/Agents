@@ -962,7 +962,6 @@ export default function ChatbotConfig() {
 
           </div>
         </div>
-      </div>
     </DashboardLayout>
   );
 }
