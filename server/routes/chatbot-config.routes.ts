@@ -336,39 +336,15 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
       );
       const currentConfig = existing.rows.length > 0 ? (existing.rows[0].structured_config ?? {}) : {};
 
-      const systemPrompt = [
-        'You are a JSON configuration editor for a WhatsApp chatbot.',
-        'You will receive the current configuration as JSON and a natural-language suggestion.',
-        'Return ONLY the updated JSON object — no markdown, no code fences, no explanation.',
-        'Preserve all existing field values and IDs unless the suggestion requires changing them.',
-        'When adding new items (faq, menuConfig, escalationRules, questions), generate a unique 7-character alphanumeric id for each.',
-        '',
-        'FIELD USAGE RULES — follow these exactly:',
-        '- questions: ONLY for qualification questions asked TO the customer to understand their needs (e.g. "What is your budget?", "How many users do you need?"). NEVER put pricing information, contact details, routing logic, policies, rules, or any bot instructions here. If the suggestion is about pricing, contact, or routing — it goes into escalationRules, NOT questions.',
-        '- faq: For factual Q&A the bot can answer directly (e.g. pricing tiers, feature lists, availability). Use this for pricing information the bot should state to customers.',
-        '- escalationRules: For conditions that trigger a human handover AND for any contact/routing/pricing rules the bot must follow (e.g. "Customer asks for a custom quote", "Customer requests enterprise pricing", "Direct customer to WhatsApp: https://wa.me/966544798226").',
-        '- servicesText: Plain-text description of products and services offered. Pricing details can be included here as context.',
-        '- NEVER add anything to the questions array that is not a direct qualification question asked to the customer.',
-        '',
-        'WHATSAPP LINKS — when a WhatsApp contact link is needed anywhere in any field, always use this exact number: 966544798226. Never use placeholders like YOURNUM, YOUR_NUMBER, or XXXXXXXXXX.',
-        '',
-        'Schema (all fields required at top level):',
-        JSON.stringify({
-          businessName: 'string',
-          industry: 'string — business description',
-          tone: 'Professional|Friendly|Formal|Casual|Custom',
-          customTone: 'string',
-          greeting: 'string',
-          servicesText: 'string',
-          closingMessage: 'string',
-          questions: [{ id: 'string', text: 'string', answerType: 'free|yesno|multiple', choices: ['string'] }],
-          faq: [{ id: 'string', question: 'string', answer: 'string' }],
-          escalationRules: [{ id: 'string', rule: 'string' }],
-          menuConfig: [{ id: 'string', label: 'string', subItems: [{ id: 'string', label: 'string', subItems: [{ id: 'string', label: 'string' }] }] }],
-        }, null, 2),
-      ].join('\n');
+      const systemPrompt = `You are a chatbot configuration editor. You will receive a structured config object and a plain English or Arabic instruction. Detect the language of the instruction and apply the change using that same language where the config fields contain natural language text (greeting, closingMessage, faq answers, escalationRules etc). Return ONLY a valid JSON object with the SAME shape as the input config — no extra keys, no missing keys, no explanation, no markdown. Apply the instruction intelligently to the correct field:
+- businessName, industry, tone, greeting, closingMessage, servicesText: plain strings
+- questions: ONLY qualification questions asked TO the customer to understand their needs. NEVER put pricing, routing, or contact logic here.
+- faq: array of {id, question, answer} — factual Q&A about the business
+- escalationRules: array of {id, rule} — conditions that trigger human handover OR routing logic like pricing responses, WhatsApp links (always use https://wa.me/966544798226), meeting booking triggers
+- menuConfig: the nested menu structure — array of {id, label, subItems[]}
+Apply the change to whichever field makes semantic sense. If the instruction says to change the entire bot behaviour or tone, update all relevant fields accordingly. If the instruction is in Arabic, write all natural language config values in Arabic. If in English, write in English. When adding new array items, generate a unique 7-character alphanumeric id for each.`;
 
-      const userPrompt = `Current config:\n${JSON.stringify(currentConfig, null, 2)}\n\nSuggestion: ${suggestion.trim()}\n\nReturn the updated config JSON only.`;
+      const userPrompt = `Current config:\n${JSON.stringify(currentConfig, null, 2)}\n\nInstruction: ${suggestion.trim()}`;
 
       const completion = await openai.chat.completions.create({
         model: 'gpt-4o-mini',
@@ -379,9 +355,26 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
         ],
       });
 
-      const raw = completion.choices[0]?.message?.content ?? '{}';
+      const raw = completion.choices[0]?.message?.content ?? '';
       const cleaned = raw.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '').trim();
-      const newConfig = JSON.parse(cleaned);
+
+      let newConfig: any;
+      try {
+        newConfig = JSON.parse(cleaned);
+      } catch {
+        logger.error('suggestChatbotConfig — JSON parse failed', cleaned.slice(0, 200));
+        return res.status(400).json({ message: 'OpenAI returned invalid JSON', raw: cleaned });
+      }
+
+      // Validate that the returned object has the same top-level keys as the input
+      const expectedKeys = Object.keys(currentConfig);
+      if (expectedKeys.length > 0) {
+        const missingKeys = expectedKeys.filter(k => !(k in newConfig));
+        if (missingKeys.length > 0) {
+          logger.error('suggestChatbotConfig — missing keys in response', missingKeys.join(', '));
+          return res.status(400).json({ message: `OpenAI response is missing keys: ${missingKeys.join(', ')}`, raw: cleaned });
+        }
+      }
 
       // Validate menu depth — same guard as the normal save
       const menuItems: any[] = newConfig.menuConfig || [];
