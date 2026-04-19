@@ -267,10 +267,10 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
 
 /* ─── Pricing card ────────────────────────────────────────────── */
 function PricingCard({
-  name, price, currency, period, features, cta, highlighted, badge,
+  name, price, currency, period, features, cta, highlighted, badge, ctaHref,
 }: {
   name: string; price: string; currency: string; period: string;
-  features: string[]; cta: string; highlighted?: boolean; badge?: string;
+  features: string[]; cta: string; highlighted?: boolean; badge?: string; ctaHref?: string;
 }) {
   return (
     <div className={`relative rounded-2xl p-8 flex flex-col ${
@@ -303,15 +303,25 @@ function PricingCard({
           </li>
         ))}
       </ul>
-      <Link href="/register">
-        <a className={`mt-8 block text-center py-3 rounded-xl font-semibold text-sm transition-all ${
+      {ctaHref ? (
+        <a href={ctaHref} target="_blank" rel="noopener noreferrer" className={`mt-8 block text-center py-3 rounded-xl font-semibold text-sm transition-all ${
           highlighted
             ? "bg-white text-[#0F510F] hover:bg-gray-100"
             : "bg-[#0F510F] text-white hover:bg-[#0d440d]"
         }`}>
           {cta}
         </a>
-      </Link>
+      ) : (
+        <Link href="/register">
+          <a className={`mt-8 block text-center py-3 rounded-xl font-semibold text-sm transition-all ${
+            highlighted
+              ? "bg-white text-[#0F510F] hover:bg-gray-100"
+              : "bg-[#0F510F] text-white hover:bg-[#0d440d]"
+          }`}>
+            {cta}
+          </a>
+        </Link>
+      )}
     </div>
   );
 }
@@ -621,6 +631,7 @@ export default function LandingPage() {
                 period={t.mo}
                 features={[...t.ps3]}
                 cta={t.priceCtaEnterprise}
+                ctaHref="https://wa.me/966544798226?text=Hi%2C%20I%27m%20interested%20in%20the%20Enterprise%20plan%20and%20would%20like%20to%20know%20more%20about%20pricing."
               />
             </Reveal>
           </div>
