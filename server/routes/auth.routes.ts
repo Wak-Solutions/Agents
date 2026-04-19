@@ -143,7 +143,10 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
         termsAcceptedAt,
       });
     } else {
-      res.status(401).json({ message: 'Unauthorized' });
+      // Return 200 so the browser doesn't log a console error on every page load.
+      // 401 is semantically correct for protected routes but wrong here — this
+      // endpoint is called proactively to discover auth state, not to guard a resource.
+      res.json({ authenticated: false });
     }
   });
 
