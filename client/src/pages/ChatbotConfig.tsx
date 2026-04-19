@@ -507,7 +507,7 @@ export default function ChatbotConfig() {
             faq:             sc.faq             ?? [],
             escalationRules: sc.escalationRules ?? [],
             closingMessage:  sc.closingMessage  ?? "",
-            servicesText:    sc.servicesText    ?? "",
+            servicesText:    sc.servicesText    || "WhatsApp Chatbot, Agent Dashboard",
             menuConfig,
           });
         }
