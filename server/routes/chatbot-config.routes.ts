@@ -343,6 +343,13 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
         'Preserve all existing field values and IDs unless the suggestion requires changing them.',
         'When adding new items (faq, menuConfig, escalationRules, questions), generate a unique 7-character alphanumeric id for each.',
         '',
+        'FIELD USAGE RULES — follow these exactly:',
+        '- questions: ONLY for qualification questions asked TO the customer to understand their needs (e.g. "What is your budget?", "How many users do you need?"). NEVER put pricing information, policies, rules, or bot instructions here.',
+        '- faq: For factual Q&A the bot can answer directly (e.g. pricing tiers, feature lists, availability). Use this for pricing information the bot should state to customers.',
+        '- escalationRules: For conditions that trigger a human handover (e.g. "Customer asks for a custom quote", "Customer requests enterprise pricing"). Also use this for any business rules or pricing policies the bot must enforce.',
+        '- servicesText: Plain-text description of products and services offered. Pricing details can be included here as context.',
+        '- NEVER put pricing rules, pricing policies, or any bot behaviour instructions into the questions array.',
+        '',
         'Schema (all fields required at top level):',
         JSON.stringify({
           businessName: 'string',
