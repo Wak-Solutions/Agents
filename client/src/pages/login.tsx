@@ -57,19 +57,30 @@ export default function Login() {
     setBiometricError("");
     setBiometricPending(true);
     try {
+      console.log('[WebAuthn] Fetching login options...');
       const optRes = await fetch("/api/auth/webauthn/login/options", { method: "POST", headers: { "Content-Type": "application/json" } });
+      console.log('[WebAuthn] login/options response status:', optRes.status);
+      const optBody = await optRes.clone().json().catch(() => null);
+      console.log('[WebAuthn] login/options response body:', optBody);
       if (!optRes.ok) throw new Error(t("loginErrorNoBiometric"));
-      const options = await optRes.json();
+      const options = optBody;
+      console.log('[WebAuthn] Calling startAuthentication with options:', options);
       const assertion = await startAuthentication({ optionsJSON: options });
+      console.log('[WebAuthn] Assertion from browser:', JSON.stringify(assertion, null, 2));
+      console.log('[WebAuthn] Sending assertion to /api/auth/webauthn/login/verify...');
       const verifyRes = await fetch("/api/auth/webauthn/login/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(assertion),
         credentials: "include",
       });
+      console.log('[WebAuthn] login/verify response status:', verifyRes.status);
+      const verifyBody = await verifyRes.clone().json().catch(() => null);
+      console.log('[WebAuthn] login/verify response body:', verifyBody);
       if (!verifyRes.ok) throw new Error(t("loginErrorBiometricFailed"));
       queryClient.invalidateQueries({ queryKey: [api.auth.me.path] });
     } catch (e: any) {
+      console.error('[WebAuthn] Error during biometric login:', e);
       setBiometricError(e.message || t("loginErrorBiometricLogin"));
     } finally {
       setBiometricPending(false);
