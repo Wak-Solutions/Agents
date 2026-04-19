@@ -271,17 +271,23 @@ export function registerRegistrationRoutes(app: Express): void {
 
     try {
       if (agents && agents.length > 0) {
+        const validAgents = agents.filter((a: any) => a.email && a.name);
+        if (validAgents.length > 0) {
+          const emails = validAgents.map((a: any) => a.email.toLowerCase());
+          const existingRes = await pool.query(
+            `SELECT email FROM agents WHERE lower(email) = ANY($1::text[])`,
+            [emails]
+          );
+          if (existingRes.rows.length > 0) {
+            const duplicates = existingRes.rows.map((r: any) => r.email);
+            return res.status(400).json({ error: 'Some emails are already in use', duplicates });
+          }
+        }
+
         for (const agent of agents) {
           if (!agent.email || !agent.name) continue;
 
-          // Check if email already exists
-          const existing = await pool.query(
-            'SELECT id FROM agents WHERE email = $1',
-            [agent.email]
-          );
-          if (existing.rows.length > 0) continue;
-
-          // Create agent with a temp password (they'll reset on first login)
+          // Create agent with a temp password (they'll set a real one on first login)
           const tempPass = Math.random().toString(36).slice(2, 10);
           const hash = await bcrypt.hash(tempPass, 10);
           await pool.query(

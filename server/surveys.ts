@@ -122,16 +122,6 @@ export async function sendSurveyToCustomer(
       `${surveyLink}\n` +
       `This link expires in 24 hours.`;
 
-    if (process.env.N8N_SEND_WEBHOOK) {
-      fetch(process.env.N8N_SEND_WEBHOOK, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-webhook-secret': process.env.WEBHOOK_SECRET || '',
-        },
-        body: JSON.stringify({ customer_phone: customerPhone, message }),
-      }).catch((e: any) => logger.error('Survey WhatsApp send failed', e.message));
-    }
   } catch (e: any) {
     logger.error('sendSurveyToCustomer failed', e.message);
   }

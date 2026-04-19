@@ -415,19 +415,6 @@ export function registerMeetingRoutes(app: Express): void {
         `phone: ${maskPhone(meeting.customer_phone)}, time: ${ksaLabel}`
       );
 
-      // Send WhatsApp confirmation (non-blocking)
-      const confirmMsg = `Your meeting is confirmed for ${ksaLabel} KSA time. Your meeting link will be sent to you 15 minutes before the meeting.`;
-      if (process.env.N8N_SEND_WEBHOOK) {
-        fetch(process.env.N8N_SEND_WEBHOOK, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-webhook-secret': process.env.WEBHOOK_SECRET || '',
-          },
-          body: JSON.stringify({ customer_phone: meeting.customer_phone, message: confirmMsg }),
-        }).catch((e: any) => logger.error('WhatsApp confirmation failed', e.message));
-      }
-
       // Email all active admins for this company (non-blocking)
       notifyManagerNewBooking({
         companyId,

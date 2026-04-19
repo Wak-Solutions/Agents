@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { nameError } from "@/lib/validate-name";
 import { useLocation } from "wouter";
 import { Plus, UserCheck, UserX, KeyRound, Edit2, Users, RefreshCw, X } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
@@ -145,6 +146,8 @@ export default function AgentsTab() {
 
   const handleCreateAgent = async (e: React.FormEvent) => {
     e.preventDefault();
+    const nameErr = nameError(newAgent.name);
+    if (nameErr) { setNewError(nameErr); return; }
     setNewError(""); setNewSaving(true);
     try {
       const res = await fetch("/api/agents", {
@@ -167,6 +170,8 @@ export default function AgentsTab() {
   const handleEditSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editAgent) return;
+    const nameErr = nameError(editForm.name);
+    if (nameErr) { setEditError(nameErr); return; }
     setEditError(""); setEditSaving(true);
     try {
       const res = await fetch(`/api/agents/${editAgent.id}`, {
@@ -442,8 +447,11 @@ export default function AgentsTab() {
                     minLength={f.key === "password" ? 6 : 1}
                     value={(newAgent as any)[f.key]}
                     onChange={e => setNewAgent(p => ({ ...p, [f.key]: e.target.value }))}
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#0F510F]"
+                    className={`w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#0F510F] ${f.key === "name" && nameError(newAgent.name) ? "border-red-300 focus:border-red-400" : "border-gray-200"}`}
                   />
+                  {f.key === "name" && nameError(newAgent.name) && (
+                    <p className="text-xs text-red-500">{nameError(newAgent.name)}</p>
+                  )}
                 </div>
               ))}
               <div className="space-y-1">
@@ -480,8 +488,11 @@ export default function AgentsTab() {
                   type={f.type} required
                   value={(editForm as any)[f.key]}
                   onChange={e => setEditForm(p => ({ ...p, [f.key]: e.target.value }))}
-                  className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#0F510F]"
+                  className={`w-full border rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#0F510F] ${f.key === "name" && nameError(editForm.name) ? "border-red-300 focus:border-red-400" : "border-gray-200"}`}
                 />
+                {f.key === "name" && nameError(editForm.name) && (
+                  <p className="text-xs text-red-500">{nameError(editForm.name)}</p>
+                )}
               </div>
             ))}
             <div className="space-y-1">

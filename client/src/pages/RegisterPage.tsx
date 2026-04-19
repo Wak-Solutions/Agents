@@ -1,18 +1,17 @@
 import { useState } from "react";
 import { useLocation, Link } from "wouter";
+import { nameError } from "@/lib/validate-name";
 import { useLanguage } from "@/lib/language-context";
 import {
-  User, Building2, MessageSquare, Bot, Users, Rocket,
+  User, Building2, MessageSquare, Users, Rocket,
   Check, ChevronRight, ChevronLeft, Eye, EyeOff, Globe,
-  Plus, Trash2, Sparkles, Briefcase, MessageCircle, Zap,
-  AlertTriangle,
+  Plus, Trash2, AlertTriangle,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    TYPES
    ═══════════════════════════════════════════════════════════════════════════ */
 
-interface FAQ { question: string; answer: string }
 interface AgentInvite { name: string; email: string }
 
 interface FormData {
@@ -37,11 +36,6 @@ interface FormData {
   whatsappDisplayName: string;
   whatsappNumberConfirmed: boolean;
   // Step 4
-  botName: string;
-  greeting: string;
-  tone: string;
-  faqs: FAQ[];
-  // Step 5
   agents: AgentInvite[];
 }
 
@@ -49,7 +43,6 @@ const INITIAL_FORM: FormData = {
   firstName: "", lastName: "", email: "", password: "", confirmPassword: "", phone: "",
   businessName: "", industry: "", country: "", website: "", teamSize: "",
   phoneNumberId: "", wabaId: "", accessToken: "", whatsappVerified: false, whatsappDisplayName: "", whatsappNumberConfirmed: false,
-  botName: "", greeting: "", tone: "friendly", faqs: [{ question: "", answer: "" }],
   agents: [{ name: "", email: "" }],
 };
 
@@ -57,7 +50,7 @@ const INITIAL_FORM: FormData = {
    STEP SIDEBAR
    ═══════════════════════════════════════════════════════════════════════════ */
 
-const STEP_ICONS = [User, Building2, MessageSquare, Bot, Users, Rocket];
+const STEP_ICONS = [User, Building2, MessageSquare, Users, Rocket];
 
 function StepSidebar({
   currentStep, t, isRtl,
@@ -70,7 +63,6 @@ function StepSidebar({
     { key: "regStep1", desc: "regStep1Desc" },
     { key: "regStep2", desc: "regStep2Desc" },
     { key: "regStep3", desc: "regStep3Desc" },
-    { key: "regStep4", desc: "regStep4Desc" },
     { key: "regStep5", desc: "regStep5Desc" },
     { key: "regStep6", desc: "regStep6Desc" },
   ];
@@ -106,7 +98,7 @@ function StepSidebar({
                 >
                   {isCompleted ? <Check className="w-5 h-5" /> : <Icon className="w-5 h-5" />}
                 </div>
-                {i < 5 && (
+                {i < 4 && (
                   <div
                     className={`w-0.5 h-10 my-1 ${
                       stepNum < currentStep ? "bg-white/50" : "bg-white/10"
@@ -153,7 +145,7 @@ function MobileStepBar({ currentStep, t }: { currentStep: number; t: (key: strin
         <span className="font-semibold text-white text-sm">WAK Solutions</span>
       </div>
       <div className="flex gap-1.5">
-        {[1, 2, 3, 4, 5, 6].map((s) => (
+        {[1, 2, 3, 4, 5].map((s) => (
           <div
             key={s}
             className={`h-1.5 flex-1 rounded-full transition-all ${
@@ -167,7 +159,7 @@ function MobileStepBar({ currentStep, t }: { currentStep: number; t: (key: strin
         ))}
       </div>
       <p className="text-white/70 text-xs mt-2">
-        {t("regStepOf").replace("{current}", String(currentStep)).replace("{total}", "6")}
+        {t("regStepOf").replace("{current}", String(currentStep)).replace("{total}", "5")}
       </p>
     </div>
   );
@@ -213,7 +205,12 @@ function Step1({ form, setForm, t }: { form: FormData; setForm: (f: FormData) =>
           <input
             className={inputClass}
             value={form.firstName}
-            onChange={(e) => setForm({ ...form, firstName: e.target.value })}
+            onChange={(e) => setForm({ ...form, firstName: e.target.value.replace(/[0-9]/g, "") })}
+            onPaste={(e) => {
+              e.preventDefault();
+              const clean = e.clipboardData.getData("text").replace(/[0-9]/g, "");
+              setForm({ ...form, firstName: (form.firstName + clean) });
+            }}
             autoFocus
           />
         </FormField>
@@ -221,7 +218,12 @@ function Step1({ form, setForm, t }: { form: FormData; setForm: (f: FormData) =>
           <input
             className={inputClass}
             value={form.lastName}
-            onChange={(e) => setForm({ ...form, lastName: e.target.value })}
+            onChange={(e) => setForm({ ...form, lastName: e.target.value.replace(/[0-9]/g, "") })}
+            onPaste={(e) => {
+              e.preventDefault();
+              const clean = e.clipboardData.getData("text").replace(/[0-9]/g, "");
+              setForm({ ...form, lastName: (form.lastName + clean) });
+            }}
           />
         </FormField>
       </div>
@@ -351,7 +353,12 @@ function Step2({ form, setForm, t }: { form: FormData; setForm: (f: FormData) =>
         <input
           className={inputClass}
           value={form.businessName}
-          onChange={(e) => setForm({ ...form, businessName: e.target.value })}
+          onChange={(e) => setForm({ ...form, businessName: e.target.value.replace(/[0-9]/g, "") })}
+          onPaste={(e) => {
+            e.preventDefault();
+            const clean = e.clipboardData.getData("text").replace(/[0-9]/g, "");
+            setForm({ ...form, businessName: (form.businessName + clean) });
+          }}
           autoFocus
         />
       </FormField>
@@ -545,128 +552,42 @@ function Step3({ form, setForm, t }: { form: FormData; setForm: (f: FormData) =>
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   STEP 4: CHATBOT
+   STEP 4: INVITE AGENTS
    ═══════════════════════════════════════════════════════════════════════════ */
 
-const TONES = [
-  { value: "professional", icon: Briefcase, key: "regToneProfessional", desc: "regToneProfessionalDesc" },
-  { value: "friendly", icon: MessageCircle, key: "regToneFriendly", desc: "regToneFriendlyDesc" },
-  { value: "concise", icon: Zap, key: "regToneConcise", desc: "regToneConciseDesc" },
-  { value: "enthusiastic", icon: Sparkles, key: "regToneEnthusiastic", desc: "regToneEnthusiasticDesc" },
-];
-
-function Step4({ form, setForm, t }: { form: FormData; setForm: (f: FormData) => void; t: (k: string) => string }) {
-  const updateFaq = (index: number, field: "question" | "answer", value: string) => {
-    const faqs = [...form.faqs];
-    faqs[index] = { ...faqs[index], [field]: value };
-    setForm({ ...form, faqs });
-  };
-
-  const addFaq = () => setForm({ ...form, faqs: [...form.faqs, { question: "", answer: "" }] });
-  const removeFaq = (i: number) => setForm({ ...form, faqs: form.faqs.filter((_, j) => j !== i) });
-
-  return (
-    <div className="space-y-6">
-      <FormField label={t("regBotName")}>
-        <input
-          className={inputClass}
-          value={form.botName}
-          onChange={(e) => setForm({ ...form, botName: e.target.value })}
-          placeholder={form.businessName || "WAK Solutions"}
-          autoFocus
-        />
-      </FormField>
-
-      <FormField label={t("regGreeting")}>
-        <input
-          className={inputClass}
-          value={form.greeting}
-          onChange={(e) => setForm({ ...form, greeting: e.target.value })}
-          placeholder={t("regGreetingPlaceholder")}
-        />
-      </FormField>
-
-      {/* Tone selector cards */}
-      <FormField label={t("regTone")}>
-        <div className="grid grid-cols-2 gap-3">
-          {TONES.map(({ value, icon: Icon, key, desc }) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => setForm({ ...form, tone: value })}
-              className={`flex items-start gap-3 p-3.5 rounded-xl border-2 text-start transition-all ${
-                form.tone === value
-                  ? "border-[#0F510F] bg-[#0F510F]/5"
-                  : "border-gray-200 hover:border-gray-300"
-              }`}
-            >
-              <Icon className={`w-5 h-5 shrink-0 mt-0.5 ${form.tone === value ? "text-[#0F510F]" : "text-gray-400"}`} />
-              <div>
-                <p className={`text-sm font-medium ${form.tone === value ? "text-[#0F510F]" : "text-gray-700"}`}>{t(key)}</p>
-                <p className="text-xs text-gray-400 mt-0.5">{t(desc)}</p>
-              </div>
-            </button>
-          ))}
-        </div>
-      </FormField>
-
-      {/* FAQs */}
-      <div>
-        <p className="text-sm font-medium text-gray-700 mb-3">{t("regFaqs")}</p>
-        <div className="space-y-3">
-          {form.faqs.map((faq, i) => (
-            <div key={i} className="flex gap-2">
-              <div className="flex-1 space-y-2">
-                <input
-                  className={inputClass}
-                  placeholder={t("regFaqQuestion")}
-                  value={faq.question}
-                  onChange={(e) => updateFaq(i, "question", e.target.value)}
-                />
-                <input
-                  className={inputClass}
-                  placeholder={t("regFaqAnswer")}
-                  value={faq.answer}
-                  onChange={(e) => updateFaq(i, "answer", e.target.value)}
-                />
-              </div>
-              {form.faqs.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => removeFaq(i)}
-                  className="text-gray-300 hover:text-red-400 transition-colors self-center"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-        <button
-          type="button"
-          onClick={addFaq}
-          className="text-sm text-[#0F510F] font-medium mt-3 hover:underline flex items-center gap-1"
-        >
-          <Plus className="w-3.5 h-3.5" />{t("regAddFaq")}
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════════════════
-   STEP 5: INVITE AGENTS
-   ═══════════════════════════════════════════════════════════════════════════ */
-
-function Step5({ form, setForm, t }: { form: FormData; setForm: (f: FormData) => void; t: (k: string) => string }) {
+function Step4({
+  form, setForm, t, emailErrors, setEmailErrors, nameErrors, setNameErrors,
+}: {
+  form: FormData;
+  setForm: (f: FormData) => void;
+  t: (k: string) => string;
+  emailErrors: string[];
+  setEmailErrors: (e: string[]) => void;
+  nameErrors: string[];
+  setNameErrors: (e: string[]) => void;
+}) {
   const updateAgent = (index: number, field: "name" | "email", value: string) => {
     const agents = [...form.agents];
     agents[index] = { ...agents[index], [field]: value };
     setForm({ ...form, agents });
+    if (field === "email") {
+      const errs = [...emailErrors];
+      errs[index] = "";
+      setEmailErrors(errs);
+    }
+    if (field === "name") {
+      const errs = [...nameErrors];
+      errs[index] = nameError(value);
+      setNameErrors(errs);
+    }
   };
 
   const addAgent = () => setForm({ ...form, agents: [...form.agents, { name: "", email: "" }] });
-  const removeAgent = (i: number) => setForm({ ...form, agents: form.agents.filter((_, j) => j !== i) });
+  const removeAgent = (i: number) => {
+    setForm({ ...form, agents: form.agents.filter((_, j) => j !== i) });
+    setEmailErrors(emailErrors.filter((_, j) => j !== i));
+    setNameErrors(nameErrors.filter((_, j) => j !== i));
+  };
 
   return (
     <div className="space-y-5">
@@ -678,19 +599,31 @@ function Step5({ form, setForm, t }: { form: FormData; setForm: (f: FormData) =>
         {form.agents.map((agent, i) => (
           <div key={i} className="flex gap-3 items-start">
             <div className="flex-1 grid grid-cols-2 gap-3">
-              <input
-                className={inputClass}
-                placeholder={t("regAgentName")}
-                value={agent.name}
-                onChange={(e) => updateAgent(i, "name", e.target.value)}
-              />
-              <input
-                type="email"
-                className={inputClass}
-                placeholder={t("regAgentEmail")}
-                value={agent.email}
-                onChange={(e) => updateAgent(i, "email", e.target.value)}
-              />
+              <div>
+                <input
+                  className={inputClass}
+                  placeholder={t("regAgentName")}
+                  value={agent.name}
+                  onChange={(e) => updateAgent(i, "name", e.target.value.replace(/[0-9]/g, ""))}
+                  onPaste={(e) => {
+                    e.preventDefault();
+                    const clean = e.clipboardData.getData("text").replace(/[0-9]/g, "");
+                    updateAgent(i, "name", agent.name + clean);
+                  }}
+                />
+              </div>
+              <div>
+                <input
+                  type="email"
+                  className={`${inputClass} ${emailErrors[i] ? "border-red-300 focus:ring-red-200 focus:border-red-400" : ""}`}
+                  placeholder={t("regAgentEmail")}
+                  value={agent.email}
+                  onChange={(e) => updateAgent(i, "email", e.target.value)}
+                />
+                {emailErrors[i] && (
+                  <p className="text-xs text-red-500 mt-1">{emailErrors[i]}</p>
+                )}
+              </div>
             </div>
             <span className="text-xs bg-gray-100 text-gray-500 px-2.5 py-1 rounded-full mt-2 shrink-0">
               {t("regAgentRole")}
@@ -720,16 +653,15 @@ function Step5({ form, setForm, t }: { form: FormData; setForm: (f: FormData) =>
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   STEP 6: GO LIVE
+   STEP 5: GO LIVE
    ═══════════════════════════════════════════════════════════════════════════ */
 
-function Step6({ currentStep, t }: { currentStep: number; t: (k: string) => string }) {
+function Step5({ currentStep, t }: { currentStep: number; t: (k: string) => string }) {
   const checks = [
     { key: "regChecklist1", done: currentStep >= 2 },
     { key: "regChecklist2", done: currentStep >= 3 },
     { key: "regChecklist3", done: currentStep >= 4 },
     { key: "regChecklist4", done: currentStep >= 5 },
-    { key: "regChecklist5", done: currentStep >= 6 },
   ];
 
   return (
@@ -772,6 +704,8 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [phoneError, setPhoneError] = useState("");
+  const [inviteEmailErrors, setInviteEmailErrors] = useState<string[]>([]);
+  const [inviteNameErrors, setInviteNameErrors] = useState<string[]>([]);
 
   const validatePhone = (phone: string): boolean => {
     if (!phone) return true; // optional field
@@ -788,17 +722,17 @@ export default function RegisterPage() {
           form.email &&
           form.password.length >= 8 &&
           form.password === form.confirmPassword &&
-          validatePhone(form.phone)
+          validatePhone(form.phone) &&
+          !nameError(form.firstName) &&
+          !nameError(form.lastName)
         );
       case 2:
         return !!(form.businessName && form.industry && form.country);
       case 3:
         return true; // skip is always allowed; checkbox is advisory only
       case 4:
-        return true; // minimal config is fine
-      case 5:
         return true; // skippable
-      case 6:
+      case 5:
         return true;
       default:
         return false;
@@ -869,24 +803,27 @@ export default function RegisterPage() {
           }
         }
       } else if (step === 4) {
-        const resp4 = await fetch("/api/register/chatbot", {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({
-            botName: form.botName || form.businessName,
-            greeting: form.greeting,
-            tone: form.tone,
-            faqs: form.faqs.filter((f) => f.question && f.answer),
-          }),
-        });
-        if (!resp4.ok) {
-          const d = await resp4.json().catch(() => ({}));
-          setError(d.error || "Failed to save chatbot config. Please try again.");
+        // Block if any agent name is invalid
+        const badNames = form.agents.map((a) => nameError(a.name));
+        if (badNames.some(Boolean)) {
+          setInviteNameErrors(badNames);
           setLoading(false);
           return;
         }
-      } else if (step === 5) {
+
+        // Within-form duplicate check
+        const dupeErrors = form.agents.map((agent, i) => {
+          if (!agent.email) return "";
+          const lower = agent.email.toLowerCase();
+          const firstIdx = form.agents.findIndex((a) => a.email.toLowerCase() === lower);
+          return firstIdx < i ? "This email has already been added" : "";
+        });
+        if (dupeErrors.some(Boolean)) {
+          setInviteEmailErrors(dupeErrors);
+          setLoading(false);
+          return;
+        }
+
         const validAgents = form.agents.filter((a) => a.name && a.email);
         if (validAgents.length > 0) {
           const resp5 = await fetch("/api/register/invite", {
@@ -897,12 +834,21 @@ export default function RegisterPage() {
           });
           if (!resp5.ok) {
             const d = await resp5.json().catch(() => ({}));
-            setError(d.error || "Failed to invite agents. Please try again.");
+            if (d.duplicates && Array.isArray(d.duplicates)) {
+              const errs = form.agents.map((a) =>
+                d.duplicates.includes(a.email.toLowerCase()) || d.duplicates.map((e: string) => e.toLowerCase()).includes(a.email.toLowerCase())
+                  ? "This email is already in use"
+                  : ""
+              );
+              setInviteEmailErrors(errs);
+            } else {
+              setError(d.error || "Failed to invite agents. Please try again.");
+            }
             setLoading(false);
             return;
           }
         }
-      } else if (step === 6) {
+      } else if (step === 5) {
         await fetch("/api/register/complete", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -912,6 +858,8 @@ export default function RegisterPage() {
         return;
       }
 
+      setInviteEmailErrors([]);
+      setInviteNameErrors([]);
       setStep(step + 1);
     } catch {
       setError("Something went wrong. Please try again.");
@@ -920,19 +868,13 @@ export default function RegisterPage() {
     }
   };
 
-  const handleBack = () => {
-    if (step > 1) setStep(step - 1);
-    setError("");
-  };
-
-  /* ─── Render ───────────────────────────────────────────────────── */
+/* ─── Render ───────────────────────────────────────────────────── */
   const stepTitles: Record<number, string> = {
     1: t("regStep1"),
     2: t("regStep2"),
     3: t("regStep3"),
-    4: t("regStep4"),
-    5: t("regStep5"),
-    6: t("regStep6"),
+    4: t("regStep5"),
+    5: t("regStep6"),
   };
 
   return (
@@ -977,9 +919,8 @@ export default function RegisterPage() {
             {step === 1 && <Step1 form={form} setForm={setForm} t={t} />}
             {step === 2 && <Step2 form={form} setForm={setForm} t={t} />}
             {step === 3 && <Step3 form={form} setForm={setForm} t={t} />}
-            {step === 4 && <Step4 form={form} setForm={setForm} t={t} />}
-            {step === 5 && <Step5 form={form} setForm={setForm} t={t} />}
-            {step === 6 && <Step6 currentStep={step} t={t} />}
+            {step === 4 && <Step4 form={form} setForm={setForm} t={t} emailErrors={inviteEmailErrors} setEmailErrors={setInviteEmailErrors} nameErrors={inviteNameErrors} setNameErrors={setInviteNameErrors} />}
+            {step === 5 && <Step5 currentStep={step} t={t} />}
 
             {/* Error */}
             {error && (
@@ -993,23 +934,11 @@ export default function RegisterPage() {
         {/* Bottom bar */}
         <div className="border-t border-gray-100 px-6 lg:px-10 py-4">
           <div className="max-w-xl mx-auto flex items-center justify-between">
-            {/* Back */}
-            <div>
-              {step > 1 && (
-                <button
-                  type="button"
-                  onClick={handleBack}
-                  className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors font-medium"
-                >
-                  {isRtl ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-                  {t("regBack")}
-                </button>
-              )}
-            </div>
+            <div />
 
             {/* Step indicator */}
             <span className="text-xs text-gray-400">
-              {t("regStepOf").replace("{current}", String(step)).replace("{total}", "6")}
+              {t("regStepOf").replace("{current}", String(step)).replace("{total}", "5")}
             </span>
 
             {/* Continue */}
@@ -1021,13 +950,13 @@ export default function RegisterPage() {
             >
               {loading ? (
                 <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{t("regSaving")}</>
-              ) : step === 6 ? (
+              ) : step === 5 ? (
                 <>{t("regOpenDashboard")} {isRtl ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</>
               ) : step === 3 ? (
                 (!form.phoneNumberId && !form.wabaId && !form.accessToken)
                   ? <>{t("regSkipForNow")} {isRtl ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</>
                   : <>{t("regContinue")} {isRtl ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</>
-              ) : step === 5 ? (
+              ) : step === 4 ? (
                 canContinue() ? (
                   <>{t("regContinue")} {isRtl ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}</>
                 ) : (

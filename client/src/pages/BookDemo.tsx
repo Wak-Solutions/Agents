@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { nameError } from "@/lib/validate-name";
 import { Video, CalendarDays, Clock, CheckCircle2, ChevronLeft, AlertCircle } from "lucide-react";
 
 interface DaySlots {
@@ -20,15 +21,21 @@ export default function BookDemo() {
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
   const [formError, setFormError] = useState("");
+  const submittingRef = useRef(false);
+  const confirmingRef = useRef(false);
 
   const handleFormSubmit = async () => {
+    if (submittingRef.current) return;
     if (!customerName.trim()) { setFormError("Please enter your name."); return; }
+    const nameErr = nameError(customerName);
+    if (nameErr) { setFormError(nameErr); return; }
     if (!customerPhone.trim()) { setFormError("Please enter your phone number."); return; }
     const cleanPhone = customerPhone.trim().replace(/[\s\-().]/g, '');
     if (!/^\+?\d{7,15}$/.test(cleanPhone)) {
       setFormError("Please enter a valid phone number (e.g. +966501234567).");
       return;
     }
+    submittingRef.current = true;
     setFormError("");
     setState("loading");
     try {
@@ -40,11 +47,15 @@ export default function BookDemo() {
     } catch {
       setState("error");
       setErrorMsg("Failed to load available slots. Please try again.");
+    } finally {
+      submittingRef.current = false;
     }
   };
 
   const handleConfirm = async () => {
     if (!selectedDate || !selectedTime) return;
+    if (confirmingRef.current) return;
+    confirmingRef.current = true;
     setConfirming(true);
     try {
       const res = await fetch("/api/book-demo", {
@@ -64,6 +75,7 @@ export default function BookDemo() {
     } catch {
       setErrorMsg("Network error. Please try again.");
       setConfirming(false);
+      confirmingRef.current = false;
     }
   };
 
@@ -100,8 +112,9 @@ export default function BookDemo() {
                   value={customerName}
                   onChange={e => setCustomerName(e.target.value)}
                   placeholder="e.g. Ahmed Al-Rashid"
-                  className="w-full border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-[#0F510F]/30 focus:border-[#0F510F]"
+                  className={`w-full border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-[#0F510F]/30 focus:border-[#0F510F] ${nameError(customerName) ? "border-red-300 focus:ring-red-200" : "border-border"}`}
                 />
+                {nameError(customerName) && <p className="text-xs text-red-500 mt-1">{nameError(customerName)}</p>}
               </div>
               <div>
                 <label className="text-sm font-medium text-foreground block mb-1.5">WhatsApp number</label>
@@ -115,7 +128,8 @@ export default function BookDemo() {
               </div>
               <button
                 onClick={handleFormSubmit}
-                className="w-full bg-[#0F510F] text-white py-3 rounded-xl font-semibold text-sm hover:bg-[#0d4510] transition-colors"
+                disabled={submittingRef.current}
+                className="w-full bg-[#0F510F] text-white py-3 rounded-xl font-semibold text-sm hover:bg-[#0d4510] disabled:opacity-60 transition-colors"
               >
                 See available times →
               </button>

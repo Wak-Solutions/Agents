@@ -340,7 +340,8 @@ export default function Meetings() {
     return () => document.removeEventListener("visibilitychange", hv);
   }, [fetchMeetings, fetchSlots, isAuthenticated]);
 
-  const startMeeting = async (id: number) => {
+  const startMeeting = async (id: number, meetingLink: string) => {
+    window.open(meetingLink, "_blank", "noopener,noreferrer");
     setStarting(id);
     try {
       const res = await fetch(`/api/meetings/${id}/start`, { method: "PATCH", credentials: "include" });
@@ -463,7 +464,7 @@ export default function Meetings() {
                       <td className="px-5 py-4">
                         {m.status === "pending" && (
                           <button
-                            onClick={() => startMeeting(m.id)}
+                            onClick={() => startMeeting(m.id, m.meeting_link)}
                             disabled={starting === m.id}
                             className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-700 border border-gray-200 bg-white px-3.5 py-2 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
                           >
@@ -476,7 +477,7 @@ export default function Meetings() {
                             disabled={completing === m.id}
                             className="inline-flex items-center gap-1.5 text-xs font-medium bg-[#0F510F] text-white px-3.5 py-2 rounded-lg hover:bg-[#0d4510] disabled:opacity-50 transition-colors"
                           >
-                            <Video className="w-3.5 h-3.5" /> Join
+                            Complete
                           </button>
                         )}
                       </td>

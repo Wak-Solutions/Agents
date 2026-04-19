@@ -79,18 +79,6 @@ export function registerEscalationRoutes(app: Express): void {
       );
       logger.info('Escalation closed', `phone: ****${customer_phone.slice(-4)}, agentId: ${agentId}`);
 
-      // Fire n8n webhook (non-blocking)
-      if (process.env.N8N_CLOSE_WEBHOOK) {
-        fetch(process.env.N8N_CLOSE_WEBHOOK, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-webhook-secret': process.env.WEBHOOK_SECRET || '',
-          },
-          body: JSON.stringify({ customer_phone }),
-        }).catch((e: any) => logger.error('n8n close webhook failed', e.message));
-      }
-
       // Send post-chat survey (fire-and-forget)
       sendSurveyToCustomer(customer_phone, agentId, escalationId);
 
