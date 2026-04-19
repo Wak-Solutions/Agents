@@ -378,6 +378,12 @@ export const en = {
   chatbotSetupCustomTonePlaceholder: "Describe the tone, e.g. Friendly but formal, with occasional humour",
   chatbotSetupPromptLabel: "Compiled system prompt",
   chatbotSetupPromptEmpty: "Save your configuration to see the compiled system prompt here.",
+  chatbotSetupSuggestTitle: "Suggest a Change",
+  chatbotSetupSuggestDesc: "Describe what you'd like to change in plain English — AI will update the config for you",
+  chatbotSetupSuggestPlaceholder: "e.g. Add a pricing FAQ, make the tone more casual, add a new menu item for returns",
+  chatbotSetupSuggestBtn: "Apply suggestion",
+  chatbotSetupSuggestApplying: "Applying...",
+  chatbotSetupSuggestSuccess: "Config updated successfully",
 
   // ── Login page ────────────────────────────────────────────────────────────
   loginTitle: "Agent Dashboard",
@@ -1010,6 +1016,12 @@ export const ar: Record<keyof typeof en, string> = {
   chatbotSetupCustomTonePlaceholder: "صف الأسلوب، مثال: ودّي لكن رسمي مع لمسة خفيفة من الطرافة",
   chatbotSetupPromptLabel: "نظام الأوامر المُجمَّع",
   chatbotSetupPromptEmpty: "احفظ إعداداتك لترى نظام الأوامر المُجمَّع هنا.",
+  chatbotSetupSuggestTitle: "اقتراح تعديل",
+  chatbotSetupSuggestDesc: "صف ما تريد تغييره بلغة عادية — سيُحدّث الذكاء الاصطناعي الإعدادات نيابةً عنك",
+  chatbotSetupSuggestPlaceholder: "مثال: أضف قسم أسعار، اجعل الأسلوب أكثر ودّية، أضف خيار استرجاع في القائمة",
+  chatbotSetupSuggestBtn: "تطبيق الاقتراح",
+  chatbotSetupSuggestApplying: "جارٍ التطبيق...",
+  chatbotSetupSuggestSuccess: "تم تحديث الإعدادات بنجاح",
 
   // ── Login page ────────────────────────────────────────────────────────────
   loginTitle: "لوحة تحكم الوكيل",

@@ -313,4 +313,98 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
       res.status(500).json({ message: err.message });
     }
   });
+
+  // POST /api/chatbot-config/suggest
+  // Takes a natural-language suggestion, asks OpenAI to return an updated
+  // structured_config JSON, then saves using the exact same flow as POST /api/chatbot-config.
+  app.post('/api/chatbot-config/suggest', requireAuth, async (req: any, res: any) => {
+    try {
+      const { suggestion } = req.body;
+      const companyId: number = req.session.companyId;
+
+      if (!suggestion || typeof suggestion !== 'string' || !suggestion.trim()) {
+        return res.status(400).json({ message: 'suggestion is required' });
+      }
+      if (!process.env.OPENAI_API_KEY) {
+        return res.status(503).json({ message: 'OPENAI_API_KEY is not configured on this server.' });
+      }
+
+      // Load current config from DB
+      const existing = await pool.query(
+        'SELECT id, structured_config FROM chatbot_config WHERE company_id = $1 ORDER BY id LIMIT 1',
+        [companyId]
+      );
+      const currentConfig = existing.rows.length > 0 ? (existing.rows[0].structured_config ?? {}) : {};
+
+      const systemPrompt = [
+        'You are a JSON configuration editor for a WhatsApp chatbot.',
+        'You will receive the current configuration as JSON and a natural-language suggestion.',
+        'Return ONLY the updated JSON object — no markdown, no code fences, no explanation.',
+        'Preserve all existing field values and IDs unless the suggestion requires changing them.',
+        'When adding new items (faq, menuConfig, escalationRules, questions), generate a unique 7-character alphanumeric id for each.',
+        '',
+        'Schema (all fields required at top level):',
+        JSON.stringify({
+          businessName: 'string',
+          industry: 'string — business description',
+          tone: 'Professional|Friendly|Formal|Casual|Custom',
+          customTone: 'string',
+          greeting: 'string',
+          servicesText: 'string',
+          closingMessage: 'string',
+          questions: [{ id: 'string', text: 'string', answerType: 'free|yesno|multiple', choices: ['string'] }],
+          faq: [{ id: 'string', question: 'string', answer: 'string' }],
+          escalationRules: [{ id: 'string', rule: 'string' }],
+          menuConfig: [{ id: 'string', label: 'string', subItems: [{ id: 'string', label: 'string', subItems: [{ id: 'string', label: 'string' }] }] }],
+        }, null, 2),
+      ].join('\n');
+
+      const userPrompt = `Current config:\n${JSON.stringify(currentConfig, null, 2)}\n\nSuggestion: ${suggestion.trim()}\n\nReturn the updated config JSON only.`;
+
+      const completion = await openai.chat.completions.create({
+        model: 'gpt-4o-mini',
+        max_tokens: 2000,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user',   content: userPrompt },
+        ],
+      });
+
+      const raw = completion.choices[0]?.message?.content ?? '{}';
+      const cleaned = raw.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '').trim();
+      const newConfig = JSON.parse(cleaned);
+
+      // Validate menu depth — same guard as the normal save
+      const menuItems: any[] = newConfig.menuConfig || [];
+      if (!menuDepthValid(menuItems)) {
+        return res.status(400).json({ message: 'AI suggested menu nesting that exceeds maximum depth of 3 levels' });
+      }
+
+      // Save — identical upsert + compilePrompt flow as POST /api/chatbot-config
+      const activePrompt = compilePrompt(newConfig);
+
+      let result;
+      if (existing.rows.length > 0) {
+        result = await pool.query(
+          `UPDATE chatbot_config
+           SET system_prompt=$1, structured_config=$2, override_active=$3, demo_conversation=$4, updated_at=NOW()
+           WHERE company_id=$5 RETURNING *`,
+          [activePrompt, JSON.stringify(newConfig), false, JSON.stringify(null), companyId]
+        );
+      } else {
+        result = await pool.query(
+          `INSERT INTO chatbot_config (system_prompt, structured_config, override_active, demo_conversation, updated_at, company_id)
+           VALUES ($1,$2,$3,$4,NOW(),$5) RETURNING *`,
+          [activePrompt, JSON.stringify(newConfig), false, JSON.stringify(null), companyId]
+        );
+      }
+
+      logger.info('suggestChatbotConfig saved', `companyId: ${companyId}, prompt_length: ${activePrompt.length}`);
+      const system_prompt_preview = compilePrompt(newConfig);
+      return res.json({ ...result.rows[0], system_prompt_preview });
+    } catch (err: any) {
+      logger.error('suggestChatbotConfig failed', err.message);
+      res.status(500).json({ message: err.message });
+    }
+  });
 }
