@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
-import { Lock, Fingerprint, Mail } from "lucide-react";
+import { Lock, Fingerprint, Mail, ArrowLeft } from "lucide-react";
 import { useAuth, useLogin } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/language-context";
 import { useQueryClient } from "@tanstack/react-query";
@@ -125,6 +125,17 @@ export default function Login() {
         </div>
       )}
 
+      {/* Back to home */}
+      <div className={`absolute top-4 ${isRtl ? "right-4" : "left-4"} z-10`}>
+        <a
+          href="/"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-[#0F510F] transition-colors"
+        >
+          <ArrowLeft className={`w-4 h-4 ${isRtl ? "rotate-180" : ""}`} />
+          Home
+        </a>
+      </div>
+
       {/* Background */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute -top-40 -right-40 w-96 h-96 bg-[#0F510F]/5 rounded-full blur-3xl" />
@@ -216,7 +227,14 @@ export default function Login() {
           </form>
         </div>
 
-        <p className="text-center text-xs text-gray-400 mt-6">
+        <p className="text-center text-sm text-gray-500 mt-5">
+          Don't have an account?{" "}
+          <a href="/register" className="font-medium text-[#0F510F] hover:text-[#0d4510] transition-colors">
+            Start free trial
+          </a>
+        </p>
+
+        <p className="text-center text-xs text-gray-400 mt-4">
           {t("loginCopyright")} &copy; {new Date().getFullYear()}
         </p>
       </div>
