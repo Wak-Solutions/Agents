@@ -166,8 +166,10 @@ export default function Login() {
                 disabled={biometricPending}
                 className="w-full flex items-center justify-center gap-3 py-3 px-4 rounded-xl border-2 border-[#0F510F]/20 bg-[#0F510F]/5 hover:bg-[#0F510F]/10 transition-all text-sm font-medium text-[#0F510F] disabled:opacity-50"
               >
-                <Fingerprint className="w-5 h-5" />
-                {biometricPending ? t("loginVerifying") : t("loginSignInBiometric")}
+                {biometricPending
+                  ? <><div className="w-4 h-4 border-2 border-[#0F510F]/30 border-t-[#0F510F] rounded-full animate-spin" />{t("loginVerifying")}</>
+                  : <><Fingerprint className="w-5 h-5" />{t("loginSignInBiometric")}</>
+                }
               </button>
               {biometricError && <p className="text-sm text-red-500 mt-2 text-center">{biometricError}</p>}
               <div className="flex items-center gap-3 mt-5 mb-1">
