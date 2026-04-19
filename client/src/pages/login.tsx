@@ -54,15 +54,10 @@ export default function Login() {
   }, []);
 
   const handleBiometricLogin = async () => {
-    if (biometricPending) return; // guard against double-invocation
     setBiometricError("");
     setBiometricPending(true);
     try {
-      const optRes = await fetch("/api/auth/webauthn/login/options", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-      });
+      const optRes = await fetch("/api/auth/webauthn/login/options", { method: "POST", headers: { "Content-Type": "application/json" } });
       if (!optRes.ok) throw new Error(t("loginErrorNoBiometric"));
       const options = await optRes.json();
       const assertion = await startAuthentication({ optionsJSON: options });
@@ -73,13 +68,8 @@ export default function Login() {
         credentials: "include",
       });
       if (!verifyRes.ok) throw new Error(t("loginErrorBiometricFailed"));
-      // Invalidate and immediately navigate — don't rely on the useEffect cycle
-      // which races with the query re-fetch and causes the spinner to clear prematurely.
-      await queryClient.invalidateQueries({ queryKey: [api.auth.me.path] });
-      setLocation("/dashboard");
+      queryClient.invalidateQueries({ queryKey: [api.auth.me.path] });
     } catch (e: any) {
-      // NotAllowedError = user dismissed/cancelled the biometric prompt — not an error.
-      if ((e as any)?.name === "NotAllowedError") return;
       setBiometricError(e.message || t("loginErrorBiometricLogin"));
     } finally {
       setBiometricPending(false);
