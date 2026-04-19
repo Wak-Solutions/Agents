@@ -222,14 +222,12 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
   // ── WebAuthn: login options ───────────────────────────────────────────────
   app.post('/api/auth/webauthn/login/options', async (req: any, res: any) => {
     try {
-      logger.info('WebAuthn login/options — rpID', getRpId(req));
       // Only return credentials for active agents to avoid cross-tenant credential exposure
       const result = await pool.query(
         `SELECT wc.credential_id FROM webauthn_credentials wc
          JOIN agents a ON a.id = wc.agent_id
          WHERE a.is_active = true`
       );
-      logger.info('WebAuthn login/options — credentials in DB', `count: ${result.rows.length}, ids: ${result.rows.map((r: any) => r.credential_id).join(', ')}`);
       if (result.rows.length === 0) {
         return res.status(400).json({ message: 'No biometric registered' });
       }
@@ -239,7 +237,6 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
         allowCredentials,
         userVerification: 'required',
       });
-      logger.info('WebAuthn login/options — challenge generated', options.challenge);
       (req.session as any).webauthnChallenge = options.challenge;
       req.session.save(() => {});
       res.json(options);
@@ -253,10 +250,6 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
   app.post('/api/auth/webauthn/login/verify', async (req: any, res: any) => {
     try {
       const challenge = (req.session as any).webauthnChallenge;
-      logger.info('WebAuthn login/verify — session challenge', challenge ?? 'MISSING');
-      logger.info('WebAuthn login/verify — incoming credential id', req.body?.id ?? 'MISSING');
-      logger.info('WebAuthn login/verify — expectedOrigin', getRpOrigin(req));
-      logger.info('WebAuthn login/verify — expectedRPID', getRpId(req));
       if (!challenge) {
         return res.status(400).json({ message: 'No pending login challenge' });
       }
@@ -276,7 +269,6 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
         return res.status(401).json({ message: 'Credential not registered' });
       }
       const stored = credRow.rows[0];
-      logger.info('WebAuthn login/verify — stored credential', `id: ${stored.credential_id}, counter: ${stored.counter}, agent_id: ${stored.agent_id}, is_active: ${stored.is_active}`);
       if (!stored.is_active) {
         return res.status(403).json({ message: 'Your account has been deactivated.' });
       }
@@ -286,32 +278,26 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
       }
 
       const publicKeyUint8 = new Uint8Array(Buffer.from(stored.public_key, 'hex'));
-      logger.info('WebAuthn login/verify — calling verifyAuthenticationResponse');
-      let verifyResult: any;
-      try {
-        verifyResult = await verifyAuthenticationResponse({
-          response: req.body,
-          expectedChallenge: challenge,
-          expectedOrigin: getRpOrigin(req),
-          expectedRPID: getRpId(req),
-          credential: {
-            id: stored.credential_id,
-            publicKey: publicKeyUint8,
-            counter: Number(stored.counter),
-          },
-        });
-      } catch (verifyErr: any) {
-        logger.error('WebAuthn login/verify — verifyAuthenticationResponse threw', verifyErr.message);
-        throw verifyErr;
-      }
-      const { verified } = verifyResult;
-      logger.info('WebAuthn login/verify — verified result', String(verified));
+      const { verified, authenticationInfo } = await verifyAuthenticationResponse({
+        response: req.body,
+        expectedChallenge: challenge,
+        expectedOrigin: getRpOrigin(req),
+        expectedRPID: getRpId(req),
+        credential: {
+          id: stored.credential_id,
+          publicKey: publicKeyUint8,
+          counter: Number(stored.counter),
+        },
+      });
 
       if (verified) {
-        // Increment counter to prevent replay attacks
+        // Store the counter value the authenticator actually reported.
+        // Platform authenticators (Face ID, Touch ID) always report 0 — storing
+        // that value rather than blindly incrementing prevents the counter from
+        // drifting ahead of what the device sends and breaking future logins.
         await pool.query(
-          `UPDATE webauthn_credentials SET counter = counter + 1 WHERE credential_id = $1`,
-          [stored.credential_id]
+          `UPDATE webauthn_credentials SET counter = $1 WHERE credential_id = $2`,
+          [authenticationInfo.newCounter, stored.credential_id]
         );
         req.session.authenticated = true;
         req.session.agentId = stored.agent_id;
