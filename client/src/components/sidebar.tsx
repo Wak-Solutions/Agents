@@ -53,11 +53,14 @@ export function Sidebar({ conversations, selectedPhone, onSelect }: SidebarProps
   const [searchQuery, setSearchQuery] = useState("");
   const { t } = useLanguage();
 
-  const activeConversations = conversations.filter(c => c.escalation_status !== "closed");
-  const filteredByStatus =
-    filter === "all" ? conversations :
-    filter === "open" ? activeConversations :
-    conversations.filter(c => c.escalation_status === "closed");
+  // ESCALATION — hidden for now
+  // const activeConversations = conversations.filter(c => c.escalation_status !== "closed");
+  // const filteredByStatus =
+  //   filter === "all" ? conversations :
+  //   filter === "open" ? activeConversations :
+  //   conversations.filter(c => c.escalation_status === "closed");
+  const activeConversations = conversations;
+  const filteredByStatus = conversations;
 
   // Search filter
   const visible = searchQuery.trim()
@@ -78,11 +81,12 @@ export function Sidebar({ conversations, selectedPhone, onSelect }: SidebarProps
       {/* ─── Header — WhatsApp Web style ─── */}
       <div className="px-4 py-3 bg-[#F0F2F5] flex items-center justify-between shrink-0">
         <span className="text-[15px] font-bold text-[#111b21] tracking-tight">{t("sidebarInbox")}</span>
-        <div className="flex items-center gap-1">
+        {/* ESCALATION — hidden for now */}
+        {/* <div className="flex items-center gap-1">
           <span className="text-[11px] font-medium text-[#00a884] bg-[#00a884]/10 px-2 py-0.5 rounded-full">
             {activeConversations.length} {t("sidebarActiveLabel")}
           </span>
-        </div>
+        </div> */}
       </div>
 
       {/* ─── Search bar ─── */}
@@ -151,7 +155,9 @@ function ConversationItem({
   isSelected: boolean;
   onClick: () => void;
 }) {
-  const isOpen = conversation.escalation_status !== "closed";
+  // ESCALATION — hidden for now
+  // const isOpen = conversation.escalation_status !== "closed";
+  const isOpen = true;
   const phone = conversation.customer_phone;
   const initials = getInitials(phone);
   const avatarColor = getAvatarColor(phone);

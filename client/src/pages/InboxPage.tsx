@@ -146,26 +146,27 @@ export default function InboxPage() {
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, [fetchData, isAuthenticated]);
 
-  const claim = async (phone: string) => {
-    setClaiming(phone);
-    setError("");
-    try {
-      const res = await fetch(`/api/escalations/${encodeURIComponent(phone)}/claim`, {
-        method: "PATCH",
-        credentials: "include",
-      });
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        setError(body.message || t("inboxClaimError"));
-      } else {
-        await fetchData();
-      }
-    } catch {
-      setError(t("inboxNetworkError"));
-    } finally {
-      setClaiming(null);
-    }
-  };
+  // ESCALATION — hidden for now
+  // const claim = async (phone: string) => {
+  //   setClaiming(phone);
+  //   setError("");
+  //   try {
+  //     const res = await fetch(`/api/escalations/${encodeURIComponent(phone)}/claim`, {
+  //       method: "PATCH",
+  //       credentials: "include",
+  //     });
+  //     if (!res.ok) {
+  //       const body = await res.json().catch(() => ({}));
+  //       setError(body.message || t("inboxClaimError"));
+  //     } else {
+  //       await fetchData();
+  //     }
+  //   } catch {
+  //     setError(t("inboxNetworkError"));
+  //   } finally {
+  //     setClaiming(null);
+  //   }
+  // };
 
   const sharedItems = items.filter(item =>
     item.item_type === "chat" ? item.assigned_agent_id === null : item.meeting_agent_id === null,
@@ -271,16 +272,18 @@ export default function InboxPage() {
                             label={item.chat_status === "in_progress" ? `${t("statusInProgress")}${item.assigned_agent_name ? ` · ${item.assigned_agent_name}` : ""}` : item.chat_status === "closed" || item.chat_status === "resolved" ? t("statusResolved") : t("statusOpen")}
                           />
                         </div>
-                        {item.escalation_reason && (
+                        {/* ESCALATION — hidden for now */}
+                        {/* {item.escalation_reason && (
                           <p className="text-xs text-gray-500 truncate">{item.escalation_reason}</p>
-                        )}
+                        )} */}
                         <div className="flex items-center gap-1.5 mt-0.5">
                           <Clock className="w-3 h-3 text-gray-400" />
                           <span className="text-xs text-gray-400">{timeAgo(item.created_at)}</span>
                         </div>
                       </div>
                       <div className="shrink-0">
-                        {tab === "shared" ? (
+                        {/* ESCALATION — hidden for now */}
+                        {/* {tab === "shared" ? (
                           <button
                             onClick={() => claim(item.customer_phone)}
                             disabled={claiming === item.customer_phone}
@@ -288,13 +291,13 @@ export default function InboxPage() {
                           >
                             {claiming === item.customer_phone ? t("inboxClaiming") : t("inboxClaim")}
                           </button>
-                        ) : (
+                        ) : ( */}
                           <Link href={`/dashboard?phone=${encodeURIComponent(item.customer_phone)}`}>
                             <a className="px-3 py-1.5 text-xs font-medium border border-[#0F510F]/30 text-[#0F510F] rounded-lg hover:bg-[#0F510F]/5 transition-colors">
                               {t("inboxOpen")}
                             </a>
                           </Link>
-                        )}
+                        {/* )} */}
                       </div>
                     </div>
                     {item.meeting_id && item.meeting_scheduled_at && (

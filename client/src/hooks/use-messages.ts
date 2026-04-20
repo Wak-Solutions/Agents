@@ -35,7 +35,8 @@ export function useSendMessage() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ['messages', variables.customer_phone] });
-      queryClient.invalidateQueries({ queryKey: [api.escalations.list.path] });
+      // ESCALATION — hidden for now
+      // queryClient.invalidateQueries({ queryKey: [api.escalations.list.path] });
     },
   });
 }

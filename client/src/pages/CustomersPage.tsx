@@ -51,7 +51,9 @@ const EVENT_CONFIG: Record<
   first_contact:      { icon: <MessageSquare className="w-3.5 h-3.5" />, bg: "bg-blue-100",   text: "text-blue-600",   ring: "ring-blue-200"   },
   bot_message:        { icon: <Bot            className="w-3.5 h-3.5" />, bg: "bg-gray-100",   text: "text-gray-500",   ring: "ring-gray-200"   },
   agent_message:      { icon: <HeadphonesIcon className="w-3.5 h-3.5" />, bg: "bg-purple-100", text: "text-purple-600", ring: "ring-purple-200" },
-  escalation:         { icon: <AlertTriangle  className="w-3.5 h-3.5" />, bg: "bg-orange-100", text: "text-orange-600", ring: "ring-orange-200" },
+  // ESCALATION — hidden for now
+  // escalation:      { icon: <AlertTriangle  className="w-3.5 h-3.5" />, bg: "bg-orange-100", text: "text-orange-600", ring: "ring-orange-200" },
+  escalation:         { icon: <AlertTriangle  className="w-3.5 h-3.5" />, bg: "bg-gray-100",   text: "text-gray-400",   ring: "ring-gray-200"   },
   meeting_booked:     { icon: <Calendar       className="w-3.5 h-3.5" />, bg: "bg-teal-100",   text: "text-teal-600",   ring: "ring-teal-200"   },
   meeting_completed:  { icon: <CheckCircle2   className="w-3.5 h-3.5" />, bg: "bg-green-100",  text: "text-green-600",  ring: "ring-green-200"  },
   survey_sent:        { icon: <ClipboardList  className="w-3.5 h-3.5" />, bg: "bg-yellow-100", text: "text-yellow-600", ring: "ring-yellow-200" },

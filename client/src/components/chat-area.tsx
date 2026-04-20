@@ -9,7 +9,8 @@ import { cn } from "@/lib/utils";
 import { useLanguage } from "@/lib/language-context";
 import type { Message, Conversation } from "@shared/schema";
 import { useSendMessage, useMessages } from "@/hooks/use-messages";
-import { useCloseEscalation } from "@/hooks/use-escalations";
+// ESCALATION — hidden for now
+// import { useCloseEscalation } from "@/hooks/use-escalations";
 import { useAuth } from "@/hooks/use-auth";
 
 /* ────────────────────────────────────────────────────────────
@@ -219,7 +220,8 @@ interface Agent { id: number; name: string; email: string; is_active: boolean; }
 function ActiveChat({ conversation, onClose }: { conversation: Conversation; onClose: () => void }) {
   const { data: messages = [], isLoading } = useMessages(conversation.customer_phone);
   const { mutate: sendMessage, isPending: isSending } = useSendMessage();
-  const { mutate: closeEscalation, isPending: isClosing } = useCloseEscalation();
+  // ESCALATION — hidden for now
+  // const { mutate: closeEscalation, isPending: isClosing } = useCloseEscalation();
   const { isAdmin } = useAuth();
 
   const [text, setText] = useState("");
@@ -238,19 +240,20 @@ function ActiveChat({ conversation, onClose }: { conversation: Conversation; onC
     }
   }, [isAdmin]);
 
-  const handleReassign = async (agentId: string) => {
-    setReassigning(true);
-    try {
-      await fetch(`/api/escalations/${encodeURIComponent(conversation.customer_phone)}/assign`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ agentId: agentId === "unassign" ? null : Number(agentId) }),
-      });
-    } finally {
-      setReassigning(false);
-    }
-  };
+  // ESCALATION — hidden for now
+  // const handleReassign = async (agentId: string) => {
+  //   setReassigning(true);
+  //   try {
+  //     await fetch(`/api/escalations/${encodeURIComponent(conversation.customer_phone)}/assign`, {
+  //       method: "PATCH",
+  //       headers: { "Content-Type": "application/json" },
+  //       credentials: "include",
+  //       body: JSON.stringify({ agentId: agentId === "unassign" ? null : Number(agentId) }),
+  //     });
+  //   } finally {
+  //     setReassigning(false);
+  //   }
+  // };
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollIntoView({ behavior: "smooth" });
@@ -265,11 +268,12 @@ function ActiveChat({ conversation, onClose }: { conversation: Conversation; onC
     );
   };
 
-  const handleClose = () => {
-    if (confirm(t("chatConfirmResolve"))) {
-      closeEscalation(conversation.customer_phone, { onSuccess: onClose });
-    }
-  };
+  // ESCALATION — hidden for now
+  // const handleClose = () => {
+  //   if (confirm(t("chatConfirmResolve"))) {
+  //     closeEscalation(conversation.customer_phone, { onSuccess: onClose });
+  //   }
+  // };
 
   const isOpen = conversation.escalation_status !== "closed";
   const phoneStr = conversation.customer_phone;
@@ -303,8 +307,9 @@ function ActiveChat({ conversation, onClose }: { conversation: Conversation; onC
         </div>
 
         <div className="flex items-center gap-1">
+          {/* ESCALATION — hidden for now */}
           {/* Admin reassign */}
-          {isAdmin && agents.length > 0 && (
+          {/* {isAdmin && agents.length > 0 && (
             <div className="flex items-center gap-1.5 mr-2">
               <UserCheck className="w-4 h-4 text-white/60" />
               <select
@@ -319,9 +324,9 @@ function ActiveChat({ conversation, onClose }: { conversation: Conversation; onC
                 ))}
               </select>
             </div>
-          )}
+          )} */}
           {/* Resolve button */}
-          {isOpen && (
+          {/* {isOpen && (
             <button
               onClick={handleClose}
               disabled={isClosing}
@@ -330,7 +335,7 @@ function ActiveChat({ conversation, onClose }: { conversation: Conversation; onC
               <CheckCircle2 className="w-3.5 h-3.5" />
               {t("chatResolveIssue")}
             </button>
-          )}
+          )} */}
           <button className="w-9 h-9 flex items-center justify-center rounded-full hover:bg-white/10 transition-colors">
             <Search className="w-[18px] h-[18px] text-white/80" />
           </button>
@@ -340,8 +345,8 @@ function ActiveChat({ conversation, onClose }: { conversation: Conversation; onC
         </div>
       </div>
 
-      {/* ─── Escalation reason banner ─── */}
-      {conversation.escalation_reason && (
+      {/* ESCALATION — hidden for now */}
+      {/* {conversation.escalation_reason && (
         <div className="bg-[#FFF3CD] border-b border-[#FFE69C] px-4 py-2 flex gap-3 text-sm shrink-0 z-10">
           <Info className="w-4 h-4 text-[#997404] shrink-0 mt-0.5" />
           <div>
@@ -349,7 +354,7 @@ function ActiveChat({ conversation, onClose }: { conversation: Conversation; onC
             <span className="text-[#664D03]/80">{conversation.escalation_reason}</span>
           </div>
         </div>
-      )}
+      )} */}
 
       {/* ─── Messages area with wallpaper ─── */}
       <div
