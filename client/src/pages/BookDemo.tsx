@@ -20,6 +20,7 @@ export default function BookDemo() {
   const [bookedLabel, setBookedLabel] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerPhone, setCustomerPhone] = useState("");
+  const [customerEmail, setCustomerEmail] = useState("");
   const [formError, setFormError] = useState("");
   const submittingRef = useRef(false);
   const confirmingRef = useRef(false);
@@ -33,6 +34,10 @@ export default function BookDemo() {
     const cleanPhone = customerPhone.trim().replace(/[\s\-().]/g, '');
     if (!/^\+?\d{7,15}$/.test(cleanPhone)) {
       setFormError("Please enter a valid phone number (e.g. +966501234567).");
+      return;
+    }
+    if (customerEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())) {
+      setFormError("Please enter a valid email address.");
       return;
     }
     submittingRef.current = true;
@@ -61,7 +66,7 @@ export default function BookDemo() {
       const res = await fetch("/api/book-demo", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date: selectedDate, time: selectedTime, customerName, customerPhone }),
+        body: JSON.stringify({ date: selectedDate, time: selectedTime, customerName, customerPhone, customerEmail }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -123,6 +128,18 @@ export default function BookDemo() {
                   value={customerPhone}
                   onChange={e => setCustomerPhone(e.target.value)}
                   placeholder="e.g. +966501234567"
+                  className="w-full border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-[#0F510F]/30 focus:border-[#0F510F]"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-foreground block mb-1.5">
+                  Email address <span className="text-muted-foreground font-normal text-xs">(optional — for booking confirmation)</span>
+                </label>
+                <input
+                  type="email"
+                  value={customerEmail}
+                  onChange={e => setCustomerEmail(e.target.value)}
+                  placeholder="e.g. ahmed@company.com"
                   className="w-full border border-border rounded-xl px-4 py-3 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-[#0F510F]/30 focus:border-[#0F510F]"
                 />
               </div>

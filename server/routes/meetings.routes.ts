@@ -524,11 +524,12 @@ export function registerMeetingRoutes(app: Express): void {
   app.post('/api/book-demo', async (req: any, res: any) => {
     try {
       const companyId = 1;
-      const { date, time, customerName, customerPhone } = z.object({
+      const { date, time, customerName, customerPhone, customerEmail } = z.object({
         date: z.string(),
         time: z.string(),
         customerName: z.string().min(1),
         customerPhone: z.string().min(1),
+        customerEmail: z.string().email().optional().or(z.literal("")),
       }).parse(req.body);
 
       // Validate requested slot is within company work hours
@@ -623,6 +624,27 @@ export function registerMeetingRoutes(app: Express): void {
         body: `${customerName} (${maskPhone(customerPhone)}) — ${ksaLabel}`,
         url: '/meetings',
       }).catch((e: any) => logger.error('Demo push failed', e.message));
+
+      // Booking confirmation email via Python service (non-blocking, only if email provided)
+      if (customerEmail) {
+        const botUrl = (process.env.BOT_URL || '').replace(/\/$/, '');
+        if (botUrl) {
+          fetch(`${botUrl}/internal/booking-confirmed`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-webhook-secret': process.env.WEBHOOK_SECRET || '',
+            },
+            body: JSON.stringify({
+              to: customerEmail,
+              customer_name: customerName,
+              meeting_time: `${ksaLabel} KSA time`,
+              meeting_link: meetingLink,
+              agent_name: 'WAK Solutions Team',
+            }),
+          }).catch((e: any) => logger.error('Booking confirmation email failed', e.message));
+        }
+      }
 
       res.json({ success: true, ksa_label: ksaLabel });
     } catch (err: any) {
