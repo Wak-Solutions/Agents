@@ -6,6 +6,7 @@ interface DaySlots {
   date: string;  // YYYY-MM-DD
   label: string;
   slots: string[];
+  bookedSlots: string[];
 }
 
 type PageState = "loading" | "error" | "expired" | "alreadyBooked" | "picking" | "confirming" | "success";
@@ -151,7 +152,7 @@ export default function BookMeeting() {
                       className="bg-card border border-border hover:border-[#0F510F] hover:bg-[#0F510F]/5 text-left px-4 py-3 rounded-xl transition-colors"
                     >
                       <p className="font-semibold text-sm text-foreground">{d.label}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">{d.slots.length} slot{d.slots.length !== 1 ? "s" : ""}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">{d.slots.length} slot{d.slots.length !== 1 ? "s" : ""} available</p>
                     </button>
                   ))}
                 </div>
@@ -173,6 +174,7 @@ export default function BookMeeting() {
                 </div>
 
                 <div className="grid grid-cols-3 gap-2">
+                  {/* Available slots */}
                   {selectedDayData?.slots.map(slot => (
                     <button
                       key={slot}
@@ -185,6 +187,16 @@ export default function BookMeeting() {
                     >
                       {slot}
                     </button>
+                  ))}
+                  {/* Booked slots — visible but non-interactive */}
+                  {selectedDayData?.bookedSlots.map(slot => (
+                    <div
+                      key={`booked-${slot}`}
+                      className="px-4 py-3 rounded-xl border border-border bg-muted/50 text-sm font-medium text-muted-foreground/50 cursor-not-allowed select-none"
+                    >
+                      <span className="block">{slot}</span>
+                      <span className="block text-xs font-normal mt-0.5">Booked</span>
+                    </div>
                   ))}
                 </div>
 

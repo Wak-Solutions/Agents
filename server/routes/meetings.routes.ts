@@ -298,7 +298,7 @@ export function registerMeetingRoutes(app: Express): void {
       const blockedSet = new Set(blockedRes.rows.map((r: any) => `${r.date}T${r.time}`));
       const takenMs = new Set(takenRes.rows.map((r: any) => new Date(r.scheduled_at).getTime()));
 
-      const days: { date: string; label: string; slots: string[] }[] = [];
+      const days: { date: string; label: string; slots: string[]; bookedSlots: string[] }[] = [];
 
       for (let i = 0; i <= 30; i++) {
         const d = new Date(ksaNow);
@@ -310,6 +310,7 @@ export function registerMeetingRoutes(app: Express): void {
         ).toISOString().slice(0, 10);
 
         const availableSlots: string[] = [];
+        const bookedSlots: string[] = [];
         // Use company work hours to generate slots for this day
         const daySlots = getSlotsForDay(d.getUTCDay(), workHours);
         for (const slot of daySlots) {
@@ -317,12 +318,15 @@ export function registerMeetingRoutes(app: Express): void {
           const h = slot === '00:00' ? 24 : parseInt(slot.split(':')[0]);
           const slotUtc = new Date(Date.UTC(yr, mo - 1, dy, h - 3, 0, 0, 0));
           if (slotUtc <= now) continue;
-          if (takenMs.has(slotUtc.getTime())) continue;
-          availableSlots.push(slot);
+          if (takenMs.has(slotUtc.getTime())) {
+            bookedSlots.push(slot);
+          } else {
+            availableSlots.push(slot);
+          }
         }
 
-        if (availableSlots.length > 0) {
-          days.push({ date: ksaDate, label: formatKsaDate(d), slots: availableSlots });
+        if (availableSlots.length > 0 || bookedSlots.length > 0) {
+          days.push({ date: ksaDate, label: formatKsaDate(d), slots: availableSlots, bookedSlots });
         }
       }
 
