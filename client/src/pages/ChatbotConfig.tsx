@@ -68,7 +68,7 @@ const DEFAULT_CONFIG: Config = {
   industry: "",
   tone: "Professional",
   customTone: "",
-  greeting: "",
+  greeting: "Welcome! How can I help you today?",
   questions: [],
   faq: [],
   escalationRules: [],
@@ -502,7 +502,7 @@ export default function ChatbotConfig() {
             industry:        sc.industry        ?? "",
             tone:            sc.tone            ?? "Professional",
             customTone:      sc.customTone      ?? "",
-            greeting:        sc.greeting        ?? "",
+            greeting:        sc.greeting        || "Welcome! How can I help you today?",
             questions:       sc.questions       ?? [],
             faq:             sc.faq             ?? [],
             escalationRules: sc.escalationRules ?? [],
@@ -792,14 +792,30 @@ export default function ChatbotConfig() {
                 </div>
               </StepCard>
 
-              {/* Step 4 — Bot behaviour */}
+              {/* Opening message — kept outside the Behavior section */}
               <StepCard
+                step={4}
+                title={t("chatbotSetupGreetingLabel")}
+                desc={t("chatbotSetupGreetingHint")}
+              >
+                <div>
+                  <input
+                    className={inputCls}
+                    placeholder="Welcome! How can I help you today?"
+                    value={config.greeting}
+                    onChange={e => updateConfig({ greeting: e.target.value })}
+                  />
+                </div>
+              </StepCard>
+
+              {/* BEHAVIOR SECTION — hidden for now */}
+              {/* <StepCard
                 step={4}
                 title={t("chatbotSetupStep4Title")}
                 desc={t("chatbotSetupStep4Desc")}
               >
                 {/* Tone */}
-                <div>
+                {/* <div>
                   <label className={labelCls}>{t("chatbotSetupToneLabel")}</label>
                   <div className="flex flex-wrap gap-2 mt-1">
                     {TONES.map(tone => (
@@ -827,7 +843,6 @@ export default function ChatbotConfig() {
                   )}
                 </div>
 
-                {/* Greeting */}
                 <div>
                   <label className={labelCls}>{t("chatbotSetupGreetingLabel")}</label>
                   <p className={hintCls}>{t("chatbotSetupGreetingHint")}</p>
@@ -839,7 +854,6 @@ export default function ChatbotConfig() {
                   />
                 </div>
 
-                {/* Escalation rules */}
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <div>
@@ -876,7 +890,6 @@ export default function ChatbotConfig() {
                   </div>
                 </div>
 
-                {/* Closing message */}
                 <div>
                   <label className={labelCls}>{t("chatbotSetupClosingLabel")}</label>
                   <p className={hintCls}>{t("chatbotSetupClosingHint")}</p>
@@ -887,7 +900,7 @@ export default function ChatbotConfig() {
                     onChange={e => updateConfig({ closingMessage: e.target.value })}
                   />
                 </div>
-              </StepCard>
+              </StepCard> */}
 
               {/* SUGGEST A CHANGE — hidden for now, re-enable when ready */}
               {/* <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
