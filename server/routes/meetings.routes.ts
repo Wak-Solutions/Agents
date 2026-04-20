@@ -14,7 +14,7 @@ import { pool } from '../db';
 import { requireAuth } from '../middleware/auth';
 import { requireWebhookSecret } from '../middleware/auth';
 import { notifyAgent, notifyAll } from '../push';
-import { notifyManagerNewBooking } from '../email';
+import { notifyManagerNewBooking, sendBookingConfirmationToCustomer } from '../email';
 import { sendSurveyToCustomer } from '../surveys';
 import { createDailyRoom } from '../integrations/daily';
 import { KSA_OFFSET_MS, formatKsaDate, formatKsaDateTime } from '../lib/timezone';
@@ -445,27 +445,14 @@ export function registerMeetingRoutes(app: Express): void {
         );
       }
 
-      // Booking confirmation email via Python service (non-blocking)
+      // Customer booking confirmation email via Resend (non-blocking)
       if (customerEmail) {
-        const botUrl = (process.env.BOT_URL || '').replace(/\/$/, '');
-        if (botUrl) {
-          fetch(`${botUrl}/internal/booking-confirmed`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-webhook-secret': process.env.WEBHOOK_SECRET || '',
-            },
-            body: JSON.stringify({
-              to: customerEmail,
-              customer_name: meeting.customer_phone,
-              meeting_time: `${ksaLabel} KSA time`,
-              meeting_link: brandedLink,
-              agent_name: 'WAK Solutions Team',
-            }),
-          }).catch((e: any) => logger.error('Booking confirmation email failed', e.message));
-        } else {
-          logger.warn('BOT_URL not set — booking confirmation email not sent');
-        }
+        sendBookingConfirmationToCustomer({
+          to: customerEmail,
+          customerName: meeting.customer_phone,
+          meetingTimeLabel: `${ksaLabel} KSA time`,
+          meetingLink: brandedLink,
+        }).catch((e: any) => logger.error('Customer confirmation email failed', e.message));
       }
 
       res.json({ success: true, ksa_label: ksaLabel });
@@ -654,25 +641,14 @@ export function registerMeetingRoutes(app: Express): void {
         url: '/meetings',
       }).catch((e: any) => logger.error('Demo push failed', e.message));
 
-      // Booking confirmation email via Python service (non-blocking, only if email provided)
+      // Customer booking confirmation email via Resend (non-blocking)
       if (customerEmail) {
-        const botUrl = (process.env.BOT_URL || '').replace(/\/$/, '');
-        if (botUrl) {
-          fetch(`${botUrl}/internal/booking-confirmed`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-webhook-secret': process.env.WEBHOOK_SECRET || '',
-            },
-            body: JSON.stringify({
-              to: customerEmail,
-              customer_name: customerName,
-              meeting_time: `${ksaLabel} KSA time`,
-              meeting_link: meetingLink,
-              agent_name: 'WAK Solutions Team',
-            }),
-          }).catch((e: any) => logger.error('Booking confirmation email failed', e.message));
-        }
+        sendBookingConfirmationToCustomer({
+          to: customerEmail,
+          customerName,
+          meetingTimeLabel: `${ksaLabel} KSA time`,
+          meetingLink,
+        }).catch((e: any) => logger.error('Customer confirmation email failed', e.message));
       }
 
       res.json({ success: true, ksa_label: ksaLabel });
