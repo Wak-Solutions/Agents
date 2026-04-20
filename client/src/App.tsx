@@ -22,7 +22,6 @@ import ContactsPage from "./pages/ContactsPage";
 import CustomersPage from "./pages/CustomersPage";
 import TermsPage from "./pages/TermsPage";
 import RegisterPage from "./pages/RegisterPage";
-import BookDemo from "./pages/BookDemo";
 import SettingsPage from "./pages/SettingsPage";
 
 function Router() {
@@ -30,7 +29,6 @@ function Router() {
     <Switch>
       {/* Public routes — must come before any auth-guarded routes */}
       <Route path="/terms" component={TermsPage} />
-      <Route path="/book-demo" component={BookDemo} />
       <Route path="/survey/:token" component={SurveyPage} />
       <Route path="/meeting/:token" component={MeetingPage} />
       <Route path="/book/:token" component={BookMeeting} />

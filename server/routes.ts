@@ -89,7 +89,6 @@ export async function registerRoutes(
     legacyHeaders: false,
     message: { message: 'Too many requests, please try again later.' },
   });
-  app.use('/api/book-demo', bookingLimiter);
   app.use('/api/book/', bookingLimiter);
   app.use('/api/register', authLimiter);
   app.use('/api/auth/login', authLimiter);
