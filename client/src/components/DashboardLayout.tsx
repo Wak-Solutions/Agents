@@ -33,7 +33,7 @@ export default function DashboardLayout({
   noPadding?: boolean;
 }) {
   const [location, setLocation] = useLocation();
-  const { isAuthenticated, isLoading: isAuthLoading, isAdmin } = useAuth();
+  const { isAuthenticated, isLoading: isAuthLoading, isAdmin, agentName } = useAuth();
   const { mutate: logout } = useLogout();
   const { lang, toggleLang, t } = useLanguage();
   const isRtl = lang === "ar";
@@ -156,6 +156,18 @@ export default function DashboardLayout({
           )}
         </nav>
 
+        {/* Agent name */}
+        {agentName && (
+          <div className="px-5 py-3 border-t border-white/10 flex items-center gap-2.5">
+            <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center shrink-0">
+              <span className="text-white text-[11px] font-bold leading-none">
+                {agentName.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase()}
+              </span>
+            </div>
+            <span className="text-white/80 text-[13px] font-medium truncate">{agentName}</span>
+          </div>
+        )}
+
         {/* Bottom actions */}
         <div className="px-3.5 pb-5 pt-3 border-t border-white/10 space-y-0.5">
           <button
@@ -189,6 +201,13 @@ export default function DashboardLayout({
           <span className="text-white/90 font-semibold text-sm">WAK Solutions</span>
         </div>
         <div className="flex items-center gap-2">
+          {agentName && (
+            <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center">
+              <span className="text-white text-[11px] font-bold leading-none">
+                {agentName.split(" ").map((w: string) => w[0]).slice(0, 2).join("").toUpperCase()}
+              </span>
+            </div>
+          )}
           <button onClick={toggleLang} className="text-white/55 hover:text-white p-1.5 rounded transition-colors">
             <Globe className="w-4 h-4" />
           </button>
