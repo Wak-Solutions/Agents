@@ -217,6 +217,30 @@ app.use((req, res, next) => {
     slog('WARN', 'db', 'Migration error (continuing)', String(err));
   }
 
+  // ── conversation_id migration ────────────────────────────────────────────
+  try {
+    await pool.query(`ALTER TABLE messages ADD COLUMN IF NOT EXISTS conversation_id UUID`);
+    // Backfill: assign one UUID per (company_id, customer_phone) pair for existing rows
+    await pool.query(`
+      UPDATE messages m
+      SET conversation_id = sub.cid
+      FROM (
+        SELECT customer_phone, company_id, gen_random_uuid() AS cid
+        FROM (
+          SELECT DISTINCT customer_phone, company_id
+          FROM messages
+          WHERE conversation_id IS NULL
+        ) t
+      ) sub
+      WHERE m.customer_phone = sub.customer_phone
+        AND m.company_id = sub.company_id
+        AND m.conversation_id IS NULL
+    `);
+    slog('INFO', 'db', 'conversation_id migration applied');
+  } catch (err) {
+    slog('WARN', 'db', 'conversation_id migration error (continuing)', String(err));
+  }
+
   const [{ registerRoutes }, { serveStatic }] = await Promise.all([
     import("./routes"),
     import("./static"),

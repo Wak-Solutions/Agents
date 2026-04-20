@@ -108,11 +108,20 @@ export function registerMessageRoutes(app: Express): void {
         return res.status(502).json({ message: 'Failed to send message via WhatsApp. Check credentials.' });
       }
 
-      // Save the outbound message to the database for the conversation history
+      // Save the outbound message — reuse or start a conversation_id (24-hour session)
+      const convRes = await pool.query(
+        `SELECT conversation_id FROM messages
+         WHERE customer_phone = $1 AND company_id = $2
+           AND conversation_id IS NOT NULL
+           AND created_at > NOW() - INTERVAL '24 hours'
+         ORDER BY created_at DESC LIMIT 1`,
+        [data.customer_phone, companyId]
+      );
+      const conversationId = convRes.rows[0]?.conversation_id ?? null;
       await pool.query(
-        `INSERT INTO messages (customer_phone, direction, message_text, company_id, created_at)
-         VALUES ($1, 'outbound', $2, $3, NOW())`,
-        [data.customer_phone, data.message, companyId]
+        `INSERT INTO messages (customer_phone, direction, message_text, company_id, created_at, conversation_id)
+         VALUES ($1, 'outbound', $2, $3, NOW(), COALESCE($4::uuid, gen_random_uuid()))`,
+        [data.customer_phone, data.message, companyId, conversationId]
       );
 
       logger.info(

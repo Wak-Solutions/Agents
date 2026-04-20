@@ -15,6 +15,7 @@ export const messages = pgTable("messages", {
   media_url: text("media_url"),        // playback URL served by the bot backend
   transcription: text("transcription"), // Whisper speech-to-text output
   company_id: integer("company_id").default(1),
+  conversation_id: text("conversation_id"), // UUID grouping messages into 24-hour sessions
 });
 
 export const escalations = pgTable("escalations", {
