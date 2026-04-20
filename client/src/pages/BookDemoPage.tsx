@@ -9,7 +9,7 @@ interface DaySlots {
   bookedSlots: string[];
 }
 
-type PageState = "loading" | "error" | "picking" | "confirming" | "success";
+type PageState = "loading" | "error" | "picking" | "success";
 
 export default function BookDemoPage() {
   const [state, setState] = useState<PageState>("loading");
@@ -22,8 +22,22 @@ export default function BookDemoPage() {
   const [meetingLink, setMeetingLink] = useState("");
 
   useEffect(() => {
-    fetch("/api/demo-booking/slots", { credentials: "include" })
+    // First check if the agent already has an active booking
+    fetch("/api/demo-booking/my-booking", { credentials: "include" })
       .then(async r => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.message || "Failed to check existing booking");
+        if (data.booking) {
+          setBookedLabel(data.booking.ksa_label);
+          setMeetingLink(data.booking.meeting_link || "");
+          setState("success");
+          return;
+        }
+        // No existing booking — load available slots
+        return fetch("/api/demo-booking/slots", { credentials: "include" });
+      })
+      .then(async r => {
+        if (!r) return; // already handled above
         const data = await r.json();
         if (!r.ok) { setState("error"); setErrorMsg(data.message || "Failed to load slots."); return; }
         setDays(data.days || []);
@@ -81,7 +95,7 @@ export default function BookDemoPage() {
         {state === "error" && (
           <div className="bg-white border border-border rounded-xl p-6 text-center space-y-3">
             <AlertCircle className="w-10 h-10 text-destructive mx-auto" />
-            <p className="font-semibold text-gray-900">Unable to load booking slots</p>
+            <p className="font-semibold text-gray-900">Unable to load booking page</p>
             <p className="text-sm text-gray-500">{errorMsg}</p>
           </div>
         )}
@@ -182,7 +196,7 @@ export default function BookDemoPage() {
           </div>
         )}
 
-        {/* Success */}
+        {/* Success — persists across sessions until meeting is completed */}
         {state === "success" && (
           <div className="bg-white border border-border rounded-xl p-8 text-center space-y-4">
             <div className="w-16 h-16 rounded-full bg-[#0F510F]/10 flex items-center justify-center mx-auto">
@@ -192,10 +206,12 @@ export default function BookDemoPage() {
               <h2 className="text-xl font-bold text-gray-900">Demo confirmed!</h2>
               <p className="text-sm text-gray-500 mt-1">Your slot has been reserved.</p>
             </div>
-            <div className="bg-gray-50 rounded-xl px-5 py-4 space-y-2">
-              <p className="text-xs text-gray-400 uppercase tracking-wide">Date & Time (KSA)</p>
-              <p className="font-semibold text-gray-900">{bookedLabel}</p>
-            </div>
+            {bookedLabel && (
+              <div className="bg-gray-50 rounded-xl px-5 py-4 space-y-2">
+                <p className="text-xs text-gray-400 uppercase tracking-wide">Date & Time (KSA)</p>
+                <p className="font-semibold text-gray-900">{bookedLabel}</p>
+              </div>
+            )}
             {meetingLink && (
               <a
                 href={meetingLink}

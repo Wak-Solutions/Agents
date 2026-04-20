@@ -466,6 +466,37 @@ export function registerMeetingRoutes(app: Express): void {
     }
   });
 
+  // ── Authenticated demo booking: fetch agent's active booking ─────────────
+  app.get('/api/demo-booking/my-booking', requireAuth, async (req: any, res: any) => {
+    try {
+      const agentId = req.session.agentId;
+      const result = await pool.query(
+        `SELECT id, meeting_link, scheduled_at, status
+         FROM meetings
+         WHERE agent_id = $1
+           AND company_id = 1
+           AND status IN ('pending', 'in_progress')
+         ORDER BY created_at DESC
+         LIMIT 1`,
+        [agentId]
+      );
+      if (result.rows.length === 0) return res.json({ booking: null });
+      const m = result.rows[0];
+      const ksaDt = new Date(new Date(m.scheduled_at).getTime() + KSA_OFFSET_MS);
+      res.json({
+        booking: {
+          id: m.id,
+          meeting_link: m.meeting_link,
+          status: m.status,
+          ksa_label: formatKsaDateTime(ksaDt),
+        },
+      });
+    } catch (err: any) {
+      logger.error('getMyDemoBooking failed', err.message);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
   // ── Authenticated demo booking: get available slots (always company_id=1) ──
   app.get('/api/demo-booking/slots', requireAuth, async (req: any, res: any) => {
     try {
