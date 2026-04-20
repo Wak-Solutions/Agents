@@ -197,6 +197,7 @@ app.use((req, res, next) => {
   try {
     await pool.query(`ALTER TABLE voice_notes ADD COLUMN IF NOT EXISTS company_id INTEGER DEFAULT 1`);
     await pool.query(`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS company_id INTEGER DEFAULT 1`);
+    await pool.query(`ALTER TABLE meetings ADD COLUMN IF NOT EXISTS customer_email TEXT`);
     // Drop the old single-column unique constraint and replace with per-company composite unique.
     // The default PostgreSQL name for UNIQUE(phone_number) on the contacts table is contacts_phone_number_key.
     await pool.query(`ALTER TABLE contacts DROP CONSTRAINT IF EXISTS contacts_phone_number_key`);

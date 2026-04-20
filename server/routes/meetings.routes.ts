@@ -337,7 +337,11 @@ export function registerMeetingRoutes(app: Express): void {
   app.post('/api/book/:token', async (req: any, res: any) => {
     try {
       const { token } = req.params;
-      const { date, time } = z.object({ date: z.string(), time: z.string() }).parse(req.body);
+      const { date, time, customerEmail } = z.object({
+        date: z.string(),
+        time: z.string(),
+        customerEmail: z.string().email().optional().or(z.literal("")),
+      }).parse(req.body);
 
       const mtg = await pool.query(
         `SELECT id, customer_phone, meeting_token, scheduled_at, token_expires_at, agent_id, company_id
@@ -403,8 +407,8 @@ export function registerMeetingRoutes(app: Express): void {
       const brandedLink = `${baseUrl}/meeting/${meeting.meeting_token}`;
 
       await pool.query(
-        `UPDATE meetings SET meeting_link=$1, scheduled_at=$2, link_sent=FALSE WHERE id=$3 AND company_id=$4`,
-        [meetingLink, scheduledUtc, meeting.id, companyId]
+        `UPDATE meetings SET meeting_link=$1, scheduled_at=$2, link_sent=FALSE, customer_email=$3 WHERE id=$4 AND company_id=$5`,
+        [meetingLink, scheduledUtc, customerEmail || null, meeting.id, companyId]
       );
 
       const ksaDt = new Date(scheduledUtc.getTime() + KSA_OFFSET_MS);
@@ -430,6 +434,7 @@ export function registerMeetingRoutes(app: Express): void {
         body: `${maskPhone(meeting.customer_phone)} — ${ksaLabel}`,
         url: '/meetings',
       };
+      logger.info('Push subscriptions at booking', `count: ${require('../push').pushSubscriptions.size}, agent_id: ${meeting.agent_id ?? 'unassigned'}`);
       if (meeting.agent_id) {
         notifyAgent(meeting.agent_id, meetingPush).catch(
           (e: any) => logger.error('Push failed', e.message)
@@ -438,6 +443,29 @@ export function registerMeetingRoutes(app: Express): void {
         notifyAll(meetingPush).catch(
           (e: any) => logger.error('Push failed', e.message)
         );
+      }
+
+      // Booking confirmation email via Python service (non-blocking)
+      if (customerEmail) {
+        const botUrl = (process.env.BOT_URL || '').replace(/\/$/, '');
+        if (botUrl) {
+          fetch(`${botUrl}/internal/booking-confirmed`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-webhook-secret': process.env.WEBHOOK_SECRET || '',
+            },
+            body: JSON.stringify({
+              to: customerEmail,
+              customer_name: meeting.customer_phone,
+              meeting_time: `${ksaLabel} KSA time`,
+              meeting_link: brandedLink,
+              agent_name: 'WAK Solutions Team',
+            }),
+          }).catch((e: any) => logger.error('Booking confirmation email failed', e.message));
+        } else {
+          logger.warn('BOT_URL not set — booking confirmation email not sent');
+        }
       }
 
       res.json({ success: true, ksa_label: ksaLabel });
@@ -577,9 +605,9 @@ export function registerMeetingRoutes(app: Express): void {
       // Insert meeting row
       await pool.query(
         `INSERT INTO meetings
-           (customer_phone, meeting_link, meeting_token, scheduled_at, status, created_at, company_id)
-         VALUES ($1, $2, $3, $4, 'pending', NOW(), $5)`,
-        [customerPhone, meetingLink, demoToken, scheduledUtc, companyId]
+           (customer_phone, meeting_link, meeting_token, scheduled_at, status, created_at, company_id, customer_email)
+         VALUES ($1, $2, $3, $4, 'pending', NOW(), $5, $6)`,
+        [customerPhone, meetingLink, demoToken, scheduledUtc, companyId, customerEmail || null]
       );
 
       logger.info('Demo booked', `phone: ${maskPhone(customerPhone)}, time: ${ksaLabel}`);
@@ -619,6 +647,7 @@ export function registerMeetingRoutes(app: Express): void {
       }).catch((e: any) => logger.error('Demo manager email failed', e.message));
 
       // Push notification (non-blocking)
+      logger.info('Push subscriptions at demo booking', `count: ${require('../push').pushSubscriptions.size}`);
       notifyAll({
         title: 'Demo booked',
         body: `${customerName} (${maskPhone(customerPhone)}) — ${ksaLabel}`,

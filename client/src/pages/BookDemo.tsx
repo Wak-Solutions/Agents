@@ -36,7 +36,11 @@ export default function BookDemo() {
       setFormError("Please enter a valid phone number (e.g. +966501234567).");
       return;
     }
-    if (customerEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())) {
+    if (!customerEmail.trim()) {
+      setFormError("Please enter your email address.");
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim())) {
       setFormError("Please enter a valid email address.");
       return;
     }
@@ -133,7 +137,7 @@ export default function BookDemo() {
               </div>
               <div>
                 <label className="text-sm font-medium text-foreground block mb-1.5">
-                  Email address <span className="text-muted-foreground font-normal text-xs">(optional — for booking confirmation)</span>
+                  Email address
                 </label>
                 <input
                   type="email"
