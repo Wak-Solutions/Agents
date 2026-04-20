@@ -1,16 +1,22 @@
 /**
- * email.ts — Transactional email via Resend.
+ * email.ts — All email is sent via the Python bot's Gmail SMTP service.
  *
- * Recipients are resolved from the agents table (all active admins for the
- * company) so that MANAGER_EMAIL env var is no longer required. MANAGER_EMAIL
- * is still supported as an extra recipient override if set.
+ * Node never calls Resend directly. Every email goes through:
+ *   POST {BOT_URL}/api/send-email  { to, subject, body }
+ *
+ * Admin recipients are resolved from the agents table.
  */
 
-import { Resend } from "resend";
 import { pool } from "./db";
 import { createLogger } from "./lib/logger";
 
 const logger = createLogger("email");
+
+function maskEmail(email: string): string {
+  const [local, domain] = email.split("@");
+  if (!domain) return "***";
+  return `${local.charAt(0)}***@${domain}`;
+}
 
 function buildGoogleCalendarUrl(opts: {
   title: string;
@@ -33,21 +39,8 @@ function buildGoogleCalendarUrl(opts: {
   return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
-/** Mask an email for safe logging: user@domain → u***@domain */
-function maskEmail(email: string): string {
-  const [local, domain] = email.split("@");
-  if (!domain) return "***";
-  return `${local.charAt(0)}***@${domain}`;
-}
-
-/**
- * Resolve the list of admin email addresses for a company.
- * Falls back to MANAGER_EMAIL env var if the DB returns no rows, or
- * appends MANAGER_EMAIL as an extra recipient if it is set.
- */
 async function resolveAdminEmails(companyId: number): Promise<string[]> {
   const emails: string[] = [];
-
   try {
     const result = await pool.query(
       `SELECT email FROM agents
@@ -58,31 +51,50 @@ async function resolveAdminEmails(companyId: number): Promise<string[]> {
       if (row.email && !emails.includes(row.email)) emails.push(row.email);
     }
     if (emails.length > 0) {
-      logger.info(
-        "resolveAdminEmails",
-        `companyId: ${companyId}, found: ${emails.length} admin(s)`
-      );
+      logger.info("resolveAdminEmails", `companyId: ${companyId}, found: ${emails.length} admin(s)`);
     } else {
-      logger.warn(
-        "resolveAdminEmails — no admin emails found in DB",
-        `companyId: ${companyId}`
-      );
+      logger.warn("resolveAdminEmails — no admin emails found in DB", `companyId: ${companyId}`);
     }
   } catch (err: any) {
-    logger.error(
-      "resolveAdminEmails — DB lookup failed",
-      `companyId: ${companyId}, error: ${err.message}`
-    );
+    logger.error("resolveAdminEmails — DB lookup failed", `companyId: ${companyId}, error: ${err.message}`);
   }
-
-  // MANAGER_EMAIL is a supplementary override (useful in dev / single-tenant setups)
   const override = process.env.MANAGER_EMAIL;
   if (override && !emails.includes(override)) {
     emails.push(override);
     logger.info("resolveAdminEmails — appended MANAGER_EMAIL override", maskEmail(override));
   }
-
   return emails;
+}
+
+/** Send a single email via the Python bot's Gmail SMTP service. Fire-and-forget safe. */
+export async function sendViaPythonBot(opts: {
+  to: string;
+  subject: string;
+  body: string;
+}): Promise<void> {
+  const botUrl = (process.env.BOT_URL || "").replace(/\/$/, "");
+  if (!botUrl) {
+    logger.warn("sendViaPythonBot — BOT_URL not set, skipping email", `to: ${maskEmail(opts.to)}`);
+    return;
+  }
+  console.log(`[EMAIL] BEFORE send — to: ${opts.to}, subject: ${opts.subject}, botUrl: ${botUrl}`);
+  try {
+    const r = await fetch(`${botUrl}/api/send-email`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ to: opts.to, subject: opts.subject, body: opts.body }),
+    });
+    const json = await r.json().catch(() => ({}));
+    console.log(`[EMAIL] AFTER send — status: ${r.status}, response: ${JSON.stringify(json)}`);
+    if (!r.ok) {
+      logger.error("sendViaPythonBot — bot returned error", `status: ${r.status}, to: ${maskEmail(opts.to)}, body: ${JSON.stringify(json)}`);
+    } else {
+      logger.info("sendViaPythonBot — sent", `to: ${maskEmail(opts.to)}, sent: ${(json as any).sent}`);
+    }
+  } catch (err: any) {
+    console.log(`[EMAIL] ERROR send — ${err.message}`);
+    logger.error("sendViaPythonBot — fetch threw", `to: ${maskEmail(opts.to)}, error: ${err.message}`);
+  }
 }
 
 export async function notifyManagerNewBooking(opts: {
@@ -92,31 +104,15 @@ export async function notifyManagerNewBooking(opts: {
   meetingLink: string;
   scheduledUtc: Date;
 }): Promise<void> {
-  if (!process.env.RESEND_API_KEY) {
-    logger.error(
-      "notifyManagerNewBooking — RESEND_API_KEY not set",
-      "email will not be sent"
-    );
-    return;
-  }
-  if (!process.env.RESEND_FROM_EMAIL) {
-    logger.error(
-      "notifyManagerNewBooking — RESEND_FROM_EMAIL not set",
-      "email will not be sent"
-    );
-    return;
-  }
-
   const recipients = await resolveAdminEmails(opts.companyId);
   if (recipients.length === 0) {
     logger.error(
       "notifyManagerNewBooking — no recipient email found",
-      `companyId: ${opts.companyId} — set MANAGER_EMAIL env var or ensure at least one admin has an email address`
+      `companyId: ${opts.companyId} — set MANAGER_EMAIL or ensure an admin has an email address`
     );
     return;
   }
 
-  const resend = new Resend(process.env.RESEND_API_KEY);
   const calUrl = buildGoogleCalendarUrl({
     title: `WAK Solutions Meeting — ${opts.customerPhone}`,
     scheduledUtc: opts.scheduledUtc,
@@ -126,112 +122,45 @@ export async function notifyManagerNewBooking(opts: {
 
   const html = `<!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-</head>
+<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head>
 <body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:32px 16px;">
-    <tr>
-      <td align="center">
-        <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-
-          <!-- Header -->
-          <tr>
-            <td style="background:#0F510F;padding:28px 32px;">
-              <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;letter-spacing:-0.3px;">WAK Solutions</h1>
-              <p style="margin:4px 0 0;color:rgba(255,255,255,0.7);font-size:13px;">New Meeting Booking</p>
-            </td>
-          </tr>
-
-          <!-- Body -->
-          <tr>
-            <td style="padding:32px;">
-              <p style="margin:0 0 24px;color:#222;font-size:15px;line-height:1.6;">
-                A customer has just booked a meeting. Here are the details:
-              </p>
-
-              <!-- Details card -->
-              <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f9f0;border:1px solid #c8e6c9;border-radius:10px;margin-bottom:28px;">
-                <tr>
-                  <td style="padding:22px 26px;">
-
-                    <p style="margin:0 0 4px;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:0.8px;font-weight:700;">Customer</p>
-                    <p style="margin:0 0 20px;font-size:16px;font-weight:700;color:#222;">${opts.customerPhone}</p>
-
-                    <p style="margin:0 0 4px;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:0.8px;font-weight:700;">Date &amp; Time (AST — UTC+3)</p>
-                    <p style="margin:0 0 20px;font-size:16px;font-weight:700;color:#0F510F;">${opts.dateTimeLabel}</p>
-
-                    <p style="margin:0 0 4px;font-size:11px;color:#666;text-transform:uppercase;letter-spacing:0.8px;font-weight:700;">Meeting Link</p>
-                    <a href="${opts.meetingLink}" style="font-size:14px;color:#0F510F;font-weight:600;word-break:break-all;text-decoration:none;">${opts.meetingLink}</a>
-                    <br />
-                    <a href="${opts.meetingLink}" style="display:inline-block;margin-top:12px;background:#0F510F;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;">Join Meeting</a>
-
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Google Calendar button -->
-              <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px;">
-                <tr>
-                  <td>
-                    <a href="${calUrl}" target="_blank" style="display:inline-block;background:#4285F4;color:#fff;text-decoration:none;padding:11px 22px;border-radius:6px;font-size:14px;font-weight:600;">
-                      &#128197; Add to Google Calendar
-                    </a>
-                  </td>
-                </tr>
-              </table>
-
-              <p style="margin:0;color:#555;font-size:13px;line-height:1.6;">
-                The customer will receive a WhatsApp reminder with the meeting link 15 minutes before the meeting starts.
-              </p>
-            </td>
-          </tr>
-
-          <!-- Footer -->
-          <tr>
-            <td style="background:#f9f9f9;border-top:1px solid #eee;padding:16px 32px;">
-              <p style="margin:0;font-size:11px;color:#aaa;text-align:center;">
-                &copy; ${year} WAK Solutions. All rights reserved.
-              </p>
-            </td>
-          </tr>
-
-        </table>
-      </td>
-    </tr>
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <tr><td style="background:#0F510F;padding:28px 32px;">
+          <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">WAK Solutions</h1>
+          <p style="margin:4px 0 0;color:rgba(255,255,255,0.7);font-size:13px;">New Meeting Booking</p>
+        </td></tr>
+        <tr><td style="padding:32px;">
+          <p style="margin:0 0 24px;color:#222;font-size:15px;line-height:1.6;">A customer has just booked a meeting:</p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f9f0;border:1px solid #c8e6c9;border-radius:10px;margin-bottom:28px;">
+            <tr><td style="padding:22px 26px;">
+              <p style="margin:0 0 4px;font-size:11px;color:#666;text-transform:uppercase;font-weight:700;">Customer</p>
+              <p style="margin:0 0 20px;font-size:16px;font-weight:700;color:#222;">${opts.customerPhone}</p>
+              <p style="margin:0 0 4px;font-size:11px;color:#666;text-transform:uppercase;font-weight:700;">Date &amp; Time (AST — UTC+3)</p>
+              <p style="margin:0 0 20px;font-size:16px;font-weight:700;color:#0F510F;">${opts.dateTimeLabel}</p>
+              <p style="margin:0 0 4px;font-size:11px;color:#666;text-transform:uppercase;font-weight:700;">Meeting Link</p>
+              <a href="${opts.meetingLink}" style="font-size:14px;color:#0F510F;font-weight:600;word-break:break-all;">${opts.meetingLink}</a><br />
+              <a href="${opts.meetingLink}" style="display:inline-block;margin-top:12px;background:#0F510F;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;">Join Meeting</a>
+            </td></tr>
+          </table>
+          <a href="${calUrl}" target="_blank" style="display:inline-block;background:#4285F4;color:#fff;text-decoration:none;padding:11px 22px;border-radius:6px;font-size:14px;font-weight:600;margin-bottom:24px;">&#128197; Add to Google Calendar</a>
+          <p style="margin:0;color:#555;font-size:13px;">The customer will receive a WhatsApp reminder 15 minutes before the meeting.</p>
+        </td></tr>
+        <tr><td style="background:#f9f9f9;border-top:1px solid #eee;padding:16px 32px;">
+          <p style="margin:0;font-size:11px;color:#aaa;text-align:center;">&copy; ${year} WAK Solutions. All rights reserved.</p>
+        </td></tr>
+      </table>
+    </td></tr>
   </table>
-</body>
-</html>`;
+</body></html>`;
 
   for (const to of recipients) {
-    logger.info(
-      "notifyManagerNewBooking — sending",
-      `to: ${maskEmail(to)}, companyId: ${opts.companyId}, customer: ${opts.customerPhone}`
-    );
-    try {
-      const result = await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL!,
-        to,
-        subject: `New Meeting Booking — ${opts.customerPhone}`,
-        html,
-      });
-      if ((result as any).error) {
-        logger.error(
-          "notifyManagerNewBooking — Resend rejected",
-          `to: ${maskEmail(to)}, error: ${JSON.stringify((result as any).error)}`
-        );
-      } else {
-        logger.info(
-          "notifyManagerNewBooking — sent",
-          `to: ${maskEmail(to)}, id: ${(result as any).data?.id ?? "unknown"}`
-        );
-      }
-    } catch (err: any) {
-      logger.error(
-        "notifyManagerNewBooking — send threw",
-        `to: ${maskEmail(to)}, error: ${err.message}`
-      );
-    }
+    logger.info("notifyManagerNewBooking — sending", `to: ${maskEmail(to)}, companyId: ${opts.companyId}`);
+    await sendViaPythonBot({
+      to,
+      subject: `New Meeting Booking — ${opts.customerPhone}`,
+      body: html,
+    });
   }
 }
