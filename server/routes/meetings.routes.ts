@@ -466,4 +466,172 @@ export function registerMeetingRoutes(app: Express): void {
     }
   });
 
+  // ── Authenticated demo booking: get available slots ───────────────────────
+  app.get('/api/demo-booking/slots', requireAuth, async (req: any, res: any) => {
+    try {
+      const companyId = req.session.companyId;
+
+      const now = new Date();
+      const ksaNow = new Date(now.getTime() + KSA_OFFSET_MS);
+      const windowStart = new Date(now);
+      windowStart.setUTCHours(0, 0, 0, 0);
+      const windowEnd = new Date(windowStart.getTime() + 31 * 24 * 3600 * 1000);
+
+      const ksaWindowStart = ksaNow.toISOString().slice(0, 10);
+      const [ksaYr, ksaMo, ksaDy] = ksaWindowStart.split('-').map(Number);
+      const blockedWindowStart = new Date(
+        Date.UTC(ksaYr, ksaMo - 1, ksaDy) - KSA_OFFSET_MS
+      ).toISOString().slice(0, 10);
+
+      const [blockedRes, takenRes] = await Promise.all([
+        pool.query(
+          `SELECT date::text, time FROM blocked_slots
+           WHERE company_id = $1
+             AND date >= $2::date AND date < $2::date + INTERVAL '32 days'`,
+          [companyId, blockedWindowStart]
+        ),
+        pool.query(
+          `SELECT scheduled_at FROM meetings
+           WHERE scheduled_at >= $1 AND scheduled_at < $2
+             AND status != 'completed'
+             AND company_id = $3`,
+          [windowStart, windowEnd, companyId]
+        ),
+      ]);
+
+      const workHours = await getWorkHours(companyId);
+      const blockedSet = new Set(blockedRes.rows.map((r: any) => `${r.date}T${r.time}`));
+      const takenMs = new Set(takenRes.rows.map((r: any) => new Date(r.scheduled_at).getTime()));
+
+      const days: { date: string; label: string; slots: string[] }[] = [];
+
+      for (let i = 0; i <= 30; i++) {
+        const d = new Date(ksaNow);
+        d.setUTCDate(d.getUTCDate() + i);
+        const ksaDate = d.toISOString().slice(0, 10);
+        const [yr, mo, dy] = ksaDate.split('-').map(Number);
+        const blockedDate = new Date(
+          Date.UTC(yr, mo - 1, dy) - KSA_OFFSET_MS
+        ).toISOString().slice(0, 10);
+
+        const availableSlots: string[] = [];
+        const daySlots = getSlotsForDay(d.getUTCDay(), workHours);
+        for (const slot of daySlots) {
+          if (blockedSet.has(`${blockedDate}T${slot}`)) continue;
+          const h = slot === '00:00' ? 24 : parseInt(slot.split(':')[0]);
+          const slotUtc = new Date(Date.UTC(yr, mo - 1, dy, h - 3, 0, 0, 0));
+          if (slotUtc <= now) continue;
+          if (takenMs.has(slotUtc.getTime())) continue;
+          availableSlots.push(slot);
+        }
+
+        if (availableSlots.length > 0) {
+          days.push({ date: ksaDate, label: formatKsaDate(d), slots: availableSlots });
+        }
+      }
+
+      res.json({ days });
+    } catch (err: any) {
+      logger.error('getDemoBookingSlots failed', err.message);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
+  // ── Authenticated demo booking: confirm a slot ────────────────────────────
+  app.post('/api/demo-booking/book', requireAuth, async (req: any, res: any) => {
+    try {
+      const companyId = req.session.companyId;
+      const agentId = req.session.agentId;
+
+      const { date, time } = z.object({
+        date: z.string(),
+        time: z.string(),
+      }).parse(req.body);
+
+      // Fetch agent details for the confirmation email
+      const agentRes = await pool.query(
+        `SELECT name, email, phone FROM agents WHERE id = $1`,
+        [agentId]
+      );
+      const agent = agentRes.rows[0] ?? {};
+
+      const workHours = await getWorkHours(companyId);
+      if (!isWithinWorkHours(date, time, workHours)) {
+        return res.status(400).json({ message: 'This time slot is outside working hours. Please choose another.' });
+      }
+
+      const [yr, mo, dy] = date.split('-').map(Number);
+      const h = time === '00:00' ? 24 : parseInt(time.split(':')[0]);
+      const scheduledUtc = new Date(Date.UTC(yr, mo - 1, dy, h - 3, 0, 0, 0));
+
+      const [takenRes, blockedRes] = await Promise.all([
+        pool.query(
+          `SELECT 1 FROM meetings
+           WHERE scheduled_at >= $1 AND scheduled_at < $2
+             AND status != 'completed'
+             AND company_id = $3`,
+          [scheduledUtc, new Date(scheduledUtc.getTime() + 3600000), companyId]
+        ),
+        pool.query(
+          'SELECT 1 FROM blocked_slots WHERE company_id=$1 AND date=$2::date AND time=$3',
+          [companyId, new Date(Date.UTC(yr, mo - 1, dy) - KSA_OFFSET_MS).toISOString().slice(0, 10), time]
+        ),
+      ]);
+
+      if (takenRes.rows.length > 0) {
+        return res.status(409).json({ message: 'This time slot was just taken. Please choose another.' });
+      }
+      if (blockedRes.rows.length > 0) {
+        return res.status(409).json({ message: 'This slot is not available. Please choose another.' });
+      }
+
+      const room = await createDailyRoom();
+      const meetingLink = room.url;
+      const demoToken = crypto.randomUUID();
+
+      const ksaDt = new Date(scheduledUtc.getTime() + KSA_OFFSET_MS);
+      const ksaLabel = formatKsaDateTime(ksaDt);
+
+      await pool.query(
+        `INSERT INTO meetings
+           (customer_phone, meeting_link, meeting_token, scheduled_at, status, created_at, company_id, customer_email, agent_id)
+         VALUES ($1, $2, $3, $4, 'pending', NOW(), $5, $6, $7)`,
+        [agent.phone || 'demo', meetingLink, demoToken, scheduledUtc, companyId, agent.email || null, agentId || null]
+      );
+
+      logger.info('Authenticated demo booked', `agentId: ${agentId}, time: ${ksaLabel}`);
+
+      // Notify manager (non-blocking)
+      notifyManagerNewBooking({
+        companyId,
+        customerPhone: agent.name || agent.phone || 'Demo booking',
+        dateTimeLabel: ksaLabel,
+        meetingLink,
+        scheduledUtc,
+      }).catch((e: any) => logger.error('Demo manager email failed', e.message));
+
+      // Send confirmation email to agent if they have one (non-blocking)
+      if (agent.email) {
+        sendBookingConfirmationToCustomer({
+          to: agent.email,
+          customerName: agent.name || 'there',
+          meetingTimeLabel: `${ksaLabel} KSA time`,
+          meetingLink,
+        }).catch((e: any) => logger.error('Demo confirmation email failed', e.message));
+      }
+
+      // Push notification (non-blocking)
+      notifyAll({
+        title: 'Demo booked',
+        body: `${agent.name || 'Agent'} — ${ksaLabel}`,
+        url: '/meetings',
+      }).catch((e: any) => logger.error('Demo push failed', e.message));
+
+      res.json({ success: true, ksa_label: ksaLabel, meeting_link: meetingLink });
+    } catch (err: any) {
+      logger.error('bookAuthDemo failed', err.message);
+      res.status(500).json({ message: err.message });
+    }
+  });
+
 }

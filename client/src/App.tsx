@@ -23,6 +23,7 @@ import CustomersPage from "./pages/CustomersPage";
 import TermsPage from "./pages/TermsPage";
 import RegisterPage from "./pages/RegisterPage";
 import SettingsPage from "./pages/SettingsPage";
+import BookDemoPage from "./pages/BookDemoPage";
 
 function Router() {
   return (
@@ -44,6 +45,7 @@ function Router() {
       <Route path="/contacts" component={ContactsPage} />
       <Route path="/customers" component={CustomersPage} />
       <Route path="/settings" component={SettingsPage} />
+      <Route path="/book-demo" component={BookDemoPage} />
       <Route path="/dashboard" component={Dashboard} />
       <Route path="/" component={LandingPage} />
       <Route component={NotFound} />

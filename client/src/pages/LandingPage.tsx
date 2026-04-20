@@ -17,7 +17,6 @@ const copy = {
     pricing: "Pricing",
     faq: "FAQ",
     login: "Login",
-    bookDemo: "Book a demo",
     startTrial: "Free Trial / Sign Up",
     seeDemo: "See it in action",
     /* hero */
@@ -115,7 +114,6 @@ const copy = {
     pricing: "الأسعار",
     faq: "الأسئلة الشائعة",
     login: "تسجيل الدخول",
-    bookDemo: "احجز عرض تجريبي",
     startTrial: "تجربة مجانية / تسجيل",
     seeDemo: "شاهده بنفسك",
     heroTitle: "واتساب بالذكاء الاصطناعي للشركات اللي ما تقدر تفوّت أي رسالة.",
@@ -474,11 +472,6 @@ export default function LandingPage() {
                   <Link href="/register">
                     <a className="inline-flex items-center gap-2 bg-[#0F510F] text-white font-semibold px-7 py-3.5 rounded-xl hover:bg-[#0d440d] transition-colors shadow-lg shadow-[#0F510F]/20 text-sm">
                       {t.startTrial} <ArrowRight className="w-4 h-4" />
-                    </a>
-                  </Link>
-                  <Link href="/register">
-                    <a className="inline-flex items-center gap-2 text-[#0F510F] font-semibold border border-[#0F510F]/30 hover:border-[#0F510F] px-7 py-3.5 rounded-xl hover:bg-[#0F510F]/5 transition-colors text-sm">
-                      {t.bookDemo}
                     </a>
                   </Link>
                   <button onClick={() => setDemoOpen(true)} className="inline-flex items-center gap-2 text-[#0F510F] font-semibold px-4 py-3.5 rounded-xl hover:bg-[#0F510F]/5 transition-colors text-sm">

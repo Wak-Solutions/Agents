@@ -3,7 +3,7 @@ import { useLocation, Link } from "wouter";
 import {
   Inbox, Users, BookUser, ContactRound, BarChart3, Video, Bot,
   ClipboardList, BookOpen, LogOut, Globe, Fingerprint, Menu, X,
-  Bell, Share, Headphones, Settings,
+  Bell, Share, Headphones, Settings, CalendarCheck,
 } from "lucide-react";
 import { startRegistration } from "@simplewebauthn/browser";
 import { useAuth, useLogout } from "@/hooks/use-auth";
@@ -85,6 +85,7 @@ export default function DashboardLayout({
     { href: "/customers",     icon: <ContactRound className="w-[18px] h-[18px]" />, label: t("customers"), adminOnly: true },
     { href: "/statistics",    icon: <BarChart3 className="w-[18px] h-[18px]" />,    label: t("statistics") },
     { href: "/meetings",      icon: <Video className="w-[18px] h-[18px]" />,        label: t("meetings") },
+    { href: "/book-demo",     icon: <CalendarCheck className="w-[18px] h-[18px]" />, label: t("bookDemo") },
     { href: "/chatbot-config",icon: <Bot className="w-[18px] h-[18px]" />,          label: t("chatbotConfig") },
     { href: "/surveys",       icon: <ClipboardList className="w-[18px] h-[18px]" />,label: t("surveys") },
     { href: "/guide",         icon: <BookOpen className="w-[18px] h-[18px]" />,     label: t("guide") },
