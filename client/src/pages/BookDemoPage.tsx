@@ -6,6 +6,7 @@ interface DaySlots {
   date: string;
   label: string;
   slots: string[];
+  bookedSlots: string[];
 }
 
 type PageState = "loading" | "error" | "picking" | "confirming" | "success";
@@ -113,6 +114,7 @@ export default function BookDemoPage() {
                     >
                       <p className="font-semibold text-sm text-gray-900">{d.label}</p>
                       <p className="text-xs text-gray-500 mt-0.5">{d.slots.length} slot{d.slots.length !== 1 ? "s" : ""} available</p>
+                      {d.bookedSlots?.length > 0 && <p className="text-xs text-muted-foreground/60 mt-0.5">{d.bookedSlots.length} booked</p>}
                     </button>
                   ))}
                 </div>
@@ -145,6 +147,15 @@ export default function BookDemoPage() {
                     >
                       {slot}
                     </button>
+                  ))}
+                  {selectedDayData?.bookedSlots?.map(slot => (
+                    <div
+                      key={`booked-${slot}`}
+                      className="px-4 py-3 rounded-xl border border-border bg-muted/50 text-sm font-medium text-muted-foreground/50 cursor-not-allowed select-none"
+                    >
+                      <span className="block">{slot}</span>
+                      <span className="block text-xs font-normal mt-0.5">Booked</span>
+                    </div>
                   ))}
                 </div>
 

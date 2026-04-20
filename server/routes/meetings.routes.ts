@@ -466,10 +466,10 @@ export function registerMeetingRoutes(app: Express): void {
     }
   });
 
-  // ── Authenticated demo booking: get available slots ───────────────────────
+  // ── Authenticated demo booking: get available slots (always company_id=1) ──
   app.get('/api/demo-booking/slots', requireAuth, async (req: any, res: any) => {
     try {
-      const companyId = req.session.companyId;
+      const companyId = 1;
 
       const now = new Date();
       const ksaNow = new Date(now.getTime() + KSA_OFFSET_MS);
@@ -503,7 +503,7 @@ export function registerMeetingRoutes(app: Express): void {
       const blockedSet = new Set(blockedRes.rows.map((r: any) => `${r.date}T${r.time}`));
       const takenMs = new Set(takenRes.rows.map((r: any) => new Date(r.scheduled_at).getTime()));
 
-      const days: { date: string; label: string; slots: string[] }[] = [];
+      const days: { date: string; label: string; slots: string[]; bookedSlots: string[] }[] = [];
 
       for (let i = 0; i <= 30; i++) {
         const d = new Date(ksaNow);
@@ -515,18 +515,22 @@ export function registerMeetingRoutes(app: Express): void {
         ).toISOString().slice(0, 10);
 
         const availableSlots: string[] = [];
+        const bookedSlots: string[] = [];
         const daySlots = getSlotsForDay(d.getUTCDay(), workHours);
         for (const slot of daySlots) {
           if (blockedSet.has(`${blockedDate}T${slot}`)) continue;
           const h = slot === '00:00' ? 24 : parseInt(slot.split(':')[0]);
           const slotUtc = new Date(Date.UTC(yr, mo - 1, dy, h - 3, 0, 0, 0));
           if (slotUtc <= now) continue;
-          if (takenMs.has(slotUtc.getTime())) continue;
-          availableSlots.push(slot);
+          if (takenMs.has(slotUtc.getTime())) {
+            bookedSlots.push(slot);
+          } else {
+            availableSlots.push(slot);
+          }
         }
 
-        if (availableSlots.length > 0) {
-          days.push({ date: ksaDate, label: formatKsaDate(d), slots: availableSlots });
+        if (availableSlots.length > 0 || bookedSlots.length > 0) {
+          days.push({ date: ksaDate, label: formatKsaDate(d), slots: availableSlots, bookedSlots });
         }
       }
 
@@ -537,10 +541,10 @@ export function registerMeetingRoutes(app: Express): void {
     }
   });
 
-  // ── Authenticated demo booking: confirm a slot ────────────────────────────
+  // ── Authenticated demo booking: confirm a slot (always company_id=1) ────────────
   app.post('/api/demo-booking/book', requireAuth, async (req: any, res: any) => {
     try {
-      const companyId = req.session.companyId;
+      const companyId = 1;
       const agentId = req.session.agentId;
 
       const { date, time } = z.object({
@@ -548,9 +552,9 @@ export function registerMeetingRoutes(app: Express): void {
         time: z.string(),
       }).parse(req.body);
 
-      // Fetch agent details for the confirmation email
+      // Fetch agent name and email only (no phone column on agents table)
       const agentRes = await pool.query(
-        `SELECT name, email, phone FROM agents WHERE id = $1`,
+        `SELECT name, email FROM agents WHERE id = $1`,
         [agentId]
       );
       const agent = agentRes.rows[0] ?? {};
@@ -596,21 +600,19 @@ export function registerMeetingRoutes(app: Express): void {
         `INSERT INTO meetings
            (customer_phone, meeting_link, meeting_token, scheduled_at, status, created_at, company_id, customer_email, agent_id)
          VALUES ($1, $2, $3, $4, 'pending', NOW(), $5, $6, $7)`,
-        [agent.phone || 'demo', meetingLink, demoToken, scheduledUtc, companyId, agent.email || null, agentId || null]
+        [agent.name || 'demo', meetingLink, demoToken, scheduledUtc, companyId, agent.email || null, agentId || null]
       );
 
       logger.info('Authenticated demo booked', `agentId: ${agentId}, time: ${ksaLabel}`);
 
-      // Notify manager (non-blocking)
       notifyManagerNewBooking({
         companyId,
-        customerPhone: agent.name || agent.phone || 'Demo booking',
+        customerPhone: agent.name || 'Demo booking',
         dateTimeLabel: ksaLabel,
         meetingLink,
         scheduledUtc,
       }).catch((e: any) => logger.error('Demo manager email failed', e.message));
 
-      // Send confirmation email to agent if they have one (non-blocking)
       if (agent.email) {
         sendBookingConfirmationToCustomer({
           to: agent.email,
@@ -620,7 +622,6 @@ export function registerMeetingRoutes(app: Express): void {
         }).catch((e: any) => logger.error('Demo confirmation email failed', e.message));
       }
 
-      // Push notification (non-blocking)
       notifyAll({
         title: 'Demo booked',
         body: `${agent.name || 'Agent'} — ${ksaLabel}`,
