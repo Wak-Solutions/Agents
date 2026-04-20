@@ -449,7 +449,7 @@ export default function ChatbotConfig() {
   const [config, setConfig] = useState<Config>(DEFAULT_CONFIG);
 
   // ── System prompt preview (returned by API after save) ────────────────────
-  const [systemPromptPreview, setSystemPromptPreview] = useState<string | null>(null);
+  const [, setSystemPromptPreview] = useState<string | null>(null);
 
   // ── Autosave state ─────────────────────────────────────────────────────────
   type SaveStatus = "idle" | "saving" | "saved" | "error";
@@ -887,27 +887,6 @@ export default function ChatbotConfig() {
                     onChange={e => updateConfig({ closingMessage: e.target.value })}
                   />
                 </div>
-              </StepCard>
-
-              {/* Step 5 — System prompt */}
-              <StepCard
-                step={5}
-                title={t("chatbotSetupStep5Title")}
-                desc={t("chatbotSetupStep5Desc")}
-              >
-                <label className={labelCls}>{t("chatbotSetupPromptLabel")}</label>
-                {systemPromptPreview ? (
-                  <textarea
-                    readOnly
-                    className={inputCls + " resize-none font-mono text-[11px] leading-relaxed bg-gray-50 cursor-default"}
-                    rows={14}
-                    value={systemPromptPreview}
-                  />
-                ) : (
-                  <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50 px-4 py-6 text-center">
-                    <p className="text-xs text-gray-400">{t("chatbotSetupPromptEmpty")}</p>
-                  </div>
-                )}
               </StepCard>
 
               {/* Suggest a Change */}
