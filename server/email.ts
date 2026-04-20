@@ -171,6 +171,7 @@ export async function sendBookingConfirmationToCustomer(opts: {
 </html>`;
 
   logger.info("sendBookingConfirmation — sending", `to: ${maskEmail(opts.to)}`);
+  console.log(`[RESEND] BEFORE send — sendBookingConfirmationToCustomer — to: ${opts.to}, from: ${process.env.RESEND_FROM_EMAIL}`);
   try {
     const result = await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL!,
@@ -178,6 +179,7 @@ export async function sendBookingConfirmationToCustomer(opts: {
       subject: "Your meeting with WAK Solutions is confirmed",
       html,
     });
+    console.log(`[RESEND] AFTER send — sendBookingConfirmationToCustomer — result: ${JSON.stringify(result)}`);
     if ((result as any).error) {
       logger.error(
         "sendBookingConfirmation — Resend rejected",
@@ -321,6 +323,7 @@ export async function notifyManagerNewBooking(opts: {
       "notifyManagerNewBooking — sending",
       `to: ${maskEmail(to)}, companyId: ${opts.companyId}, customer: ${opts.customerPhone}`
     );
+    console.log(`[RESEND] BEFORE send — notifyManagerNewBooking — to: ${to}, from: ${process.env.RESEND_FROM_EMAIL}, companyId: ${opts.companyId}`);
     try {
       const result = await resend.emails.send({
         from: process.env.RESEND_FROM_EMAIL!,
@@ -328,6 +331,7 @@ export async function notifyManagerNewBooking(opts: {
         subject: `New Meeting Booking — ${opts.customerPhone}`,
         html,
       });
+      console.log(`[RESEND] AFTER send — notifyManagerNewBooking — result: ${JSON.stringify(result)}`);
       if ((result as any).error) {
         logger.error(
           "notifyManagerNewBooking — Resend rejected",
