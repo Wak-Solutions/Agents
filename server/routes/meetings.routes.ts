@@ -14,7 +14,51 @@ import { pool } from '../db';
 import { requireAuth } from '../middleware/auth';
 import { requireWebhookSecret } from '../middleware/auth';
 import { notifyAgent, notifyAll } from '../push';
-import { notifyManagerNewBooking, sendBookingConfirmationToCustomer } from '../email';
+import { notifyManagerNewBooking } from '../email';
+
+/** Fire-and-forget: ask the Python bot to send a booking confirmation email via Gmail SMTP. */
+function notifyPythonBotEmail(opts: {
+  to: string;
+  customerName: string;
+  meetingTime: string;
+  meetingLink: string;
+  agentName?: string;
+}): void {
+  const botUrl = (process.env.BOT_URL || '').replace(/\/$/, '');
+  if (!botUrl) {
+    logger.warn('notifyPythonBotEmail — BOT_URL not set, skipping email');
+    return;
+  }
+  if (!opts.to) {
+    logger.warn('notifyPythonBotEmail — no recipient email, skipping');
+    return;
+  }
+  console.log(`[EMAIL] BEFORE Python bot notify — to: ${opts.to}, botUrl: ${botUrl}`);
+  fetch(`${botUrl}/internal/booking-confirmed`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-webhook-secret': process.env.WEBHOOK_SECRET || '',
+    },
+    body: JSON.stringify({
+      to: opts.to,
+      customer_name: opts.customerName,
+      meeting_time: opts.meetingTime,
+      meeting_link: opts.meetingLink,
+      agent_name: opts.agentName || 'WAK Solutions Team',
+    }),
+  })
+    .then(async r => {
+      const body = await r.json().catch(() => ({}));
+      console.log(`[EMAIL] AFTER Python bot notify — status: ${r.status}, body: ${JSON.stringify(body)}`);
+      if (!r.ok) logger.error('notifyPythonBotEmail — bot returned error', `status: ${r.status}, body: ${JSON.stringify(body)}`);
+      else logger.info('notifyPythonBotEmail — sent', `to: ${opts.to}, sent: ${body.sent}`);
+    })
+    .catch(e => {
+      console.log(`[EMAIL] ERROR Python bot notify — ${e.message}`);
+      logger.error('notifyPythonBotEmail — fetch failed', e.message);
+    });
+}
 import { sendSurveyToCustomer } from '../surveys';
 import { createDailyRoom } from '../integrations/daily';
 import { KSA_OFFSET_MS, formatKsaDate, formatKsaDateTime } from '../lib/timezone';
@@ -449,14 +493,14 @@ export function registerMeetingRoutes(app: Express): void {
         );
       }
 
-      // Customer booking confirmation email via Resend (non-blocking)
+      // Customer booking confirmation email via Python bot → Gmail SMTP
       if (customerEmail) {
-        sendBookingConfirmationToCustomer({
+        notifyPythonBotEmail({
           to: customerEmail,
           customerName: meeting.customer_phone,
-          meetingTimeLabel: `${ksaLabel} KSA time`,
+          meetingTime: `${ksaLabel} KSA time`,
           meetingLink: brandedLink,
-        }).catch((e: any) => logger.error('Customer confirmation email failed', e.message));
+        });
       }
 
       res.json({ success: true, ksa_label: ksaLabel });
@@ -644,13 +688,14 @@ export function registerMeetingRoutes(app: Express): void {
         scheduledUtc,
       }).catch((e: any) => logger.error('Demo manager email failed', e.message));
 
+      // Agent confirmation email via Python bot → Gmail SMTP
       if (agent.email) {
-        sendBookingConfirmationToCustomer({
+        notifyPythonBotEmail({
           to: agent.email,
           customerName: agent.name || 'there',
-          meetingTimeLabel: `${ksaLabel} KSA time`,
+          meetingTime: `${ksaLabel} KSA time`,
           meetingLink,
-        }).catch((e: any) => logger.error('Demo confirmation email failed', e.message));
+        });
       }
 
       notifyAll({
