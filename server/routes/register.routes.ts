@@ -16,7 +16,7 @@ import type { Express } from 'express';
 import { pool } from '../db';
 import { requireAuth } from '../middleware/auth';
 import { createLogger } from '../lib/logger';
-import { sendViaPythonBot } from '../email';
+import { sendEmail } from '../email';
 
 const logger = createLogger('register');
 
@@ -295,12 +295,12 @@ export function registerRegistrationRoutes(app: Express): void {
           );
           invited.push({ email: agent.email });
 
-          // Send invitation email with temp credentials via Python bot → Gmail SMTP
+          // Send invitation email with temp credentials via nodemailer → Gmail SMTP
           const dashboardUrl = process.env.DASHBOARD_URL || 'https://your-dashboard.up.railway.app';
-          sendViaPythonBot({
-            to: agent.email,
-            subject: `You've been invited to WAK Solutions`,
-            body: `
+          sendEmail(
+            agent.email,
+            `You've been invited to WAK Solutions`,
+            `
               <p>Hi ${agent.name},</p>
               <p>You've been invited to join your team on WAK Solutions.</p>
               <p><strong>Login email:</strong> ${agent.email}<br>
@@ -308,7 +308,7 @@ export function registerRegistrationRoutes(app: Express): void {
               <p>Please <a href="${dashboardUrl}/login">sign in here</a> and change your password after your first login.</p>
               <p>— WAK Solutions</p>
             `,
-          }).catch((e: any) => logger.warn('Invite email failed', `email: ${agent.email}, error: ${e.message}`));
+          ).catch((e: any) => logger.warn('Invite email failed', `email: ${agent.email}, error: ${e.message}`));
         }
       }
 

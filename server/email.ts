@@ -1,16 +1,23 @@
 /**
- * email.ts — All email is sent via the Python bot's Gmail SMTP service.
+ * email.ts — All email is sent via nodemailer using Gmail SMTP.
  *
- * Node never calls Resend directly. Every email goes through:
- *   POST {BOT_URL}/api/send-email  { to, subject, body }
- *
+ * Requires env vars: GMAIL_ADDRESS, GMAIL_APP_PASSWORD
  * Admin recipients are resolved from the agents table.
  */
 
+import nodemailer from 'nodemailer';
 import { pool } from "./db";
 import { createLogger } from "./lib/logger";
 
 const logger = createLogger("email");
+
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL_ADDRESS,
+    pass: process.env.GMAIL_APP_PASSWORD,
+  },
+});
 
 function maskEmail(email: string): string {
   const [local, domain] = email.split("@");
@@ -66,34 +73,26 @@ async function resolveAdminEmails(companyId: number): Promise<string[]> {
   return emails;
 }
 
-/** Send a single email via the Python bot's Gmail SMTP service. Fire-and-forget safe. */
-export async function sendViaPythonBot(opts: {
-  to: string;
-  subject: string;
-  body: string;
-}): Promise<void> {
-  const botUrl = (process.env.BOT_URL || "").replace(/\/$/, "");
-  if (!botUrl) {
-    logger.warn("sendViaPythonBot — BOT_URL not set, skipping email", `to: ${maskEmail(opts.to)}`);
+/** Send an email via Gmail SMTP using nodemailer. Fire-and-forget safe. */
+export async function sendEmail(to: string, subject: string, body: string): Promise<void> {
+  const gmailAddress = process.env.GMAIL_ADDRESS;
+  if (!gmailAddress) {
+    logger.warn("sendEmail — GMAIL_ADDRESS not set, skipping email", `to: ${maskEmail(to)}`);
     return;
   }
-  console.log(`[EMAIL] BEFORE send — to: ${opts.to}, subject: ${opts.subject}, botUrl: ${botUrl}`);
+  console.log(`[EMAIL] BEFORE send — to: ${to}, subject: ${subject}`);
   try {
-    const r = await fetch(`${botUrl}/api/send-email`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ to: opts.to, subject: opts.subject, body: opts.body }),
+    const info = await transporter.sendMail({
+      from: `WAK Solutions <${gmailAddress}>`,
+      to,
+      subject,
+      html: body,
     });
-    const json = await r.json().catch(() => ({}));
-    console.log(`[EMAIL] AFTER send — status: ${r.status}, response: ${JSON.stringify(json)}`);
-    if (!r.ok) {
-      logger.error("sendViaPythonBot — bot returned error", `status: ${r.status}, to: ${maskEmail(opts.to)}, body: ${JSON.stringify(json)}`);
-    } else {
-      logger.info("sendViaPythonBot — sent", `to: ${maskEmail(opts.to)}, sent: ${(json as any).sent}`);
-    }
+    console.log(`[EMAIL] AFTER send — messageId: ${info.messageId}`);
+    logger.info("sendEmail — sent", `to: ${maskEmail(to)}, messageId: ${info.messageId}`);
   } catch (err: any) {
     console.log(`[EMAIL] ERROR send — ${err.message}`);
-    logger.error("sendViaPythonBot — fetch threw", `to: ${maskEmail(opts.to)}, error: ${err.message}`);
+    logger.error("sendEmail — failed", `to: ${maskEmail(to)}, error: ${err.message}`);
   }
 }
 
@@ -157,10 +156,6 @@ export async function notifyManagerNewBooking(opts: {
 
   for (const to of recipients) {
     logger.info("notifyManagerNewBooking — sending", `to: ${maskEmail(to)}, companyId: ${opts.companyId}`);
-    await sendViaPythonBot({
-      to,
-      subject: `New Meeting Booking — ${opts.customerPhone}`,
-      body: html,
-    });
+    await sendEmail(to, `New Meeting Booking — ${opts.customerPhone}`, html);
   }
 }

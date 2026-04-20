@@ -14,7 +14,7 @@ import { pool } from '../db';
 import { requireAuth } from '../middleware/auth';
 import { requireWebhookSecret } from '../middleware/auth';
 import { notifyAgent, notifyAll } from '../push';
-import { notifyManagerNewBooking, sendViaPythonBot } from '../email';
+import { notifyManagerNewBooking, sendEmail } from '../email';
 import { sendSurveyToCustomer } from '../surveys';
 import { createDailyRoom } from '../integrations/daily';
 import { KSA_OFFSET_MS, formatKsaDate, formatKsaDateTime } from '../lib/timezone';
@@ -449,13 +449,13 @@ export function registerMeetingRoutes(app: Express): void {
         );
       }
 
-      // Customer booking confirmation email via Python bot → Gmail SMTP
+      // Customer booking confirmation email via nodemailer → Gmail SMTP
       if (customerEmail) {
-        sendViaPythonBot({
-          to: customerEmail,
-          subject: 'Your meeting with WAK Solutions is confirmed',
-          body: `<p>Hi,</p><p>Your meeting is confirmed for <strong>${ksaLabel} KSA time</strong>.</p><p><a href="${brandedLink}">Join Meeting</a></p><p>WAK Solutions</p>`,
-        }).catch((e: any) => logger.error('Customer confirmation email failed', e.message));
+        sendEmail(
+          customerEmail,
+          'Your meeting with WAK Solutions is confirmed',
+          `<p>Hi,</p><p>Your meeting is confirmed for <strong>${ksaLabel} KSA time</strong>.</p><p><a href="${brandedLink}">Join Meeting</a></p><p>WAK Solutions</p>`,
+        ).catch((e: any) => logger.error('Customer confirmation email failed', e.message));
       }
 
       res.json({ success: true, ksa_label: ksaLabel });
@@ -643,13 +643,13 @@ export function registerMeetingRoutes(app: Express): void {
         scheduledUtc,
       }).catch((e: any) => logger.error('Demo manager email failed', e.message));
 
-      // Agent confirmation email via Python bot → Gmail SMTP
+      // Agent confirmation email via nodemailer → Gmail SMTP
       if (agent.email) {
-        sendViaPythonBot({
-          to: agent.email,
-          subject: 'Your demo with WAK Solutions is confirmed',
-          body: `<p>Hi ${agent.name || 'there'},</p><p>Your demo is confirmed for <strong>${ksaLabel} KSA time</strong>.</p><p><a href="${meetingLink}">Join Meeting</a></p><p>WAK Solutions</p>`,
-        }).catch((e: any) => logger.error('Demo confirmation email failed', e.message));
+        sendEmail(
+          agent.email,
+          'Your demo with WAK Solutions is confirmed',
+          `<p>Hi ${agent.name || 'there'},</p><p>Your demo is confirmed for <strong>${ksaLabel} KSA time</strong>.</p><p><a href="${meetingLink}">Join Meeting</a></p><p>WAK Solutions</p>`,
+        ).catch((e: any) => logger.error('Demo confirmation email failed', e.message));
       }
 
       notifyAll({
