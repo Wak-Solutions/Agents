@@ -5,7 +5,7 @@
  * Admin recipients are resolved from the agents table.
  */
 
-import * as Brevo from '@getbrevo/brevo';
+import { BrevoClient } from '@getbrevo/brevo';
 import { pool } from "./db";
 import { createLogger } from "./lib/logger";
 
@@ -48,11 +48,7 @@ const logger = createLogger("email");
 //   }
 // }
 
-const brevoClient = new Brevo.TransactionalEmailsApi();
-brevoClient.setApiKey(
-  Brevo.TransactionalEmailsApiApiKeys.apiKey,
-  process.env.BREVO_API_KEY!
-);
+const brevoClient = new BrevoClient({ apiKey: process.env.BREVO_API_KEY! });
 
 function maskEmail(email: string): string {
   const [local, domain] = email.split("@");
@@ -111,18 +107,17 @@ async function resolveAdminEmails(companyId: number): Promise<string[]> {
 /** Send an email via Brevo HTTP API. Fire-and-forget safe. */
 export async function sendEmail(to: string, subject: string, body: string): Promise<void> {
   try {
-    const sendSmtpEmail = new Brevo.SendSmtpEmail();
-    sendSmtpEmail.to = [{ email: to }];
-    sendSmtpEmail.sender = {
-      email: process.env.BREVO_FROM_EMAIL!,
-      name: process.env.BREVO_FROM_NAME || 'WAK Solutions',
-    };
-    sendSmtpEmail.subject = subject;
-    sendSmtpEmail.htmlContent = body;
-
-    const result = await brevoClient.sendTransacEmail(sendSmtpEmail);
+    const result = await brevoClient.transactionalEmails.sendTransacEmail({
+      sender: {
+        email: process.env.BREVO_FROM_EMAIL!,
+        name: process.env.BREVO_FROM_NAME || 'WAK Solutions',
+      },
+      to: [{ email: to }],
+      subject,
+      htmlContent: body,
+    });
     console.log('[EMAIL] Brevo sent —', to);
-    logger.info("sendEmail — sent via Brevo", `to: ${maskEmail(to)}, messageId: ${(result.body as any)?.messageId ?? 'n/a'}`);
+    logger.info("sendEmail — sent via Brevo", `to: ${maskEmail(to)}, messageId: ${(result as any)?.messageId ?? 'n/a'}`);
   } catch (error: any) {
     console.error('[EMAIL] Brevo error —', error.message);
     logger.error("sendEmail — Brevo failed", `to: ${maskEmail(to)}, error: ${error.message}`);
