@@ -563,77 +563,77 @@ export default function ChatbotConfig() {
     return () => clearTimeout(timer);
   }, [configKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Suggest a Change ──────────────────────────────────────────────────────
-  const [suggestion, setSuggestion]         = useState("");
-  const [suggesting, setSuggesting]         = useState(false);
-  const [suggestSuccess, setSuggestSuccess] = useState(false);
-  const [suggestError, setSuggestError]     = useState<string | null>(null);
-
-  const applySuggestion = async () => {
-    if (!suggestion.trim() || suggesting) return;
-    setSuggesting(true);
-    setSuggestSuccess(false);
-    setSuggestError(null);
-    try {
-      const res = await fetch("/api/chatbot-config/suggest", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ suggestion }),
-      });
-      if (!res.ok) {
-        const body = await res.json();
-        throw new Error(body.message || "Failed to apply suggestion");
-      }
-      const data = await res.json();
-      const sc = data.structured_config;
-      if (sc && typeof sc === "object") {
-        const rawMenu: any[] = Array.isArray(data.menu_config) && data.menu_config.length > 0
-          ? data.menu_config
-          : (sc.menuConfig ?? []);
-        const menuConfig: MenuItem[] = rawMenu.map((it: any) => ({
-          id: it.id ?? uid(),
-          label: it.label ?? "",
-          subItems: (it.subItems ?? []).map((sub: any) =>
-            typeof sub === "string"
-              ? { id: uid(), label: sub, subItems: [] }
-              : {
-                  id: sub.id ?? uid(),
-                  label: sub.label ?? "",
-                  subItems: (sub.subItems ?? []).map((ss: any) =>
-                    typeof ss === "string"
-                      ? { id: uid(), label: ss }
-                      : { id: ss.id ?? uid(), label: ss.label ?? "" }
-                  ),
-                }
-          ),
-        }));
-        setConfig({
-          businessName:    sc.businessName    ?? "",
-          industry:        sc.industry        ?? "",
-          tone:            sc.tone            ?? "Professional",
-          customTone:      sc.customTone      ?? "",
-          greeting:        sc.greeting        ?? "",
-          questions:       sc.questions       ?? [],
-          faq:             sc.faq             ?? [],
-          escalationRules: sc.escalationRules ?? [],
-          closingMessage:  sc.closingMessage  ?? "",
-          servicesText:    sc.servicesText    ?? "",
-          menuConfig,
-        });
-        // Mark as not a user edit so autosave doesn't re-fire
-        userEditedRef.current = false;
-      }
-      if (data.system_prompt_preview) setSystemPromptPreview(data.system_prompt_preview);
-      setSuggestion("");
-      setSuggestSuccess(true);
-      setTimeout(() => setSuggestSuccess(false), 4000);
-    } catch (e: any) {
-      setSuggestError(e.message || "Something went wrong. Please try again.");
-    } finally {
-      setSuggesting(false);
-    }
-  };
+  // {/* SUGGEST A CHANGE — hidden for now, re-enable when ready */}
+  // const [suggestion, setSuggestion]         = useState("");
+  // const [suggesting, setSuggesting]         = useState(false);
+  // const [suggestSuccess, setSuggestSuccess] = useState(false);
+  // const [suggestError, setSuggestError]     = useState<string | null>(null);
+  //
+  // const applySuggestion = async () => {
+  //   if (!suggestion.trim() || suggesting) return;
+  //   setSuggesting(true);
+  //   setSuggestSuccess(false);
+  //   setSuggestError(null);
+  //   try {
+  //     const res = await fetch("/api/chatbot-config/suggest", {
+  //       method: "POST",
+  //       credentials: "include",
+  //       headers: { "Content-Type": "application/json" },
+  //       body: JSON.stringify({ suggestion }),
+  //     });
+  //     if (!res.ok) {
+  //       const body = await res.json();
+  //       throw new Error(body.message || "Failed to apply suggestion");
+  //     }
+  //     const data = await res.json();
+  //     const sc = data.structured_config;
+  //     if (sc && typeof sc === "object") {
+  //       const rawMenu: any[] = Array.isArray(data.menu_config) && data.menu_config.length > 0
+  //         ? data.menu_config
+  //         : (sc.menuConfig ?? []);
+  //       const menuConfig: MenuItem[] = rawMenu.map((it: any) => ({
+  //         id: it.id ?? uid(),
+  //         label: it.label ?? "",
+  //         subItems: (it.subItems ?? []).map((sub: any) =>
+  //           typeof sub === "string"
+  //             ? { id: uid(), label: sub, subItems: [] }
+  //             : {
+  //                 id: sub.id ?? uid(),
+  //                 label: sub.label ?? "",
+  //                 subItems: (sub.subItems ?? []).map((ss: any) =>
+  //                   typeof ss === "string"
+  //                     ? { id: uid(), label: ss }
+  //                     : { id: ss.id ?? uid(), label: ss.label ?? "" }
+  //                 ),
+  //               }
+  //         ),
+  //       }));
+  //       setConfig({
+  //         businessName:    sc.businessName    ?? "",
+  //         industry:        sc.industry        ?? "",
+  //         tone:            sc.tone            ?? "Professional",
+  //         customTone:      sc.customTone      ?? "",
+  //         greeting:        sc.greeting        ?? "",
+  //         questions:       sc.questions       ?? [],
+  //         faq:             sc.faq             ?? [],
+  //         escalationRules: sc.escalationRules ?? [],
+  //         closingMessage:  sc.closingMessage  ?? "",
+  //         servicesText:    sc.servicesText    ?? "",
+  //         menuConfig,
+  //       });
+  //       // Mark as not a user edit so autosave doesn't re-fire
+  //       userEditedRef.current = false;
+  //     }
+  //     if (data.system_prompt_preview) setSystemPromptPreview(data.system_prompt_preview);
+  //     setSuggestion("");
+  //     setSuggestSuccess(true);
+  //     setTimeout(() => setSuggestSuccess(false), 4000);
+  //   } catch (e: any) {
+  //     setSuggestError(e.message || "Something went wrong. Please try again.");
+  //   } finally {
+  //     setSuggesting(false);
+  //   }
+  // };
 
   if (isLoading || !isAuthenticated) {
     return (
@@ -889,8 +889,8 @@ export default function ChatbotConfig() {
                 </div>
               </StepCard>
 
-              {/* Suggest a Change */}
-              <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
+              {/* SUGGEST A CHANGE — hidden for now, re-enable when ready */}
+              {/* <div className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden">
                 <div className="px-5 pt-5 pb-4 border-b border-gray-100 flex items-start gap-3">
                   <div className="w-6 h-6 rounded-full bg-[#0F510F]/10 text-[#0F510F] text-xs font-bold flex items-center justify-center flex-shrink-0 mt-0.5">
                     ✦
@@ -935,7 +935,7 @@ export default function ChatbotConfig() {
                     )}
                   </button>
                 </div>
-              </div>
+              </div> */}
 
             </div>
 
