@@ -87,10 +87,10 @@ async function sendPush(
       'Push delivery failed',
       `endpoint: ...${row.endpoint.slice(-20)}, status: ${err.statusCode ?? 'n/a'}, error: ${err.message}`,
     );
-    // 410 Gone = subscription revoked; 404 = endpoint not found → clean up
-    if (err.statusCode === 410 || err.statusCode === 404) {
+    // 410 Gone = revoked; 404 = not found; 403 = VAPID mismatch / invalid → clean up
+    if (err.statusCode === 410 || err.statusCode === 404 || err.statusCode === 403) {
       removeSubscription(row.endpoint).catch(() => {});
-      logger.info('Removed expired push subscription', `endpoint: ...${row.endpoint.slice(-20)}`);
+      logger.info('Removed invalid push subscription', `endpoint: ...${row.endpoint.slice(-20)}, status: ${err.statusCode}`);
     }
   }
 }

@@ -19,27 +19,19 @@ function isIOS(): boolean {
 }
 
 async function doSubscribe() {
-  const registration = await navigator.serviceWorker.ready; // wait for active SW
+  const registration = await navigator.serviceWorker.ready;
   const vapidRes = await fetch(api.push.vapidPublicKey.path, { credentials: "include" });
   if (!vapidRes.ok) throw new Error("Failed to fetch VAPID key");
   const { publicKey } = await vapidRes.json();
 
-  // Check for existing subscription — reuse if still valid
-  let subscription = await registration.pushManager.getSubscription();
-  if (subscription) {
-    // Validate the key hasn't changed
-    const existingKey = subscription.options?.applicationServerKey;
-    const newKey = urlBase64ToUint8Array(publicKey);
-    if (existingKey && arrayBufferEqual(existingKey, newKey.buffer)) {
-      // Existing subscription is valid — just re-register with backend
-      await sendSubscriptionToBackend(subscription);
-      return;
-    }
-    // Key changed — unsubscribe old one
-    await subscription.unsubscribe();
-  }
+  // Always unsubscribe any existing subscription and request a fresh one.
+  // This guarantees the endpoint stored in the DB is always valid and avoids
+  // 403/410 errors from stale subscriptions after VAPID key changes or
+  // browser restarts.
+  const existing = await registration.pushManager.getSubscription();
+  if (existing) await existing.unsubscribe();
 
-  subscription = await registration.pushManager.subscribe({
+  const subscription = await registration.pushManager.subscribe({
     userVisibleOnly: true,
     applicationServerKey: urlBase64ToUint8Array(publicKey),
   });
@@ -55,15 +47,6 @@ async function sendSubscriptionToBackend(subscription: PushSubscription) {
   });
 }
 
-function arrayBufferEqual(a: ArrayBuffer, b: ArrayBuffer): boolean {
-  if (a.byteLength !== b.byteLength) return false;
-  const va = new Uint8Array(a);
-  const vb = new Uint8Array(b);
-  for (let i = 0; i < va.length; i++) {
-    if (va[i] !== vb[i]) return false;
-  }
-  return true;
-}
 
 export function usePushNotifications(isAuthenticated: boolean, isAuthLoading: boolean) {
   const [showBanner, setShowBanner] = useState(false);
