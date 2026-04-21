@@ -441,7 +441,7 @@ function ActiveChat({ conversation, onClose }: { conversation: Conversation; onC
    MessageBubble — WhatsApp Web identical
    ──────────────────────────────────────────────────────────── */
 function MessageBubble({ message, showTail }: { message: Message; showTail: boolean }) {
-  const { t } = useLanguage();
+  const { t, isRTL } = useLanguage();
   const isCustomer = message.sender === "customer";
   const isAI = message.sender === "ai";
   const isVoiceNote = message.media_type === "audio";
@@ -484,7 +484,11 @@ function MessageBubble({ message, showTail }: { message: Message; showTail: bool
           {isVoiceNote ? (
             <VoiceNotePlayer message={message} isCustomer={isCustomer} />
           ) : (
-            <span className="text-[14.2px] leading-[19px] text-[#111b21] whitespace-pre-wrap break-words">
+            <span
+              className="text-[14.2px] leading-[19px] text-[#111b21] whitespace-pre-wrap break-words block"
+              dir={isRTL ? "rtl" : "ltr"}
+              style={isRTL ? { textAlign: "right" } : undefined}
+            >
               {message.message_text}
             </span>
           )}

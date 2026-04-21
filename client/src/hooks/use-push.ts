@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { api } from "@shared/routes";
 import { urlBase64ToUint8Array } from "@/lib/utils";
 
@@ -51,11 +51,10 @@ async function sendSubscriptionToBackend(subscription: PushSubscription) {
 export function usePushNotifications(isAuthenticated: boolean, isAuthLoading: boolean) {
   const [showBanner, setShowBanner] = useState(false);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+  const subscribedRef = useRef(false);
 
   useEffect(() => {
     // Wait until /api/me has fully resolved before attempting push subscribe.
-    // Firing while loading risks a stale-cache race where isAuthenticated is
-    // true from a cached response but the actual session is not yet confirmed.
     if (isAuthLoading || !isAuthenticated) return;
     if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) return;
 
@@ -71,11 +70,14 @@ export function usePushNotifications(isAuthenticated: boolean, isAuthLoading: bo
     }
 
     if (Notification.permission === "granted") {
-      // Already permitted — re-subscribe to ensure backend has current subscription
-      // This handles the case where subscription was lost after PWA reinstall
-      doSubscribe().catch(err => console.error("Push subscribe error:", err));
+      // Re-subscribe on every mount to ensure the backend always has the
+      // current, valid subscription endpoint. subscribedRef prevents a
+      // double-fire if the auth state flickers within the same mount.
+      if (!subscribedRef.current) {
+        subscribedRef.current = true;
+        doSubscribe().catch(err => console.error("Push subscribe error:", err));
+      }
     } else if (Notification.permission === "default") {
-      // Not yet asked — show the banner so the user can trigger it with a tap
       setShowBanner(true);
     }
     // "denied" — do nothing
