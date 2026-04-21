@@ -654,17 +654,29 @@ export default function ChatbotConfig() {
               <Bot className="w-5 h-5 text-[#0F510F]" />
               <h1 className="text-xl font-bold text-gray-900">{t("chatbotSetupTitle")}</h1>
             </div>
-            {/* Autosave indicator */}
-            <div className="flex items-center gap-1.5 text-xs min-w-[90px] justify-end">
-              {saveStatus === "saving" && (
-                <><span className="w-1.5 h-1.5 rounded-full bg-gray-400 flex-shrink-0" /><span className="text-gray-400">{t("chatbotSetupSaving")}</span></>
-              )}
-              {saveStatus === "saved" && (
-                <><span className="w-1.5 h-1.5 rounded-full bg-[#0F510F] flex-shrink-0" /><span className="text-[#0F510F]">{t("chatbotSetupSavedSuccess")}</span></>
-              )}
-              {saveStatus === "error" && (
-                <><span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" /><span className="text-red-500">Save failed</span></>
-              )}
+            {/* Save button + status */}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-1.5 text-xs min-w-[90px] justify-end">
+                {saveStatus === "saving" && (
+                  <><span className="w-1.5 h-1.5 rounded-full bg-gray-400 flex-shrink-0" /><span className="text-gray-400">{t("chatbotSetupSaving")}</span></>
+                )}
+                {saveStatus === "saved" && (
+                  <><span className="w-1.5 h-1.5 rounded-full bg-[#0F510F] flex-shrink-0" /><span className="text-[#0F510F]">{t("chatbotSetupSavedSuccess")}</span></>
+                )}
+                {saveStatus === "error" && (
+                  <><span className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0" /><span className="text-red-500">Save failed</span></>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={doSave}
+                disabled={saveStatus === "saving"}
+                className="flex items-center gap-1.5 text-sm font-medium bg-[#0F510F] text-white px-4 py-1.5 rounded-lg hover:bg-[#0d4510] disabled:opacity-50 transition-colors"
+              >
+                {saveStatus === "saving" ? (
+                  <><div className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />{t("chatbotSetupSaving")}</>
+                ) : "Save"}
+              </button>
             </div>
           </div>
 
