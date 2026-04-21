@@ -295,19 +295,51 @@ export function registerRegistrationRoutes(app: Express): void {
           );
           invited.push({ email: agent.email });
 
-          // Send invitation email with temp credentials via nodemailer → Gmail SMTP
+          // Send invitation email with credentials
           const dashboardUrl = process.env.DASHBOARD_URL || 'https://your-dashboard.up.railway.app';
+          const _iYear = new Date().getFullYear();
+          const inviteHtml = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <tr><td style="background:#0F510F;padding:28px 32px;">
+          <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">WAK Solutions</h1>
+          <p style="margin:4px 0 0;color:rgba(255,255,255,0.7);font-size:13px;">You've been invited to join your team</p>
+        </td></tr>
+        <tr><td style="padding:32px;">
+          <p style="margin:0 0 24px;color:#222;font-size:15px;line-height:1.6;">Hi ${agent.name},</p>
+          <p style="margin:0 0 24px;color:#555;font-size:14px;line-height:1.6;">You've been added as a team member on WAK Solutions — an AI-powered customer engagement platform. Use the credentials below to sign in and get started.</p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f9f0;border:1px solid #c8e6c9;border-radius:10px;margin-bottom:28px;">
+            <tr><td style="padding:22px 26px;">
+              <p style="margin:0 0 4px;font-size:11px;color:#666;text-transform:uppercase;font-weight:700;">Login Email</p>
+              <p style="margin:0 0 20px;font-size:15px;font-weight:700;color:#222;">${agent.email}</p>
+              <p style="margin:0 0 4px;font-size:11px;color:#666;text-transform:uppercase;font-weight:700;">Temporary Password</p>
+              <p style="margin:0 0 20px;font-size:15px;font-weight:700;color:#0F510F;letter-spacing:1px;">${tempPass}</p>
+              <a href="${dashboardUrl}/login" style="display:inline-block;background:#0F510F;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;">Sign In to Dashboard</a>
+            </td></tr>
+          </table>
+          <p style="margin:0 0 10px;color:#444;font-size:14px;font-weight:700;">Getting started</p>
+          <ul style="margin:0 0 24px;padding-left:20px;color:#555;font-size:13px;line-height:1.9;">
+            <li>Sign in using the email and temporary password above.</li>
+            <li>You will be prompted to set a new password on your first login — please do this immediately.</li>
+            <li>Once in, you can view conversations, manage meetings, and collaborate with your team.</li>
+          </ul>
+          <p style="margin:0;color:#555;font-size:13px;line-height:1.6;">If you have any trouble signing in or did not expect this invitation, please contact your team administrator.</p>
+        </td></tr>
+        <tr><td style="background:#f9f9f9;border-top:1px solid #eee;padding:16px 32px;">
+          <p style="margin:0;font-size:11px;color:#aaa;text-align:center;">&copy; ${_iYear} WAK Solutions. All rights reserved.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
           sendEmail(
             agent.email,
             `You've been invited to WAK Solutions`,
-            `
-              <p>Hi ${agent.name},</p>
-              <p>You've been invited to join your team on WAK Solutions.</p>
-              <p><strong>Login email:</strong> ${agent.email}<br>
-              <strong>Temporary password:</strong> ${tempPass}</p>
-              <p>Please <a href="${dashboardUrl}/login">sign in here</a> and change your password after your first login.</p>
-              <p>— WAK Solutions</p>
-            `,
+            inviteHtml,
           ).catch((e: any) => logger.warn('Invite email failed', `email: ${agent.email}, error: ${e.message}`));
         }
       }

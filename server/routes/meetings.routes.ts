@@ -449,12 +449,55 @@ export function registerMeetingRoutes(app: Express): void {
         );
       }
 
-      // Customer booking confirmation email via nodemailer → Gmail SMTP
+      // Customer booking confirmation email
       if (customerEmail) {
+        const _pad = (n: number) => String(n).padStart(2, '0');
+        const _fmt = (d: Date) => `${d.getUTCFullYear()}${_pad(d.getUTCMonth()+1)}${_pad(d.getUTCDate())}T${_pad(d.getUTCHours())}${_pad(d.getUTCMinutes())}00Z`;
+        const _calEnd = new Date(scheduledUtc.getTime() + 3600000);
+        const customerCalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('Meeting with WAK Solutions')}&dates=${_fmt(scheduledUtc)}/${_fmt(_calEnd)}&details=${encodeURIComponent('Join your meeting: ' + brandedLink)}&sf=true&output=xml`;
+        const _year = new Date().getFullYear();
+        const customerConfirmHtml = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <tr><td style="background:#0F510F;padding:28px 32px;">
+          <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">WAK Solutions</h1>
+          <p style="margin:4px 0 0;color:rgba(255,255,255,0.7);font-size:13px;">Meeting Confirmation</p>
+        </td></tr>
+        <tr><td style="padding:32px;">
+          <p style="margin:0 0 24px;color:#222;font-size:15px;line-height:1.6;">Your meeting with WAK Solutions is confirmed. We look forward to connecting with you — please save the details below so you have everything you need on the day.</p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f9f0;border:1px solid #c8e6c9;border-radius:10px;margin-bottom:28px;">
+            <tr><td style="padding:22px 26px;">
+              <p style="margin:0 0 4px;font-size:11px;color:#666;text-transform:uppercase;font-weight:700;">Date &amp; Time (AST — UTC+3)</p>
+              <p style="margin:0 0 20px;font-size:16px;font-weight:700;color:#0F510F;">${ksaLabel}</p>
+              <p style="margin:0 0 4px;font-size:11px;color:#666;text-transform:uppercase;font-weight:700;">Meeting Link</p>
+              <a href="${brandedLink}" style="font-size:14px;color:#0F510F;font-weight:600;word-break:break-all;">${brandedLink}</a><br />
+              <a href="${brandedLink}" style="display:inline-block;margin-top:12px;background:#0F510F;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;">Join Meeting</a>
+            </td></tr>
+          </table>
+          <a href="${customerCalUrl}" target="_blank" style="display:inline-block;background:#4285F4;color:#fff;text-decoration:none;padding:11px 22px;border-radius:6px;font-size:14px;font-weight:600;margin-bottom:28px;">&#128197; Add to Google Calendar</a>
+          <p style="margin:0 0 10px;color:#444;font-size:14px;font-weight:700;">Before your meeting</p>
+          <ul style="margin:0 0 24px;padding-left:20px;color:#555;font-size:13px;line-height:1.9;">
+            <li>Use the link above to join — no software installation required, it opens in your browser.</li>
+            <li>Find a quiet spot with a stable internet connection a few minutes before the scheduled time.</li>
+            <li>You will receive a WhatsApp reminder 15 minutes before the meeting starts.</li>
+          </ul>
+          <p style="margin:0;color:#555;font-size:13px;line-height:1.6;">Need to reschedule or have a question? Simply reply to us on WhatsApp and we will be happy to help.</p>
+        </td></tr>
+        <tr><td style="background:#f9f9f9;border-top:1px solid #eee;padding:16px 32px;">
+          <p style="margin:0;font-size:11px;color:#aaa;text-align:center;">&copy; ${_year} WAK Solutions. All rights reserved.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
         sendEmail(
           customerEmail,
           'Your meeting with WAK Solutions is confirmed',
-          `<p>Hi,</p><p>Your meeting is confirmed for <strong>${ksaLabel} KSA time</strong>.</p><p><a href="${brandedLink}">Join Meeting</a></p><p>WAK Solutions</p>`,
+          customerConfirmHtml,
         ).catch((e: any) => logger.error('Customer confirmation email failed', e.message));
       }
 
@@ -643,12 +686,56 @@ export function registerMeetingRoutes(app: Express): void {
         scheduledUtc,
       }).catch((e: any) => logger.error('Demo manager email failed', e.message));
 
-      // Agent confirmation email via nodemailer → Gmail SMTP
+      // Agent demo confirmation email
       if (agent.email) {
+        const _dPad = (n: number) => String(n).padStart(2, '0');
+        const _dFmt = (d: Date) => `${d.getUTCFullYear()}${_dPad(d.getUTCMonth()+1)}${_dPad(d.getUTCDate())}T${_dPad(d.getUTCHours())}${_dPad(d.getUTCMinutes())}00Z`;
+        const _dCalEnd = new Date(scheduledUtc.getTime() + 3600000);
+        const demoCalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('WAK Solutions Demo')}&dates=${_dFmt(scheduledUtc)}/${_dFmt(_dCalEnd)}&details=${encodeURIComponent('Join your demo: ' + meetingLink)}&sf=true&output=xml`;
+        const _dYear = new Date().getFullYear();
+        const demoConfirmHtml = `<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /></head>
+<body style="margin:0;padding:0;background:#f5f5f5;font-family:Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f5f5f5;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+        <tr><td style="background:#0F510F;padding:28px 32px;">
+          <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">WAK Solutions</h1>
+          <p style="margin:4px 0 0;color:rgba(255,255,255,0.7);font-size:13px;">Demo Booking Confirmation</p>
+        </td></tr>
+        <tr><td style="padding:32px;">
+          <p style="margin:0 0 24px;color:#222;font-size:15px;line-height:1.6;">Hi ${agent.name || 'there'},</p>
+          <p style="margin:0 0 24px;color:#555;font-size:14px;line-height:1.6;">Your demo session with WAK Solutions is confirmed. We're excited to walk you through the platform and show you how it can transform your customer engagement. Please save the details below.</p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f9f0;border:1px solid #c8e6c9;border-radius:10px;margin-bottom:28px;">
+            <tr><td style="padding:22px 26px;">
+              <p style="margin:0 0 4px;font-size:11px;color:#666;text-transform:uppercase;font-weight:700;">Date &amp; Time (AST — UTC+3)</p>
+              <p style="margin:0 0 20px;font-size:16px;font-weight:700;color:#0F510F;">${ksaLabel}</p>
+              <p style="margin:0 0 4px;font-size:11px;color:#666;text-transform:uppercase;font-weight:700;">Meeting Link</p>
+              <a href="${meetingLink}" style="font-size:14px;color:#0F510F;font-weight:600;word-break:break-all;">${meetingLink}</a><br />
+              <a href="${meetingLink}" style="display:inline-block;margin-top:12px;background:#0F510F;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;">Join Demo</a>
+            </td></tr>
+          </table>
+          <a href="${demoCalUrl}" target="_blank" style="display:inline-block;background:#4285F4;color:#fff;text-decoration:none;padding:11px 22px;border-radius:6px;font-size:14px;font-weight:600;margin-bottom:28px;">&#128197; Add to Google Calendar</a>
+          <p style="margin:0 0 10px;color:#444;font-size:14px;font-weight:700;">What to expect</p>
+          <ul style="margin:0 0 24px;padding-left:20px;color:#555;font-size:13px;line-height:1.9;">
+            <li>A live walkthrough of the WAK Solutions platform tailored to your use case.</li>
+            <li>Time to ask questions and explore how the platform fits your team's workflow.</li>
+            <li>No software to install — the meeting runs entirely in your browser.</li>
+          </ul>
+          <p style="margin:0;color:#555;font-size:13px;line-height:1.6;">If you need to reschedule, please get in touch with us and we'll find a time that works for you.</p>
+        </td></tr>
+        <tr><td style="background:#f9f9f9;border-top:1px solid #eee;padding:16px 32px;">
+          <p style="margin:0;font-size:11px;color:#aaa;text-align:center;">&copy; ${_dYear} WAK Solutions. All rights reserved.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
         sendEmail(
           agent.email,
           'Your demo with WAK Solutions is confirmed',
-          `<p>Hi ${agent.name || 'there'},</p><p>Your demo is confirmed for <strong>${ksaLabel} KSA time</strong>.</p><p><a href="${meetingLink}">Join Meeting</a></p><p>WAK Solutions</p>`,
+          demoConfirmHtml,
         ).catch((e: any) => logger.error('Demo confirmation email failed', e.message));
       }
 
