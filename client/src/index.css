@@ -242,6 +242,21 @@
     inset: -1px;
   }
 
+  /* Landscape iPhone/iPad: extend background into safe-area insets so the
+     notch and Dynamic Island show the app shell color instead of white gaps.
+     viewport-fit=cover (set in index.html) lets the layout reach the edges;
+     these padding rules push interactive content back into the safe area.
+     env() returns 0 in portrait and on desktop — this block has no effect there. */
+  @supports (padding: env(safe-area-inset-left)) {
+    @media (orientation: landscape) and (max-width: 1024px) {
+      body {
+        background-color: #0F510F;
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+      }
+    }
+  }
+
   /* Push notification banners below the fixed mobile navbar in portrait mode.
      The navbar is h-[56px]; landscape and desktop are unaffected. */
   @media (max-width: 768px) and (orientation: portrait) {
