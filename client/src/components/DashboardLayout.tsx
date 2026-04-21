@@ -291,27 +291,31 @@ export default function DashboardLayout({
           </Link>
         </div>
 
-        {/* Banners */}
-        {showInstallPrompt && (
-          <div className="bg-blue-50 border-b border-blue-200 px-5 py-2.5 flex items-center justify-between gap-3 shrink-0 md:flex">
-            <div className="flex items-center gap-2 text-sm text-blue-800">
-              <Share className="w-4 h-4 shrink-0" />
-              <span>{t("iosInstallPrompt")}</span>
-            </div>
-            <button onClick={dismissInstallPrompt} className="shrink-0 text-blue-600 hover:text-blue-800 p-1 rounded transition-colors">
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        )}
-        {showBanner && (
-          <div className="bg-amber-50 border-b border-amber-200 px-5 py-2.5 flex items-center justify-between gap-3 shrink-0">
-            <div className="flex items-center gap-2 text-sm text-amber-800">
-              <Bell className="w-4 h-4 shrink-0" />
-              <span>{t("enableNotificationsPrompt")}</span>
-            </div>
-            <button onClick={enableNotifications} className="shrink-0 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg transition-colors">
-              {t("enableNotifications")}
-            </button>
+        {/* Banners — wrapped so portrait-mobile CSS can push them below the fixed navbar */}
+        {(showInstallPrompt || showBanner) && (
+          <div className="notification-banners">
+            {showInstallPrompt && (
+              <div className="bg-blue-50 border-b border-blue-200 px-5 py-2.5 flex items-center justify-between gap-3 shrink-0 md:flex">
+                <div className="flex items-center gap-2 text-sm text-blue-800">
+                  <Share className="w-4 h-4 shrink-0" />
+                  <span>{t("iosInstallPrompt")}</span>
+                </div>
+                <button onClick={dismissInstallPrompt} className="shrink-0 text-blue-600 hover:text-blue-800 p-1 rounded transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+            {showBanner && (
+              <div className="bg-amber-50 border-b border-amber-200 px-5 py-2.5 flex items-center justify-between gap-3 shrink-0">
+                <div className="flex items-center gap-2 text-sm text-amber-800">
+                  <Bell className="w-4 h-4 shrink-0" />
+                  <span>{t("enableNotificationsPrompt")}</span>
+                </div>
+                <button onClick={enableNotifications} className="shrink-0 text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white px-3 py-1.5 rounded-lg transition-colors">
+                  {t("enableNotifications")}
+                </button>
+              </div>
+            )}
           </div>
         )}
 

@@ -242,6 +242,14 @@
     inset: -1px;
   }
 
+  /* Push notification banners below the fixed mobile navbar in portrait mode.
+     The navbar is h-[56px]; landscape and desktop are unaffected. */
+  @media (max-width: 768px) and (orientation: portrait) {
+    .notification-banners {
+      padding-top: 56px;
+    }
+  }
+
   /* Unread message pulse animation */
   @keyframes pulse-dot {
     0%, 100% { opacity: 1; }
