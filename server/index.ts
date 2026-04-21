@@ -241,6 +241,31 @@ app.use((req, res, next) => {
     slog('WARN', 'db', 'conversation_id migration error (continuing)', String(err));
   }
 
+  // ── push_subscriptions — persists Web Push endpoints across restarts ──────
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS push_subscriptions (
+        id           SERIAL PRIMARY KEY,
+        agent_id     INTEGER NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+        endpoint     TEXT NOT NULL,
+        subscription JSONB NOT NULL,
+        company_id   INTEGER NOT NULL DEFAULT 1,
+        created_at   TIMESTAMPTZ DEFAULT NOW(),
+        updated_at   TIMESTAMPTZ DEFAULT NOW(),
+        CONSTRAINT push_subscriptions_endpoint_key UNIQUE (endpoint)
+      )
+    `);
+    await pool.query(
+      `CREATE INDEX IF NOT EXISTS push_subscriptions_agent_idx ON push_subscriptions (agent_id)`
+    );
+    await pool.query(
+      `CREATE INDEX IF NOT EXISTS push_subscriptions_company_idx ON push_subscriptions (company_id)`
+    );
+    slog('INFO', 'db', 'push_subscriptions migration applied');
+  } catch (err) {
+    slog('WARN', 'db', 'push_subscriptions migration error (continuing)', String(err));
+  }
+
   const [{ registerRoutes }, { serveStatic }] = await Promise.all([
     import("./routes"),
     import("./static"),

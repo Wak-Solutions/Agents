@@ -144,39 +144,34 @@ export function registerMessageRoutes(app: Express): void {
         `phone: ${maskPhone(data.customer_phone)}, type: text`
       );
 
-      // Look up whether this chat is assigned to a specific agent.
       const companyId = parseInt(req.body.company_id);
       if (!companyId) return res.status(400).json({ message: 'company_id is required' });
-      const escRow = await pool.query(
-        `SELECT assigned_agent_id FROM escalations
-         WHERE customer_phone=$1 AND status IN ('open','in_progress') AND company_id = $2
+
+      // Detect whether this is the start of a new conversation session by
+      // checking the conversation_id of the most recent message. A new
+      // conversation_id (not yet seen in notifiedChats) means the session
+      // just started — fire "New Chat". Subsequent messages in the same
+      // session are already in the set and produce no notification.
+      const convRow = await pool.query(
+        `SELECT conversation_id FROM messages
+         WHERE customer_phone = $1 AND company_id = $2
          ORDER BY created_at DESC LIMIT 1`,
         [data.customer_phone, companyId]
       );
-      const assignedAgentId: number | null = escRow.rows[0]?.assigned_agent_id ?? null;
+      const convId: string | null = convRow.rows[0]?.conversation_id ?? null;
+      const notifKey = convId ? `conv:${convId}` : `new:${data.customer_phone}`;
 
-      if (assignedAgentId) {
-        const key = `${assignedAgentId}:${data.customer_phone}`;
-        if (!notifiedChats.has(key)) {
-          notifiedChats.add(key);
-          await notifyAgent(assignedAgentId, {
-            title: 'New message',
-            body: `${maskPhone(data.customer_phone)}: ${data.message_text.substring(0, 60)}`,
-            url: '/inbox',
+      if (!notifiedChats.has(notifKey)) {
+        notifiedChats.add(notifKey);
+        await notifyAll(
+          {
+            title: 'New Chat',
+            body: `New conversation from ${maskPhone(data.customer_phone)}`,
+            url: `/dashboard?phone=${encodeURIComponent(data.customer_phone)}`,
             data: { phone: data.customer_phone },
-          });
-        }
-      } else {
-        const key = `all:${data.customer_phone}`;
-        if (!notifiedChats.has(key)) {
-          notifiedChats.add(key);
-          await notifyAll({
-            title: 'New customer waiting',
-            body: `${maskPhone(data.customer_phone)} is waiting — tap to claim`,
-            url: '/inbox',
-            data: { phone: data.customer_phone },
-          });
-        }
+          },
+          companyId,
+        );
       }
 
       res.json({ success: true });
@@ -186,12 +181,44 @@ export function registerMessageRoutes(app: Express): void {
     }
   });
 
+  // POST /api/human-requested — Python bot signals customer wants a human agent
+  // Does NOT interact with the escalations table; push notification only.
+  app.post('/api/human-requested', requireWebhookSecret, async (req: any, res: any) => {
+    try {
+      const { customer_phone, company_id } = req.body;
+      if (!customer_phone) return res.status(400).json({ message: 'customer_phone is required' });
+      const companyId = parseInt(company_id) || 1;
+      logger.info('Human agent requested', `phone: ${maskPhone(customer_phone)}`);
+      await notifyAll(
+        {
+          title: 'Human Requested',
+          body: `${maskPhone(customer_phone)} is requesting a human agent`,
+          url: `/dashboard?phone=${encodeURIComponent(customer_phone)}`,
+          data: { phone: customer_phone },
+        },
+        companyId,
+      );
+      res.json({ success: true });
+    } catch (err: any) {
+      logger.error('human-requested webhook failed', err.message);
+      res.status(400).json({ message: err.message });
+    }
+  });
+
   // POST /api/notifications/mark-read/:phone — clear notification dedup flag
-  app.post('/api/notifications/mark-read/:phone', requireAuth, (req: any, res: any) => {
-    const agentId = req.session.agentId as number;
+  app.post('/api/notifications/mark-read/:phone', requireAuth, async (req: any, res: any) => {
     const phone = decodeURIComponent(req.params.phone);
-    notifiedChats.delete(`${agentId}:${phone}`);
-    notifiedChats.delete(`all:${phone}`);
+    const companyId = req.session.companyId;
+    // Clear any active conversation session keys for this phone
+    const convRow = await pool.query(
+      `SELECT DISTINCT conversation_id FROM messages
+       WHERE customer_phone = $1 AND company_id = $2 AND conversation_id IS NOT NULL`,
+      [phone, companyId]
+    ).catch(() => ({ rows: [] as any[] }));
+    for (const row of convRow.rows) {
+      notifiedChats.delete(`conv:${row.conversation_id}`);
+    }
+    notifiedChats.delete(`new:${phone}`);
     res.json({ success: true });
   });
 }

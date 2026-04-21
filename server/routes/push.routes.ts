@@ -3,7 +3,7 @@
  */
 
 import type { Express } from 'express';
-import { pushSubscriptions, VAPID_PUBLIC_KEY } from '../push';
+import { VAPID_PUBLIC_KEY, registerSubscription, removeSubscription } from '../push';
 import { requireAuth } from '../middleware/auth';
 import { createLogger } from '../lib/logger';
 import { api } from '@shared/routes';
@@ -16,18 +16,31 @@ export function registerPushRoutes(app: Express): void {
     res.json({ publicKey: VAPID_PUBLIC_KEY });
   });
 
-  app.post(api.push.subscribe.path, requireAuth, (req: any, res: any) => {
-    const subscription = req.body;
-    const agentId = req.session.agentId as number;
-    pushSubscriptions.set(subscription.endpoint, { subscription, agentId });
-    logger.info('Push subscription registered', `agentId: ${agentId}`);
-    res.json({ success: true });
+  app.post(api.push.subscribe.path, requireAuth, async (req: any, res: any) => {
+    try {
+      const subscription = req.body;
+      if (!subscription?.endpoint) {
+        return res.status(400).json({ message: 'Invalid subscription object' });
+      }
+      const agentId = req.session.agentId as number;
+      const companyId = (req.session.companyId as number) ?? 1;
+      await registerSubscription(agentId, companyId, subscription);
+      res.json({ success: true });
+    } catch (err: any) {
+      logger.error('Subscribe failed', err.message);
+      res.status(500).json({ message: err.message });
+    }
   });
 
-  app.post(api.push.unsubscribe.path, requireAuth, (req: any, res: any) => {
-    const subscription = req.body;
-    pushSubscriptions.delete(subscription.endpoint);
-    logger.info('Push subscription removed', `agentId: ${req.session.agentId}`);
-    res.json({ success: true });
+  app.post(api.push.unsubscribe.path, requireAuth, async (req: any, res: any) => {
+    try {
+      const { endpoint } = req.body;
+      if (endpoint) await removeSubscription(endpoint);
+      logger.info('Push subscription removed', `agentId: ${req.session.agentId}`);
+      res.json({ success: true });
+    } catch (err: any) {
+      logger.error('Unsubscribe failed', err.message);
+      res.status(500).json({ message: err.message });
+    }
   });
 }

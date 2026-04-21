@@ -1,13 +1,10 @@
 /**
  * push.ts — Web Push notification state and delivery helpers.
  *
- * Extracted from routes.ts so that push subscriptions and the
- * "already notified" dedup set are not invisible module-level globals
- * scattered across a 1600-line file.
- *
- * NOTE: pushSubscriptions and notifiedChats are process-local in-memory state.
- * They will reset on every Railway deploy. This is acceptable for the current
- * scale but would need a Redis-backed solution for multi-instance deployments.
+ * Subscriptions are persisted in the push_subscriptions PostgreSQL table so
+ * they survive Railway restarts and re-deploys. The notifiedChats dedup set
+ * remains in-memory (worst case: one extra notification after a restart, which
+ * is acceptable).
  */
 
 import webpush from 'web-push';
@@ -38,78 +35,113 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
 export { VAPID_PUBLIC_KEY };
 
 // ---------------------------------------------------------------------------
-// In-memory state
+// In-memory dedup set (resets on restart — acceptable)
 // ---------------------------------------------------------------------------
 
 /**
- * All active push subscriptions, keyed by endpoint URL.
- * Each entry stores the subscription object and the agentId it belongs to.
- */
-export const pushSubscriptions = new Map<
-  string,
-  { subscription: any; agentId: number }
->();
-
-/**
- * Tracks which chats have already triggered a notification to avoid re-firing
- * on every message. Key format:
- *   "agentId:phone" for assigned chats
- *   "all:phone"     for unassigned chats
- *
- * Cleared when the agent marks a chat as read (POST /api/notifications/mark-read/:phone).
+ * Tracks which conversation sessions have already triggered a "New Chat"
+ * notification. Keyed on `conv:<conversation_id>` so each new session fires
+ * exactly once. Cleared via POST /api/notifications/mark-read/:phone.
  */
 export const notifiedChats = new Set<string>();
 
 // ---------------------------------------------------------------------------
-// Delivery helpers
+// DB-backed subscription management
 // ---------------------------------------------------------------------------
 
-async function sendPush(subscription: any, payload: object): Promise<void> {
-  try {
-    await webpush.sendNotification(subscription, JSON.stringify(payload));
-  } catch (err: any) {
-    logger.error('Push delivery failed', `endpoint: ${subscription.endpoint?.slice(-20)}, error: ${err.message}`);
-  }
-}
-
-/** Send push notification to every connected agent (used for unassigned chats). */
-export async function notifyAll(payload: object): Promise<void> {
-  const promises = Array.from(pushSubscriptions.values()).map(({ subscription }) =>
-    sendPush(subscription, payload)
+export async function registerSubscription(
+  agentId: number,
+  companyId: number,
+  subscription: any,
+): Promise<void> {
+  await pool.query(
+    `INSERT INTO push_subscriptions (agent_id, endpoint, subscription, company_id)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (endpoint)
+     DO UPDATE SET agent_id = $1, subscription = $3, company_id = $4, updated_at = NOW()`,
+    [agentId, subscription.endpoint, JSON.stringify(subscription), companyId],
   );
-  await Promise.all(promises);
-  logger.info('Push sent to all agents', `subscribers: ${pushSubscriptions.size}`);
+  logger.info('Push subscription persisted', `agentId: ${agentId}`);
 }
 
-/** Send push notification only to a specific agent's subscriptions. */
-export async function notifyAgent(agentId: number, payload: object): Promise<void> {
-  const promises: Promise<void>[] = [];
-  for (const { subscription, agentId: aid } of pushSubscriptions.values()) {
-    if (aid === agentId) {
-      promises.push(sendPush(subscription, payload));
-    }
-  }
-  await Promise.all(promises);
-  if (promises.length > 0) {
-    logger.info('Push sent to agent', `agentId: ${agentId}, subscriptions: ${promises.length}`);
-  }
+export async function removeSubscription(endpoint: string): Promise<void> {
+  await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [endpoint]);
 }
 
-/** Send push notification only to admin agents (used for escalations). */
-export async function notifyAdmins(payload: object): Promise<void> {
+// ---------------------------------------------------------------------------
+// Low-level delivery — removes expired subscriptions on 410/404
+// ---------------------------------------------------------------------------
+
+async function sendPush(
+  row: { endpoint: string; subscription: any },
+  payload: object,
+): Promise<void> {
+  const sub =
+    typeof row.subscription === 'string'
+      ? JSON.parse(row.subscription)
+      : row.subscription;
   try {
-    const adminRes = await pool.query(
-      "SELECT id FROM agents WHERE role='admin' AND is_active=true"
+    await webpush.sendNotification(sub, JSON.stringify(payload));
+  } catch (err: any) {
+    logger.error(
+      'Push delivery failed',
+      `endpoint: ...${row.endpoint.slice(-20)}, status: ${err.statusCode ?? 'n/a'}, error: ${err.message}`,
     );
-    const adminIds = new Set<number>(adminRes.rows.map((r: any) => r.id as number));
-    const promises: Promise<void>[] = [];
-    for (const { subscription, agentId } of pushSubscriptions.values()) {
-      if (adminIds.has(agentId)) {
-        promises.push(sendPush(subscription, payload));
-      }
+    // 410 Gone = subscription revoked; 404 = endpoint not found → clean up
+    if (err.statusCode === 410 || err.statusCode === 404) {
+      removeSubscription(row.endpoint).catch(() => {});
+      logger.info('Removed expired push subscription', `endpoint: ...${row.endpoint.slice(-20)}`);
     }
-    await Promise.all(promises);
-    logger.info('Push sent to admins', `admin_count: ${adminIds.size}, subscriptions: ${promises.length}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Public delivery helpers
+// ---------------------------------------------------------------------------
+
+/** Broadcast to all subscribed agents (optionally filtered by companyId). */
+export async function notifyAll(payload: object, companyId?: number): Promise<void> {
+  const res = companyId
+    ? await pool.query(
+        'SELECT endpoint, subscription FROM push_subscriptions WHERE company_id = $1',
+        [companyId],
+      )
+    : await pool.query('SELECT endpoint, subscription FROM push_subscriptions');
+  await Promise.all(res.rows.map((row: any) => sendPush(row, payload)));
+  logger.info('Push sent to all agents', `subscribers: ${res.rows.length}${companyId ? `, companyId: ${companyId}` : ''}`);
+}
+
+/** Send to a specific agent's registered devices. */
+export async function notifyAgent(agentId: number, payload: object): Promise<void> {
+  const res = await pool.query(
+    'SELECT endpoint, subscription FROM push_subscriptions WHERE agent_id = $1',
+    [agentId],
+  );
+  await Promise.all(res.rows.map((row: any) => sendPush(row, payload)));
+  if (res.rows.length > 0) {
+    logger.info('Push sent to agent', `agentId: ${agentId}, subscriptions: ${res.rows.length}`);
+  }
+}
+
+/** Send to all admin-role agents (optionally filtered by companyId). */
+export async function notifyAdmins(payload: object, companyId?: number): Promise<void> {
+  try {
+    const res = companyId
+      ? await pool.query(
+          `SELECT ps.endpoint, ps.subscription
+           FROM push_subscriptions ps
+           JOIN agents a ON a.id = ps.agent_id
+           WHERE a.role = 'admin' AND a.is_active = true AND ps.company_id = $1`,
+          [companyId],
+        )
+      : await pool.query(
+          `SELECT ps.endpoint, ps.subscription
+           FROM push_subscriptions ps
+           JOIN agents a ON a.id = ps.agent_id
+           WHERE a.role = 'admin' AND a.is_active = true`,
+        );
+    await Promise.all(res.rows.map((row: any) => sendPush(row, payload)));
+    logger.info('Push sent to admins', `subscriptions: ${res.rows.length}`);
   } catch (err: any) {
     logger.error('notifyAdmins failed', err.message);
   }

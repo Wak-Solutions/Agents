@@ -434,17 +434,17 @@ export function registerMeetingRoutes(app: Express): void {
 
       // Push notification
       const meetingPush = {
-        title: 'Meeting booked',
+        title: 'Meeting Booked',
         body: `${maskPhone(meeting.customer_phone)} — ${ksaLabel}`,
         url: '/meetings',
       };
-      logger.info('Push subscriptions at booking', `count: ${require('../push').pushSubscriptions.size}, agent_id: ${meeting.agent_id ?? 'unassigned'}`);
+      logger.info('Sending meeting booked push', `agent_id: ${meeting.agent_id ?? 'unassigned'}`);
       if (meeting.agent_id) {
         notifyAgent(meeting.agent_id, meetingPush).catch(
           (e: any) => logger.error('Push failed', e.message)
         );
       } else {
-        notifyAll(meetingPush).catch(
+        notifyAll(meetingPush, companyId).catch(
           (e: any) => logger.error('Push failed', e.message)
         );
       }
@@ -740,7 +740,7 @@ export function registerMeetingRoutes(app: Express): void {
       }
 
       notifyAll({
-        title: 'Demo booked',
+        title: 'Meeting Booked',
         body: `${agent.name || 'Agent'} — ${ksaLabel}`,
         url: '/meetings',
       }).catch((e: any) => logger.error('Demo push failed', e.message));
