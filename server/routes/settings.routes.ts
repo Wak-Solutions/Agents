@@ -116,7 +116,7 @@ export function registerSettingsRoutes(app: Express): void {
     try {
       const companyId: number = req.session.companyId;
       const result = await pool.query(
-        `SELECT whatsapp_phone_number_id, whatsapp_waba_id, whatsapp_token
+        `SELECT whatsapp_phone_number_id, whatsapp_waba_id, whatsapp_token, whatsapp_app_secret
          FROM companies WHERE id = $1`,
         [companyId]
       );
@@ -126,6 +126,7 @@ export function registerSettingsRoutes(app: Express): void {
         phoneNumberId: row.whatsapp_phone_number_id ?? '',
         wabaId:        row.whatsapp_waba_id         ?? '',
         accessToken:   row.whatsapp_token            ?? '',
+        appSecret:     row.whatsapp_app_secret      ?? '',
       });
     } catch (err: any) {
       logger.error('getWhatsAppSettings failed', err.message);
@@ -137,7 +138,7 @@ export function registerSettingsRoutes(app: Express): void {
   app.put('/api/settings/whatsapp', requireAuth, requireAdmin, async (req: any, res: any) => {
     try {
       const companyId: number = req.session.companyId;
-      const { phoneNumberId, wabaId, accessToken } = req.body;
+      const { phoneNumberId, wabaId, accessToken, appSecret } = req.body;
 
       if (!phoneNumberId || !wabaId || !accessToken) {
         return res.status(400).json({ message: 'phoneNumberId, wabaId, and accessToken are required' });
@@ -147,9 +148,10 @@ export function registerSettingsRoutes(app: Express): void {
         `UPDATE companies
          SET whatsapp_phone_number_id = $1,
              whatsapp_waba_id         = $2,
-             whatsapp_token           = $3
-         WHERE id = $4`,
-        [String(phoneNumberId).trim(), String(wabaId).trim(), String(accessToken).trim(), companyId]
+             whatsapp_token           = $3,
+             whatsapp_app_secret      = $4
+         WHERE id = $5`,
+        [String(phoneNumberId).trim(), String(wabaId).trim(), String(accessToken).trim(), appSecret ? String(appSecret).trim() : null, companyId]
       );
 
       logger.info('setWhatsAppSettings', `companyId: ${companyId}, phoneNumberId: ${phoneNumberId}`);

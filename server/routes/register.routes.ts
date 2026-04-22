@@ -33,6 +33,7 @@ async function ensureOnboardingColumns(): Promise<void> {
     { name: 'team_size', type: 'TEXT' },
     { name: 'onboarding_step', type: 'INTEGER DEFAULT 1' },
     { name: 'onboarding_complete', type: 'BOOLEAN DEFAULT false' },
+    { name: 'whatsapp_app_secret', type: 'TEXT' },
   ];
   for (const col of cols) {
     await pool.query(
@@ -168,7 +169,7 @@ export function registerRegistrationRoutes(app: Express): void {
 
   // ── Step 3: WhatsApp credentials ────────────────────────────────────────
   app.put('/api/register/whatsapp', requireAuth, async (req: any, res: any) => {
-    const { phoneNumberId, wabaId, accessToken } = req.body;
+    const { phoneNumberId, wabaId, accessToken, appSecret } = req.body;
     const companyId = req.session.companyId;
 
     try {
@@ -177,9 +178,10 @@ export function registerRegistrationRoutes(app: Express): void {
          SET whatsapp_phone_number_id = $1,
              whatsapp_waba_id = $2,
              whatsapp_token = $3,
+             whatsapp_app_secret = $4,
              onboarding_step = GREATEST(onboarding_step, 4)
-         WHERE id = $4`,
-        [phoneNumberId, wabaId, accessToken, companyId]
+         WHERE id = $5`,
+        [phoneNumberId, wabaId, accessToken, appSecret || null, companyId]
       );
       logger.info('WhatsApp credentials saved', `companyId: ${companyId}`);
       res.json({ success: true });

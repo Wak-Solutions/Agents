@@ -11,6 +11,7 @@ interface WhatsAppCredentials {
   phoneNumberId: string;
   wabaId: string;
   accessToken: string;
+  appSecret: string;
 }
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
@@ -34,8 +35,9 @@ const inputClass =
 ───────────────────────────────────────────────────────────────────────────── */
 
 function WhatsAppPanel({ t }: { t: (k: string) => string }) {
-  const [creds, setCreds] = useState<WhatsAppCredentials>({ phoneNumberId: "", wabaId: "", accessToken: "" });
+  const [creds, setCreds] = useState<WhatsAppCredentials>({ phoneNumberId: "", wabaId: "", accessToken: "", appSecret: "" });
   const [revealToken, setRevealToken] = useState(false);
+  const [revealSecret, setRevealSecret] = useState(false);
   const [loadError, setLoadError] = useState("");
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [saveError, setSaveError] = useState("");
@@ -43,11 +45,15 @@ function WhatsAppPanel({ t }: { t: (k: string) => string }) {
   const [verifyError, setVerifyError] = useState("");
   const [verifiedName, setVerifiedName] = useState("");
 
-  // Reset verified state when any credential changes
+  // Reset verified state when phone/waba/token credentials change (not appSecret —
+  // verify doesn't test it, so don't invalidate verification on secret changes).
   const updateCreds = (patch: Partial<WhatsAppCredentials>) => {
     setCreds(prev => ({ ...prev, ...patch }));
-    setVerifyStatus("idle");
-    setVerifiedName("");
+    const verifyInvalidating = 'phoneNumberId' in patch || 'wabaId' in patch || 'accessToken' in patch;
+    if (verifyInvalidating) {
+      setVerifyStatus("idle");
+      setVerifiedName("");
+    }
     setSaveStatus("idle");
   };
 
@@ -187,6 +193,36 @@ function WhatsAppPanel({ t }: { t: (k: string) => string }) {
               </button>
             )}
           </div>
+        </div>
+
+        {/* App Secret */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            App Secret
+            <span className="text-xs text-gray-400 font-normal ms-1.5">(Meta Developer → App Settings → Basic → App Secret)</span>
+          </label>
+          <div className="relative">
+            <input
+              type={revealSecret ? "text" : "password"}
+              className={inputClass + " pe-24"}
+              value={creds.appSecret}
+              onChange={e => updateCreds({ appSecret: e.target.value })}
+              placeholder={creds.appSecret ? maskToken(creds.appSecret) : "32-char hex string"}
+            />
+            {creds.appSecret && (
+              <button
+                type="button"
+                onClick={() => setRevealSecret(v => !v)}
+                className="absolute end-3 top-1/2 -translate-y-1/2 flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700 font-medium transition-colors"
+              >
+                {revealSecret
+                  ? <><EyeOff className="w-3.5 h-3.5" />{t("settingsHide")}</>
+                  : <><Eye className="w-3.5 h-3.5" />{t("settingsReveal")}</>
+                }
+              </button>
+            )}
+          </div>
+          <p className="text-xs text-amber-700 mt-1.5">Required for Meta to send messages to your bot. Without this, the signature check will reject all incoming messages.</p>
         </div>
 
         {/* Verify row */}

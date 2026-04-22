@@ -32,6 +32,7 @@ interface FormData {
   phoneNumberId: string;
   wabaId: string;
   accessToken: string;
+  appSecret: string;
   whatsappVerified: boolean;
   whatsappDisplayName: string;
   whatsappNumberConfirmed: boolean;
@@ -42,7 +43,7 @@ interface FormData {
 const INITIAL_FORM: FormData = {
   firstName: "", lastName: "", email: "", password: "", confirmPassword: "", phone: "",
   businessName: "", industry: "", country: "", website: "", teamSize: "",
-  phoneNumberId: "", wabaId: "", accessToken: "", whatsappVerified: false, whatsappDisplayName: "", whatsappNumberConfirmed: false,
+  phoneNumberId: "", wabaId: "", accessToken: "", appSecret: "", whatsappVerified: false, whatsappDisplayName: "", whatsappNumberConfirmed: false,
   agents: [{ name: "", email: "" }],
 };
 
@@ -527,6 +528,19 @@ function Step3({ form, setForm, t }: { form: FormData; setForm: (f: FormData) =>
         />
       </FormField>
 
+      <FormField label="App Secret">
+        <input
+          type="password"
+          className={inputClass}
+          value={form.appSecret}
+          onChange={(e) => setForm({ ...form, appSecret: e.target.value })}
+          placeholder="Meta → App Settings → Basic → App Secret"
+        />
+        <p className="text-xs text-amber-700 mt-1.5">
+          Required for incoming messages. Found in Meta Developer Console → your app → Settings → Basic → App Secret.
+        </p>
+      </FormField>
+
       <div className="flex items-center gap-3">
         <button
           type="button"
@@ -793,6 +807,7 @@ export default function RegisterPage() {
               phoneNumberId: form.phoneNumberId,
               wabaId: form.wabaId,
               accessToken: form.accessToken,
+              appSecret: form.appSecret,
             }),
           });
           if (!resp3.ok) {
