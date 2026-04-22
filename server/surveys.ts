@@ -51,14 +51,16 @@ export async function ensureSurveyTables(): Promise<void> {
     `CREATE UNIQUE INDEX IF NOT EXISTS one_active_survey ON surveys (is_active) WHERE is_active = true`,
     // ── Column migrations ──
     `ALTER TABLE surveys          ADD COLUMN IF NOT EXISTS is_default    BOOLEAN DEFAULT false`,
+    `ALTER TABLE surveys          ADD COLUMN IF NOT EXISTS company_id    INTEGER NOT NULL DEFAULT 1`,
     `ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS agent_id      INTEGER`,
     `ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS escalation_id INTEGER`,
     `ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS meeting_id    INTEGER REFERENCES meetings(id)`,
+    `ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS company_id    INTEGER NOT NULL DEFAULT 1`,
     `ALTER TABLE survey_answers   ADD COLUMN IF NOT EXISTS answer_yes_no BOOLEAN`,
     // Seed default survey — skipped if one already exists
     `WITH new_survey AS (
-       INSERT INTO surveys (title, description, is_default, is_active)
-       SELECT 'WAK Standard Survey', 'Default customer satisfaction survey', true, true
+       INSERT INTO surveys (title, description, is_default, is_active, company_id)
+       SELECT 'WAK Standard Survey', 'Default customer satisfaction survey', true, true, 1
        WHERE NOT EXISTS (SELECT 1 FROM surveys WHERE is_default = true)
        RETURNING id
      )
