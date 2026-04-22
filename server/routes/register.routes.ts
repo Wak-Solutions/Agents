@@ -73,17 +73,24 @@ export function registerRegistrationRoutes(app: Express): void {
         return res.status(409).json({ error: 'An account with this email already exists' });
       }
 
-      // Create company
+      // 1. Create company (Removed 'plan' and 'trial_ends_at' columns here)
       const companyName = `${firstName} ${lastName}'s Company`;
       const companyRes = await client.query(
-        `INSERT INTO companies (name, email, plan, trial_ends_at, onboarding_step)
-         VALUES ($1, $2, 'trial', NOW() + INTERVAL '14 days', 2)
+        `INSERT INTO companies (name, email, onboarding_step)
+         VALUES ($1, $2, 2)
          RETURNING id`,
         [companyName, email]
       );
       const companyId = companyRes.rows[0].id;
 
-      // Create admin agent
+      // 2. Create the associated subscription (The missing link)
+      await client.query(
+        `INSERT INTO subscriptions (company_id, plan, status, trial_ends_at)
+         VALUES ($1, 'trial', 'trial', NOW() + INTERVAL '14 days')`,
+        [companyId]
+      );
+
+      // 3. Create admin agent
       const hash = await bcrypt.hash(password, 10);
       const agentRes = await client.query(
         `INSERT INTO agents (name, email, password_hash, role, company_id, is_active)
@@ -101,7 +108,7 @@ export function registerRegistrationRoutes(app: Express): void {
         );
       }
 
-      // Create a blank chatbot_config row so new companies have their own config from day 1
+      // Create a blank chatbot_config row
       await client.query(
         `INSERT INTO chatbot_config (system_prompt, override_active, company_id)
          VALUES ('', false, $1)`,
