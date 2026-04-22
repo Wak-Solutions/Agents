@@ -56,6 +56,8 @@ export async function ensureSurveyTables(): Promise<void> {
     `ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS escalation_id INTEGER`,
     `ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS meeting_id    INTEGER REFERENCES meetings(id)`,
     `ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS company_id    INTEGER NOT NULL DEFAULT 1`,
+    `ALTER TABLE survey_questions ADD COLUMN IF NOT EXISTS company_id    INTEGER NOT NULL DEFAULT 1`,
+    `ALTER TABLE survey_answers   ADD COLUMN IF NOT EXISTS company_id    INTEGER NOT NULL DEFAULT 1`,
     `ALTER TABLE survey_answers   ADD COLUMN IF NOT EXISTS answer_yes_no BOOLEAN`,
     // Seed default survey — skipped if one already exists
     `WITH new_survey AS (
@@ -64,8 +66,8 @@ export async function ensureSurveyTables(): Promise<void> {
        WHERE NOT EXISTS (SELECT 1 FROM surveys WHERE is_default = true)
        RETURNING id
      )
-     INSERT INTO survey_questions (survey_id, question_text, question_type, order_index)
-     SELECT id, q.question_text, q.question_type, q.order_index
+     INSERT INTO survey_questions (survey_id, question_text, question_type, order_index, company_id)
+     SELECT id, q.question_text, q.question_type, q.order_index, 1
      FROM new_survey, (VALUES
        ('How would you rate the quality of our service?', 'rating',    1),
        ('Would you recommend WAK Solutions to others?',   'yes_no',    2),
@@ -321,9 +323,9 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
         order_index: z.number().int(),
       }).parse(req.body);
       const result = await pool.query(
-        `INSERT INTO survey_questions (survey_id, question_text, question_type, order_index)
-         VALUES ($1, $2, $3, $4) RETURNING *`,
-        [req.params.id, question_text, question_type, order_index]
+        `INSERT INTO survey_questions (survey_id, question_text, question_type, order_index, company_id)
+         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+        [req.params.id, question_text, question_type, order_index, companyId]
       );
       res.status(201).json(result.rows[0]);
     } catch (err: any) {
@@ -558,9 +560,9 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
 
       for (const a of answers) {
         await pool.query(
-          `INSERT INTO survey_answers (response_id, question_id, answer_text, answer_rating, answer_yes_no)
-           VALUES ($1, $2, $3, $4, $5)`,
-          [response.id, a.question_id, a.answer_text ?? null, a.answer_rating ?? null, a.answer_yes_no ?? null]
+          `INSERT INTO survey_answers (response_id, question_id, answer_text, answer_rating, answer_yes_no, company_id)
+           VALUES ($1, $2, $3, $4, $5, $6)`,
+          [response.id, a.question_id, a.answer_text ?? null, a.answer_rating ?? null, a.answer_yes_no ?? null, response.company_id ?? 1]
         );
       }
 
