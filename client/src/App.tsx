@@ -24,6 +24,7 @@ import TermsPage from "./pages/TermsPage";
 import RegisterPage from "./pages/RegisterPage";
 import SettingsPage from "./pages/SettingsPage";
 import BookDemoPage from "./pages/BookDemoPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 
 function Router() {
   return (
@@ -35,6 +36,7 @@ function Router() {
       <Route path="/book/:token" component={BookMeeting} />
       <Route path="/register" component={RegisterPage} />
       <Route path="/login" component={Login} />
+      <Route path="/reset-password/:token" component={ResetPasswordPage} />
       <Route path="/guide" component={Guide} />
       <Route path="/statistics" component={Statistics} />
       <Route path="/chatbot-config" component={ChatbotConfig} />

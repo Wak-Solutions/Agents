@@ -10,6 +10,8 @@
  */
 
 import bcrypt from 'bcrypt';
+import crypto from 'crypto';
+import rateLimit from 'express-rate-limit';
 import type { Express } from 'express';
 import {
   generateAuthenticationOptions,
@@ -23,6 +25,7 @@ import { requireAuth } from '../middleware/auth';
 import { createLogger } from '../lib/logger';
 import { api } from '@shared/routes';
 import { getCompanyTrialStatus } from '../lib/trial';
+import { sendEmail } from '../email';
 
 const logger = createLogger('auth');
 
@@ -52,6 +55,23 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
       created_at    TIMESTAMPTZ DEFAULT NOW()
     )
   `).catch(() => {});
+
+  // Ensure the password_resets table exists on startup.
+  // Stores only the SHA-256 hash of the reset token so a DB leak does not
+  // expose usable reset links. Tokens are single-use and short-lived.
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS password_resets (
+      id         SERIAL PRIMARY KEY,
+      agent_id   INTEGER NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+      token_hash TEXT NOT NULL UNIQUE,
+      expires_at TIMESTAMPTZ NOT NULL,
+      used_at    TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `).catch(() => {});
+  await pool.query(
+    `CREATE INDEX IF NOT EXISTS password_resets_agent_idx ON password_resets (agent_id)`
+  ).catch(() => {});
 
   // ── Login ────────────────────────────────────────────────────────────────
   app.post(api.auth.login.path, async (req: any, res: any) => {
@@ -389,6 +409,148 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
       res.json({ registered: result.rows[0].n > 0 });
     } catch {
       res.json({ registered: false });
+    }
+  });
+
+  // ── Forgot / Reset Password ──────────────────────────────────────────────
+  // Limits per IP. Prevents abusing the endpoint to flood users' inboxes or
+  // to enumerate accounts via timing.
+  const forgotLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: 'Too many requests. Please try again later.' },
+  });
+  const resetLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: 'Too many requests. Please try again later.' },
+  });
+
+  const RESET_TTL_MINUTES = 30;
+
+  function hashToken(raw: string): string {
+    return crypto.createHash('sha256').update(raw).digest('hex');
+  }
+
+  function getAppBaseUrl(req: any): string {
+    const raw = (
+      process.env.APP_URL ||
+      process.env.RAILWAY_PUBLIC_URL ||
+      process.env.RAILWAY_PUBLIC_DOMAIN ||
+      req.headers.host ||
+      'localhost'
+    ).replace(/\/$/, '');
+    return raw.startsWith('http') ? raw : `https://${raw}`;
+  }
+
+  // POST /api/auth/forgot-password — identifier is email or phone.
+  // Always responds 200 with a generic message regardless of whether the
+  // account exists, so the endpoint cannot be used to enumerate users.
+  app.post('/api/auth/forgot-password', forgotLimiter, async (req: any, res: any) => {
+    const identifier = typeof req.body?.identifier === 'string' ? req.body.identifier.trim() : '';
+    const generic = { success: true, message: 'If an account exists for that email or phone, a reset link has been sent.' };
+    if (!identifier) {
+      return res.status(400).json({ message: 'Email or phone is required' });
+    }
+    try {
+      const agentRes = await pool.query(
+        `SELECT id, name, email, is_active FROM agents WHERE email = $1 OR phone = $1 LIMIT 1`,
+        [identifier]
+      );
+      const agent = agentRes.rows[0];
+      if (!agent || !agent.is_active || !agent.email) {
+        // Silently succeed — we cannot email phone-only users, and we don't
+        // reveal whether the identifier matched anything.
+        logger.info('forgotPassword — no actionable account', `identifier: ${identifier.slice(0, 3)}***`);
+        return res.json(generic);
+      }
+
+      const rawToken = crypto.randomBytes(32).toString('hex');
+      const tokenHash = hashToken(rawToken);
+      const expiresAt = new Date(Date.now() + RESET_TTL_MINUTES * 60 * 1000);
+
+      // Invalidate any prior unused tokens for this account to keep exactly
+      // one live reset link at a time.
+      await pool.query(
+        `UPDATE password_resets SET used_at = NOW()
+         WHERE agent_id = $1 AND used_at IS NULL`,
+        [agent.id]
+      );
+      await pool.query(
+        `INSERT INTO password_resets (agent_id, token_hash, expires_at) VALUES ($1, $2, $3)`,
+        [agent.id, tokenHash, expiresAt]
+      );
+
+      const resetUrl = `${getAppBaseUrl(req)}/reset-password/${rawToken}`;
+      const html = `
+        <div style="font-family:Arial,Helvetica,sans-serif;background:#f5f5f5;padding:32px 16px;">
+          <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;">
+            <div style="background:#0F510F;padding:22px 28px;">
+              <h1 style="margin:0;color:#fff;font-size:20px;">WAK Solutions</h1>
+              <p style="margin:4px 0 0;color:rgba(255,255,255,0.8);font-size:13px;">Password reset</p>
+            </div>
+            <div style="padding:28px;color:#333;font-size:14px;line-height:1.6;">
+              <p>Hi ${agent.name || 'there'},</p>
+              <p>We received a request to reset the password for your WAK Solutions account. Click the button below to choose a new password. This link is valid for ${RESET_TTL_MINUTES} minutes and can only be used once.</p>
+              <p style="text-align:center;margin:28px 0;">
+                <a href="${resetUrl}" style="background:#0F510F;color:#fff;text-decoration:none;padding:12px 26px;border-radius:8px;font-weight:600;display:inline-block;">Reset Password</a>
+              </p>
+              <p style="font-size:12px;color:#666;">If the button does not work, copy and paste this link into your browser:<br /><span style="word-break:break-all;color:#0F510F;">${resetUrl}</span></p>
+              <p style="font-size:12px;color:#666;margin-top:20px;">If you did not request a password reset you can safely ignore this email — your password will not change.</p>
+            </div>
+          </div>
+        </div>
+      `;
+      sendEmail(agent.email, 'Reset your WAK Solutions password', html)
+        .catch((e: any) => logger.error('forgotPassword — email send failed', e.message));
+
+      logger.info('forgotPassword — reset email dispatched', `agentId: ${agent.id}`);
+      return res.json(generic);
+    } catch (err: any) {
+      logger.error('forgotPassword failed', err.message);
+      // Still return the generic success so attackers cannot infer errors.
+      return res.json(generic);
+    }
+  });
+
+  // POST /api/auth/reset-password — consumes a reset token and sets a new password.
+  app.post('/api/auth/reset-password', resetLimiter, async (req: any, res: any) => {
+    try {
+      const token = typeof req.body?.token === 'string' ? req.body.token : '';
+      const newPassword = typeof req.body?.newPassword === 'string' ? req.body.newPassword : '';
+      if (!token || !newPassword) {
+        return res.status(400).json({ message: 'Token and new password are required' });
+      }
+      if (newPassword.length < 8) {
+        return res.status(400).json({ message: 'New password must be at least 8 characters' });
+      }
+
+      const tokenHash = hashToken(token);
+      const r = await pool.query(
+        `SELECT id, agent_id, expires_at, used_at FROM password_resets WHERE token_hash = $1 LIMIT 1`,
+        [tokenHash]
+      );
+      const reset = r.rows[0];
+      if (!reset || reset.used_at || new Date(reset.expires_at) < new Date()) {
+        return res.status(400).json({ message: 'This reset link is invalid or has expired.' });
+      }
+
+      const newHash = await bcrypt.hash(newPassword, 10);
+      // Atomic-ish: mark the token used, then update the password. Both scoped
+      // to the same agent so a tampered body cannot redirect the update.
+      await pool.query(`UPDATE password_resets SET used_at = NOW() WHERE id = $1`, [reset.id]);
+      await pool.query(`UPDATE agents SET password_hash = $1 WHERE id = $2`, [newHash, reset.agent_id]);
+
+      logger.info('resetPassword success', `agentId: ${reset.agent_id}`);
+      // Never return a password or hash.
+      return res.json({ success: true });
+    } catch (err: any) {
+      logger.error('resetPassword failed', err.message);
+      return res.status(500).json({ message: 'Could not reset password. Please try again.' });
     }
   });
 }

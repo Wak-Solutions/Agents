@@ -20,6 +20,10 @@ export default function Login() {
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [termsChecked, setTermsChecked] = useState(false);
   const [termsAccepting, setTermsAccepting] = useState(false);
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotIdentifier, setForgotIdentifier] = useState("");
+  const [forgotStatus, setForgotStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [forgotError, setForgotError] = useState("");
   const { t, lang } = useLanguage();
   const isRtl = lang === "ar";
 
@@ -97,6 +101,30 @@ export default function Login() {
     }
   };
 
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!forgotIdentifier.trim()) return;
+    setForgotStatus("sending");
+    setForgotError("");
+    try {
+      const res = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ identifier: forgotIdentifier.trim() }),
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        setForgotStatus("error");
+        setForgotError(body.message || "Something went wrong. Please try again.");
+        return;
+      }
+      setForgotStatus("sent");
+    } catch {
+      setForgotStatus("error");
+      setForgotError("Network error. Please try again.");
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!password) return;
@@ -145,6 +173,60 @@ export default function Login() {
                   <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{t("termsModalAccepting")}</>
                 ) : t("termsModalContinue")}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Forgot password modal */}
+      {showForgotModal && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" dir={isRtl ? "rtl" : "ltr"}>
+            <div className="px-6 pt-6 pb-4 border-b border-gray-100 flex items-start justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-gray-900">Reset your password</h2>
+                <p className="text-sm text-gray-500 mt-1">Enter your email and we'll send you a reset link.</p>
+              </div>
+              <button onClick={() => setShowForgotModal(false)} className="text-gray-400 hover:text-gray-600 text-2xl leading-none">&times;</button>
+            </div>
+            <div className="px-6 py-5">
+              {forgotStatus === "sent" ? (
+                <div className="text-center py-4">
+                  <p className="text-sm text-gray-700">If an account exists for that email or phone, a reset link has been sent. The link is valid for 30 minutes.</p>
+                  <button
+                    onClick={() => setShowForgotModal(false)}
+                    className="mt-5 w-full bg-[#0F510F] text-white py-3 rounded-xl font-semibold text-sm hover:bg-[#0d4510] transition-colors"
+                  >
+                    Close
+                  </button>
+                </div>
+              ) : (
+                <form onSubmit={handleForgotSubmit} className="space-y-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-1.5">
+                      <Mail className="w-3.5 h-3.5 text-gray-400" />
+                      Email or phone
+                    </label>
+                    <input
+                      type="text"
+                      value={forgotIdentifier}
+                      onChange={e => setForgotIdentifier(e.target.value)}
+                      placeholder="email@example.com or +966501234567"
+                      autoFocus
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0F510F]/20 focus:border-[#0F510F]/40 bg-white"
+                    />
+                  </div>
+                  {forgotError && <p className="text-sm text-red-500">{forgotError}</p>}
+                  <button
+                    type="submit"
+                    disabled={!forgotIdentifier.trim() || forgotStatus === "sending"}
+                    className="w-full bg-[#0F510F] text-white py-3 rounded-xl font-semibold text-sm disabled:opacity-50 hover:bg-[#0d4510] transition-colors flex items-center justify-center gap-2"
+                  >
+                    {forgotStatus === "sending" && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                    Send reset link
+                  </button>
+                </form>
+              )}
             </div>
           </div>
         </div>
@@ -241,6 +323,20 @@ export default function Login() {
                   {error.message || t("loginErrorCredentials")}
                 </p>
               )}
+              <div className="flex justify-end pt-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForgotModal(true);
+                    setForgotIdentifier(identifier);
+                    setForgotStatus("idle");
+                    setForgotError("");
+                  }}
+                  className="text-xs font-medium text-[#0F510F] hover:text-[#0d4510] transition-colors"
+                >
+                  Forgot password?
+                </button>
+              </div>
             </div>
             <button
               data-testid="button-login"
