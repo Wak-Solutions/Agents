@@ -8,7 +8,7 @@ import { api } from "@shared/routes";
 import { startRegistration, startAuthentication } from "@simplewebauthn/browser";
 
 export default function Login() {
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [, setLocation] = useLocation();
   const { isAuthenticated, isLoading: isAuthLoading, termsAcceptedAt } = useAuth();
@@ -79,7 +79,7 @@ export default function Login() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!password) return;
-    login({ email: email || undefined, password });
+    login({ email: identifier || undefined, password });
   };
 
   if (isAuthLoading) {
@@ -184,15 +184,15 @@ export default function Login() {
             <div className="space-y-1.5">
               <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
                 <Mail className="w-3.5 h-3.5 text-gray-400" />
-                {t("loginEmail")} <span className="text-xs text-gray-400 font-normal">{t("loginEmailHint")}</span>
+                Email or Mobile Number
               </label>
               <input
-                type="email"
-                placeholder={t("loginEmailPlaceholder")}
-                value={email}
-                onChange={e => setEmail(e.target.value)}
+                type="text"
+                placeholder="email@example.com or +966501234567"
+                value={identifier}
+                onChange={e => setIdentifier(e.target.value)}
                 disabled={isPending}
-                autoComplete="email"
+                autoComplete="username"
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0F510F]/20 focus:border-[#0F510F]/40 disabled:opacity-50 bg-white"
               />
             </div>

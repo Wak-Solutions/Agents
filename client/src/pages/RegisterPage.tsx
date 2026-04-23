@@ -229,7 +229,7 @@ function Step1({ form, setForm, t }: { form: FormData; setForm: (f: FormData) =>
         </FormField>
       </div>
 
-      <FormField label={t("regEmail")}>
+      <FormField label={t("regEmail")} hint="optional">
         <input
           type="email"
           className={inputClass}
@@ -281,7 +281,7 @@ function Step1({ form, setForm, t }: { form: FormData; setForm: (f: FormData) =>
         )}
       </FormField>
 
-      <FormField label={t("regPhone")} hint={t("regPhoneHint")}>
+      <FormField label={t("regPhone")}>
         <input
           type="tel"
           className={`${inputClass} ${
@@ -293,10 +293,12 @@ function Step1({ form, setForm, t }: { form: FormData; setForm: (f: FormData) =>
           value={form.phone}
           onChange={(e) => setForm({ ...form, phone: e.target.value })}
         />
-        {form.phone && !/^\+[0-9]{9,14}$/.test(form.phone) && (
+        {form.phone && !/^\+[0-9]{9,14}$/.test(form.phone) ? (
           <p className="text-xs text-red-500 mt-1">
             Phone must start with + and contain 10–15 digits (e.g. +966501234567)
           </p>
+        ) : (
+          <p className="text-xs text-gray-400 mt-1">Include country code, e.g. +966501234567</p>
         )}
       </FormField>
 
@@ -722,7 +724,6 @@ export default function RegisterPage() {
   const [inviteNameErrors, setInviteNameErrors] = useState<string[]>([]);
 
   const validatePhone = (phone: string): boolean => {
-    if (!phone) return true; // optional field
     return /^\+[0-9]{9,14}$/.test(phone);
   };
 
@@ -733,10 +734,10 @@ export default function RegisterPage() {
         return !!(
           form.firstName &&
           form.lastName &&
-          form.email &&
+          form.phone &&
+          validatePhone(form.phone) &&
           form.password.length >= 8 &&
           form.password === form.confirmPassword &&
-          validatePhone(form.phone) &&
           !nameError(form.firstName) &&
           !nameError(form.lastName)
         );

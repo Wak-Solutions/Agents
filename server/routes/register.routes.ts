@@ -40,6 +40,8 @@ async function ensureOnboardingColumns(): Promise<void> {
       `ALTER TABLE companies ADD COLUMN IF NOT EXISTS ${col.name} ${col.type}`
     );
   }
+  // phone on agents for phone-only accounts (email is optional)
+  await pool.query(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS phone TEXT`);
   // Fix sequences after manual inserts / seeding to prevent duplicate key errors
   await pool.query(`SELECT setval('companies_id_seq', GREATEST((SELECT COALESCE(MAX(id),0) FROM companies) + 1, nextval('companies_id_seq')), false)`);
   await pool.query(`SELECT setval('agents_id_seq', GREATEST((SELECT COALESCE(MAX(id),0) FROM agents) + 1, nextval('agents_id_seq')), false)`);
@@ -53,7 +55,7 @@ export function registerRegistrationRoutes(app: Express): void {
   app.post('/api/register', async (req: any, res: any) => {
     const { firstName, lastName, email, password, phone } = req.body;
 
-    if (!firstName || !lastName || !email || !password) {
+    if (!firstName || !lastName || !phone || !password) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
     if (password.length < 8) {
@@ -64,23 +66,35 @@ export function registerRegistrationRoutes(app: Express): void {
     try {
       await client.query('BEGIN');
 
-      // Check if email already exists
-      const existing = await client.query(
-        'SELECT id FROM agents WHERE email = $1',
-        [email]
+      // Check email uniqueness only when provided
+      if (email) {
+        const emailCheck = await client.query(
+          'SELECT id FROM agents WHERE email = $1',
+          [email]
+        );
+        if (emailCheck.rows.length > 0) {
+          await client.query('ROLLBACK');
+          return res.status(409).json({ error: 'An account with this email already exists' });
+        }
+      }
+
+      // Check phone uniqueness
+      const phoneCheck = await client.query(
+        'SELECT id FROM agents WHERE phone = $1',
+        [phone]
       );
-      if (existing.rows.length > 0) {
+      if (phoneCheck.rows.length > 0) {
         await client.query('ROLLBACK');
-        return res.status(409).json({ error: 'An account with this email already exists' });
+        return res.status(409).json({ error: 'An account with this mobile number already exists' });
       }
 
       // 1. Create company (Removed 'plan' and 'trial_ends_at' columns here)
       const companyName = `${firstName} ${lastName}'s Company`;
       const companyRes = await client.query(
-        `INSERT INTO companies (name, email, onboarding_step)
-         VALUES ($1, $2, 2)
+        `INSERT INTO companies (name, email, phone, onboarding_step)
+         VALUES ($1, $2, $3, 2)
          RETURNING id`,
-        [companyName, email]
+        [companyName, email || null, phone]
       );
       const companyId = companyRes.rows[0].id;
 
@@ -94,20 +108,12 @@ export function registerRegistrationRoutes(app: Express): void {
       // 3. Create admin agent
       const hash = await bcrypt.hash(password, 10);
       const agentRes = await client.query(
-        `INSERT INTO agents (name, email, password_hash, role, company_id, is_active)
-         VALUES ($1, $2, $3, 'admin', $4, true)
+        `INSERT INTO agents (name, email, phone, password_hash, role, company_id, is_active)
+         VALUES ($1, $2, $3, $4, 'admin', $5, true)
          RETURNING id`,
-        [`${firstName} ${lastName}`, email, hash, companyId]
+        [`${firstName} ${lastName}`, email || null, phone, hash, companyId]
       );
       const agentId = agentRes.rows[0].id;
-
-      // Store phone on company if provided
-      if (phone) {
-        await client.query(
-          'UPDATE companies SET phone = $1 WHERE id = $2',
-          [phone, companyId]
-        );
-      }
 
       // Create a blank chatbot_config row
       await client.query(

@@ -55,15 +55,16 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
   // ── Login ────────────────────────────────────────────────────────────────
   app.post(api.auth.login.path, async (req: any, res: any) => {
     const { email, password } = req.body;
+    const identifier: string = email; // may be an email address or a phone number
 
-    if (!email || !password) {
-      return res.status(400).json({ message: 'Email and password are required' });
+    if (!identifier || !password) {
+      return res.status(400).json({ message: 'Email/phone and password are required' });
     }
 
     try {
       const agentRes = await pool.query(
-        `SELECT * FROM agents WHERE email=$1 LIMIT 1`,
-        [email]
+        `SELECT * FROM agents WHERE email=$1 OR phone=$1 LIMIT 1`,
+        [identifier]
       );
       if (agentRes.rows.length === 0) {
         logger.warn('Login failed — agent not found', `email: ${email}`);
