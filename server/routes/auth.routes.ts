@@ -80,19 +80,32 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
         logger.warn('Login failed — wrong password', `email: ${email}`);
         return res.status(401).json({ message: 'Invalid credentials' });
       }
+      const termsAcceptedAt = agent.terms_accepted_at
+        ? new Date(agent.terms_accepted_at).toISOString()
+        : null;
       await pool.query(`UPDATE agents SET last_login=NOW() WHERE id=$1`, [agent.id]);
       req.session.authenticated = true;
       req.session.agentId = agent.id;
       req.session.companyId = agent.company_id;
       req.session.role = agent.role;
       req.session.agentName = agent.name;
+      (req.session as any).termsAcceptedAt = termsAcceptedAt;
       return req.session.save((err: any) => {
         if (err) {
           logger.error('Session save failed after login', `agentId: ${agent.id}, error: ${err.message}`);
           return res.status(500).json({ message: 'Session save error' });
         }
         logger.info('Login success', `agentId: ${agent.id}, role: ${agent.role}`);
-        res.json({ success: true, role: agent.role, name: agent.name });
+        // Return the full auth shape so the frontend can populate its cache
+        // immediately without a second /api/me round-trip.
+        res.json({
+          success: true,
+          authenticated: true,
+          role: agent.role,
+          agentId: agent.id,
+          agentName: agent.name,
+          termsAcceptedAt,
+        });
       });
     } catch (err: any) {
       logger.error('Login error', err.message);
@@ -122,8 +135,10 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
   // ── /me ──────────────────────────────────────────────────────────────────
   app.get(api.auth.me.path, async (req: any, res: any) => {
     if (req.session.authenticated) {
-      let termsAcceptedAt: string | null = null;
-      if (req.session.agentId) {
+      // Read from session first (populated at login) — avoids a DB round-trip on every
+      // page load. Fall back to a DB query only for sessions that pre-date this change.
+      let termsAcceptedAt: string | null = (req.session as any).termsAcceptedAt ?? undefined;
+      if (termsAcceptedAt === undefined && req.session.agentId) {
         try {
           const r = await pool.query(
             `SELECT terms_accepted_at FROM agents WHERE id = $1`,
@@ -131,8 +146,10 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
           );
           const raw = r.rows[0]?.terms_accepted_at;
           termsAcceptedAt = raw ? new Date(raw).toISOString() : null;
+          (req.session as any).termsAcceptedAt = termsAcceptedAt;
         } catch (err: any) {
           logger.warn('Could not fetch terms_accepted_at', `agentId: ${req.session.agentId}, error: ${err.message}`);
+          termsAcceptedAt = null;
         }
       }
       res.json({
@@ -141,7 +158,7 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
         agentId: req.session.agentId || null,
         companyId: req.session.companyId || null,
         agentName: req.session.agentName || 'Admin',
-        termsAcceptedAt,
+        termsAcceptedAt: termsAcceptedAt ?? null,
       });
     } else {
       // Return 200 so the browser doesn't log a console error on every page load.
@@ -259,7 +276,8 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
       // Look up the credential and its owning agent
       const credRow = await pool.query(
         `SELECT wc.credential_id, wc.public_key, wc.counter,
-                a.id AS agent_id, a.company_id, a.name AS agent_name, a.role, a.is_active
+                a.id AS agent_id, a.company_id, a.name AS agent_name, a.role, a.is_active,
+                a.terms_accepted_at
          FROM webauthn_credentials wc
          JOIN agents a ON a.id = wc.agent_id
          WHERE wc.credential_id = $1`,
@@ -300,11 +318,15 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
           `UPDATE webauthn_credentials SET counter = $1 WHERE credential_id = $2`,
           [authenticationInfo.newCounter, stored.credential_id]
         );
+        const waTermsAcceptedAt = stored.terms_accepted_at
+          ? new Date(stored.terms_accepted_at).toISOString()
+          : null;
         req.session.authenticated = true;
         req.session.agentId = stored.agent_id;
         req.session.companyId = stored.company_id;
         req.session.role = stored.role;
         req.session.agentName = stored.agent_name;
+        (req.session as any).termsAcceptedAt = waTermsAcceptedAt;
         (req.session as any).webauthnChallenge = undefined;
         req.session.save((err: any) => {
           if (err) {
@@ -312,7 +334,14 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
             return res.status(500).json({ message: 'Session error' });
           }
           logger.info('WebAuthn login success', `agentId: ${stored.agent_id}, companyId: ${stored.company_id}`);
-          res.json({ success: true });
+          res.json({
+            success: true,
+            authenticated: true,
+            role: stored.role,
+            agentId: stored.agent_id,
+            agentName: stored.agent_name,
+            termsAcceptedAt: waTermsAcceptedAt,
+          });
         });
       } else {
         logger.warn('WebAuthn login verification failed');

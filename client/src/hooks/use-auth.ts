@@ -47,8 +47,17 @@ export function useLogin() {
       }
       return res.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [api.auth.me.path] });
+    onSuccess: (data) => {
+      // Populate the auth cache immediately from the login response.
+      // This avoids a second /api/me round-trip (which takes 1300ms+ on cold
+      // connections) and lets the redirect fire as soon as login completes.
+      queryClient.setQueryData([api.auth.me.path], {
+        authenticated: true,
+        role: data.role,
+        agentId: data.agentId,
+        agentName: data.agentName,
+        termsAcceptedAt: data.termsAcceptedAt ?? null,
+      });
     },
   });
 }

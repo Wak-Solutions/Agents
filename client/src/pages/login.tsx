@@ -68,7 +68,14 @@ export default function Login() {
         credentials: "include",
       });
       if (!verifyRes.ok) throw new Error(t("loginErrorBiometricFailed"));
-      queryClient.invalidateQueries({ queryKey: [api.auth.me.path] });
+      const verifyData = await verifyRes.json();
+      queryClient.setQueryData([api.auth.me.path], {
+        authenticated: true,
+        role: verifyData.role,
+        agentId: verifyData.agentId,
+        agentName: verifyData.agentName,
+        termsAcceptedAt: verifyData.termsAcceptedAt ?? null,
+      });
     } catch (e: any) {
       setBiometricError(e.message || t("loginErrorBiometricLogin"));
     } finally {
