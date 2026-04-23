@@ -34,6 +34,7 @@ import { registerCustomerRoutes }      from './routes/customers.routes';
 import { registerPushRoutes }          from './routes/push.routes';
 import { registerRegistrationRoutes, ensureOnboardingColumns } from './routes/register.routes';
 import { ensureConfigTable, getTrialDays, getCompanyTrialStatus } from './lib/trial';
+import { ensureContactCompanies } from './lib/contacts-migration';
 import { ensureAgentsTable, registerAgentRoutes } from './agents';
 import { ensureSurveyTables, registerSurveyRoutes } from './surveys';
 import { requireAuth, requireAdmin }   from './middleware/auth';
@@ -74,6 +75,7 @@ export async function registerRoutes(
   await ensureOnboardingColumns();
   await ensureBlockedSlotsCompanyId(); // multi-tenant isolation: scope blocked_slots to company
   await ensureWorkHoursColumn();       // per-company working hours
+  await ensureContactCompanies();      // join-table linking contacts to companies
 
   // ── Rate limiting on public-facing endpoints ──────────────────────────────
   // Prevents abuse of the demo booking page, registration, and login.

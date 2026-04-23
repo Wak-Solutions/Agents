@@ -188,9 +188,7 @@ app.use((req, res, next) => {
         phone_number TEXT        NOT NULL,
         name         TEXT,
         source       TEXT        NOT NULL DEFAULT 'manual',
-        company_id   INTEGER     DEFAULT 1,
-        created_at   TIMESTAMPTZ DEFAULT NOW(),
-        UNIQUE (phone_number, company_id)
+        created_at   TIMESTAMPTZ DEFAULT NOW()
       );
       CREATE INDEX IF NOT EXISTS contacts_phone_idx ON contacts (phone_number);
     `);
@@ -202,22 +200,9 @@ app.use((req, res, next) => {
   // ── Additive column migrations (safe to run repeatedly) ─────────────────
   try {
     await pool.query(`ALTER TABLE voice_notes ADD COLUMN IF NOT EXISTS company_id INTEGER DEFAULT 1`);
-    await pool.query(`ALTER TABLE contacts ADD COLUMN IF NOT EXISTS company_id INTEGER DEFAULT 1`);
     await pool.query(`ALTER TABLE meetings ADD COLUMN IF NOT EXISTS customer_email TEXT`);
-    // Drop the old single-column unique constraint and replace with per-company composite unique.
-    // The default PostgreSQL name for UNIQUE(phone_number) on the contacts table is contacts_phone_number_key.
-    await pool.query(`ALTER TABLE contacts DROP CONSTRAINT IF EXISTS contacts_phone_number_key`);
-    await pool.query(`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1 FROM pg_constraint WHERE conname = 'contacts_phone_company_key'
-        ) THEN
-          ALTER TABLE contacts ADD CONSTRAINT contacts_phone_company_key UNIQUE (phone_number, company_id);
-        END IF;
-      END;
-      $$
-    `);
+    // contacts company scoping is now handled by the contact_companies join
+    // table (see lib/contacts-migration.ts) — no per-company column here.
     slog('INFO', 'db', 'Column migrations applied successfully');
   } catch (err) {
     slog('WARN', 'db', 'Migration error (continuing)', String(err));

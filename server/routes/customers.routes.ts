@@ -36,7 +36,7 @@ export function registerCustomerRoutes(app: Express): void {
         )
         SELECT
           all_phones.phone,
-          c.name, c.source,
+          c.name, cc.source,
           MIN(m.created_at)  AS first_seen,
           MAX(m.created_at)  AS last_seen,
           (SELECT COUNT(*) FROM messages       WHERE customer_phone = all_phones.phone AND company_id = $3) +
@@ -45,10 +45,11 @@ export function registerCustomerRoutes(app: Express): void {
           (SELECT COUNT(*) FROM survey_responses WHERE customer_phone = all_phones.phone AND company_id = $3) +
           (SELECT COUNT(*) FROM orders         WHERE customer_phone = all_phones.phone AND company_id = $3) AS touchpoints
         FROM all_phones
-        LEFT JOIN contacts c ON c.phone_number = all_phones.phone AND c.company_id = $3
+        LEFT JOIN contacts c ON c.phone_number = all_phones.phone
+        LEFT JOIN contact_companies cc ON cc.contact_id = c.id AND cc.company_id = $3
         LEFT JOIN messages m ON m.customer_phone = all_phones.phone AND m.company_id = $3
         ${searchClause}
-        GROUP BY all_phones.phone, c.name, c.source
+        GROUP BY all_phones.phone, c.name, cc.source
         ORDER BY first_seen DESC NULLS LAST
         LIMIT $1 OFFSET $2
       `, params);
@@ -62,7 +63,8 @@ export function registerCustomerRoutes(app: Express): void {
                UNION SELECT DISTINCT customer_phone FROM escalations WHERE company_id = $1
                UNION SELECT DISTINCT customer_phone FROM meetings WHERE company_id = $1
              ) all_phones
-             LEFT JOIN contacts c ON c.phone_number = all_phones.phone AND c.company_id = $1
+             LEFT JOIN contacts c ON c.phone_number = all_phones.phone
+             LEFT JOIN contact_companies cc ON cc.contact_id = c.id AND cc.company_id = $1
              WHERE all_phones.phone ILIKE $2 OR c.name ILIKE $2
            ) t`
         : `SELECT COUNT(*) FROM (
@@ -152,7 +154,11 @@ export function registerCustomerRoutes(app: Express): void {
           [phone, companyId]
         ),
         pool.query(
-          `SELECT name, source FROM contacts WHERE phone_number = $1 AND company_id = $2 LIMIT 1`,
+          `SELECT c.name, cc.source
+           FROM contacts c
+           JOIN contact_companies cc ON cc.contact_id = c.id
+           WHERE c.phone_number = $1 AND cc.company_id = $2
+           LIMIT 1`,
           [phone, companyId]
         ),
       ]);
@@ -264,7 +270,11 @@ export function registerCustomerRoutes(app: Express): void {
     const companyId = req.session.companyId;
     try {
       const result = await pool.query(
-        `SELECT id, phone_number, name, source, created_at FROM contacts WHERE company_id = $1 ORDER BY created_at DESC`,
+        `SELECT c.id, c.phone_number, c.name, cc.source, cc.created_at
+         FROM contacts c
+         JOIN contact_companies cc ON cc.contact_id = c.id
+         WHERE cc.company_id = $1
+         ORDER BY cc.created_at DESC`,
         [companyId]
       );
       res.json(result.rows);
@@ -280,18 +290,43 @@ export function registerCustomerRoutes(app: Express): void {
     const phone = String(phone_number).trim().replace(/[\s\-().]/g, '');
     if (!/^\+?\d{7,15}$/.test(phone)) return res.status(400).json({ message: 'invalid_phone' });
     const companyId = req.session.companyId;
+    const client = await pool.connect();
     try {
-      const result = await pool.query(
-        `INSERT INTO contacts (phone_number, name, source, company_id) VALUES ($1, $2, 'manual', $3)
-         RETURNING id, phone_number, name, source, created_at`,
-        [phone, (name || '').trim() || null, companyId]
+      await client.query('BEGIN');
+      const upsert = await client.query(
+        `INSERT INTO contacts (phone_number, name, source)
+         VALUES ($1, $2, 'manual')
+         ON CONFLICT (phone_number) DO UPDATE SET name = COALESCE(contacts.name, EXCLUDED.name)
+         RETURNING id, phone_number, name, created_at`,
+        [phone, (name || '').trim() || null]
       );
+      const contact = upsert.rows[0];
+      const link = await client.query(
+        `INSERT INTO contact_companies (contact_id, company_id, source)
+         VALUES ($1, $2, 'manual')
+         ON CONFLICT (contact_id, company_id) DO NOTHING
+         RETURNING source, created_at`,
+        [contact.id, companyId]
+      );
+      if (link.rowCount === 0) {
+        await client.query('ROLLBACK');
+        return res.status(409).json({ message: 'duplicate' });
+      }
+      await client.query('COMMIT');
       logger.info('Contact created', `phone: ${maskPhone(phone)}`);
-      res.json(result.rows[0]);
+      res.json({
+        id: contact.id,
+        phone_number: contact.phone_number,
+        name: contact.name,
+        source: link.rows[0].source,
+        created_at: link.rows[0].created_at,
+      });
     } catch (err: any) {
-      if (err.code === '23505') return res.status(409).json({ message: 'duplicate' });
+      await client.query('ROLLBACK').catch(() => {});
       logger.error('createContact failed', err.message);
       res.status(500).json({ message: err.message });
+    } finally {
+      client.release();
     }
   });
 
@@ -301,8 +336,10 @@ export function registerCustomerRoutes(app: Express): void {
     const companyId = req.session.companyId;
     try {
       const result = await pool.query(
-        `UPDATE contacts SET name = $1 WHERE id = $2 AND company_id = $3
-         RETURNING id, phone_number, name, source, created_at`,
+        `UPDATE contacts c SET name = $1
+         FROM contact_companies cc
+         WHERE cc.contact_id = c.id AND c.id = $2 AND cc.company_id = $3
+         RETURNING c.id, c.phone_number, c.name, cc.source, cc.created_at`,
         [(name || '').trim() || null, id, companyId]
       );
       if (result.rowCount === 0) return res.status(404).json({ message: 'Not found' });
@@ -316,7 +353,16 @@ export function registerCustomerRoutes(app: Express): void {
   app.delete('/api/contacts/:id', requireAdmin, async (req: any, res: any) => {
     const companyId = req.session.companyId;
     try {
-      await pool.query('DELETE FROM contacts WHERE id = $1 AND company_id = $2', [Number(req.params.id), companyId]);
+      const id = Number(req.params.id);
+      await pool.query(
+        `DELETE FROM contact_companies WHERE contact_id = $1 AND company_id = $2`,
+        [id, companyId]
+      );
+      await pool.query(
+        `DELETE FROM contacts WHERE id = $1
+         AND NOT EXISTS (SELECT 1 FROM contact_companies WHERE contact_id = $1)`,
+        [id]
+      );
       logger.info('Contact deleted', `contactId: ${req.params.id}`);
       res.json({ success: true });
     } catch (err: any) {
@@ -332,7 +378,15 @@ export function registerCustomerRoutes(app: Express): void {
     }
     const companyId = req.session.companyId;
     try {
-      await pool.query('DELETE FROM contacts WHERE id = ANY($1::int[]) AND company_id = $2', [ids, companyId]);
+      await pool.query(
+        `DELETE FROM contact_companies WHERE contact_id = ANY($1::int[]) AND company_id = $2`,
+        [ids, companyId]
+      );
+      await pool.query(
+        `DELETE FROM contacts WHERE id = ANY($1::int[])
+         AND NOT EXISTS (SELECT 1 FROM contact_companies WHERE contact_id = contacts.id)`,
+        [ids]
+      );
       logger.info('Contacts bulk deleted', `count: ${ids.length}`);
       res.json({ success: true });
     } catch (err: any) {
@@ -351,14 +405,22 @@ export function registerCustomerRoutes(app: Express): void {
       const name  = String(row.name  || '').trim() || null;
       if (!/^\+?\d{7,15}$/.test(phone)) { invalid++; continue; }
       try {
-        const result = await pool.query(
-          `INSERT INTO contacts (phone_number, name, source, company_id)
-           VALUES ($1, $2, 'imported', $3)
-           ON CONFLICT (phone_number) DO NOTHING
+        const upsert = await pool.query(
+          `INSERT INTO contacts (phone_number, name, source)
+           VALUES ($1, $2, 'imported')
+           ON CONFLICT (phone_number) DO UPDATE SET name = COALESCE(contacts.name, EXCLUDED.name)
            RETURNING id`,
-          [phone, name, companyId]
+          [phone, name]
         );
-        if ((result.rowCount ?? 0) > 0) added++; else duplicates++;
+        const contactId = upsert.rows[0].id;
+        const link = await pool.query(
+          `INSERT INTO contact_companies (contact_id, company_id, source)
+           VALUES ($1, $2, 'imported')
+           ON CONFLICT (contact_id, company_id) DO NOTHING
+           RETURNING contact_id`,
+          [contactId, companyId]
+        );
+        if ((link.rowCount ?? 0) > 0) added++; else duplicates++;
       } catch (_) {
         invalid++;
       }
