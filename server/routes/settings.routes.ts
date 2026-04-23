@@ -11,6 +11,8 @@
  * Default: Sun–Thu, 09:00–18:00, Asia/Riyadh
  */
 
+import bcrypt from 'bcrypt';
+import rateLimit from 'express-rate-limit';
 import type { Express } from 'express';
 import { pool } from '../db';
 import { requireAuth, requireAdmin } from '../middleware/auth';
@@ -159,6 +161,53 @@ export function registerSettingsRoutes(app: Express): void {
     } catch (err: any) {
       logger.error('setWhatsAppSettings failed', err.message);
       res.status(500).json({ message: err.message });
+    }
+  });
+
+  // POST /api/settings/change-password — rate-limited to slow down brute-force
+  // attempts against the current password by an attacker who has hijacked
+  // an authenticated session.
+  const changePasswordLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req: any) => `cp:${req.session?.agentId ?? req.ip}`,
+    message: { message: 'Too many password change attempts. Please try again later.' },
+  });
+
+  app.post('/api/settings/change-password', changePasswordLimiter, requireAuth, async (req: any, res: any) => {
+    try {
+      const agentId: number = req.session.agentId;
+      const { currentPassword, newPassword } = req.body ?? {};
+      if (typeof currentPassword !== 'string' || typeof newPassword !== 'string') {
+        return res.status(400).json({ message: 'currentPassword and newPassword are required' });
+      }
+      if (newPassword.length < 8) {
+        return res.status(400).json({ message: 'New password must be at least 8 characters' });
+      }
+      if (newPassword === currentPassword) {
+        return res.status(400).json({ message: 'New password must be different from the current password' });
+      }
+
+      const r = await pool.query(`SELECT password_hash FROM agents WHERE id = $1`, [agentId]);
+      if (r.rows.length === 0) {
+        return res.status(404).json({ message: 'Account not found' });
+      }
+      const ok = await bcrypt.compare(currentPassword, r.rows[0].password_hash);
+      if (!ok) {
+        logger.warn('changePassword — current password mismatch', `agentId: ${agentId}`);
+        return res.status(401).json({ message: 'Current password is incorrect' });
+      }
+
+      const newHash = await bcrypt.hash(newPassword, 10);
+      await pool.query(`UPDATE agents SET password_hash = $1 WHERE id = $2`, [newHash, agentId]);
+      logger.info('changePassword success', `agentId: ${agentId}`);
+      // Never return a password or hash in the response.
+      res.json({ success: true });
+    } catch (err: any) {
+      logger.error('changePassword failed', err.message);
+      res.status(500).json({ message: 'Failed to change password' });
     }
   });
 }

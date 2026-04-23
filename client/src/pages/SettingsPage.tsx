@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { MessageSquare, Eye, EyeOff, Check, AlertCircle } from "lucide-react";
+import { MessageSquare, Eye, EyeOff, Check, AlertCircle, Lock } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useLanguage } from "@/lib/language-context";
 
@@ -278,7 +278,7 @@ function WhatsAppPanel({ t }: { t: (k: string) => string }) {
    Settings Sections (left nav)
 ───────────────────────────────────────────────────────────────────────────── */
 
-type SectionId = "whatsapp";
+type SectionId = "whatsapp" | "password";
 
 interface Section {
   id: SectionId;
@@ -288,7 +288,139 @@ interface Section {
 
 const SECTIONS: Section[] = [
   { id: "whatsapp", icon: <MessageSquare className="w-4 h-4" />, labelKey: "settingsWhatsApp" },
+  { id: "password", icon: <Lock className="w-4 h-4" />, labelKey: "settingsChangePassword" },
 ];
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   Change Password Panel
+───────────────────────────────────────────────────────────────────────────── */
+
+function ChangePasswordPanel({ t }: { t: (k: string) => string }) {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrent, setShowCurrent] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+  const [status, setStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [error, setError] = useState("");
+
+  const canSubmit =
+    currentPassword.length > 0 &&
+    newPassword.length >= 8 &&
+    newPassword === confirmPassword &&
+    newPassword !== currentPassword &&
+    status !== "saving";
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (newPassword.length < 8) { setError(t("settingsPasswordTooShort")); return; }
+    if (newPassword !== confirmPassword) { setError(t("settingsPasswordMismatch")); return; }
+    if (newPassword === currentPassword) { setError(t("settingsPasswordSameAsOld")); return; }
+
+    setStatus("saving");
+    try {
+      const resp = await fetch("/api/settings/change-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const data = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        setStatus("error");
+        setError(data.message || t("settingsPasswordError"));
+        return;
+      }
+      setStatus("saved");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch {
+      setStatus("error");
+      setError(t("settingsPasswordError"));
+    }
+  };
+
+  return (
+    <section className="bg-white border border-gray-200 rounded-2xl p-6">
+      <div className="flex items-center gap-3 mb-6">
+        <div className="w-10 h-10 rounded-xl bg-[#0F510F]/10 flex items-center justify-center">
+          <Lock className="w-5 h-5 text-[#0F510F]" />
+        </div>
+        <div>
+          <h2 className="text-lg font-semibold text-gray-900">{t("settingsChangePassword")}</h2>
+          <p className="text-xs text-gray-500 mt-0.5">{t("settingsChangePasswordSub")}</p>
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-4 max-w-md">
+        <div>
+          <label className="text-xs font-medium text-gray-700 mb-1.5 block">{t("settingsCurrentPassword")}</label>
+          <div className="relative">
+            <input
+              type={showCurrent ? "text" : "password"}
+              value={currentPassword}
+              onChange={e => { setCurrentPassword(e.target.value); setStatus("idle"); setError(""); }}
+              autoComplete="current-password"
+              className={inputClass}
+            />
+            <button type="button" onClick={() => setShowCurrent(s => !s)} className="absolute end-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              {showCurrent ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+        </div>
+        <div>
+          <label className="text-xs font-medium text-gray-700 mb-1.5 block">{t("settingsNewPassword")}</label>
+          <div className="relative">
+            <input
+              type={showNew ? "text" : "password"}
+              value={newPassword}
+              onChange={e => { setNewPassword(e.target.value); setStatus("idle"); setError(""); }}
+              autoComplete="new-password"
+              className={inputClass}
+            />
+            <button type="button" onClick={() => setShowNew(s => !s)} className="absolute end-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+              {showNew ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+          <p className="text-[11px] text-gray-500 mt-1">{t("settingsPasswordHint")}</p>
+        </div>
+        <div>
+          <label className="text-xs font-medium text-gray-700 mb-1.5 block">{t("settingsConfirmPassword")}</label>
+          <input
+            type={showNew ? "text" : "password"}
+            value={confirmPassword}
+            onChange={e => { setConfirmPassword(e.target.value); setStatus("idle"); setError(""); }}
+            autoComplete="new-password"
+            className={inputClass}
+          />
+        </div>
+
+        {error && (
+          <div className="flex items-start gap-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg px-3 py-2">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>{error}</span>
+          </div>
+        )}
+        {status === "saved" && (
+          <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 text-sm rounded-lg px-3 py-2">
+            <Check className="w-4 h-4 shrink-0" />
+            <span>{t("settingsPasswordUpdated")}</span>
+          </div>
+        )}
+
+        <button
+          type="submit"
+          disabled={!canSubmit}
+          className="bg-[#0F510F] text-white px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-[#0d4510] disabled:opacity-50 transition-colors"
+        >
+          {status === "saving" ? t("settingsPasswordSaving") : t("settingsChangePassword")}
+        </button>
+      </form>
+    </section>
+  );
+}
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Page
@@ -335,6 +467,7 @@ export default function SettingsPage() {
           {/* Right panel */}
           <div className="flex-1 min-w-0">
             {activeSection === "whatsapp" && <WhatsAppPanel t={t} />}
+            {activeSection === "password" && <ChangePasswordPanel t={t} />}
           </div>
         </div>
       </div>
