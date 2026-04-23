@@ -76,16 +76,11 @@ export async function sendSurveyToCustomer(
   companyId: number = 1,
 ): Promise<void> {
   try {
-    // Prefer a company-scoped active survey; fall back to any active survey.
-    let surveyRes = await pool.query(
+    // Strictly scoped to this company — no cross-tenant fallback.
+    const surveyRes = await pool.query(
       `SELECT id FROM surveys WHERE is_active = true AND company_id = $1 LIMIT 1`,
       [companyId]
     );
-    if (surveyRes.rows.length === 0) {
-      surveyRes = await pool.query(
-        `SELECT id FROM surveys WHERE is_active = true LIMIT 1`
-      );
-    }
     if (surveyRes.rows.length === 0) return;
     const surveyId = surveyRes.rows[0].id;
     if (!surveyId) return;
