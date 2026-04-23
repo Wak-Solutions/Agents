@@ -233,7 +233,7 @@ export default function Login() {
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 disabled={isPending}
-                autoFocus={!email}
+                autoFocus={!identifier}
                 className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#0F510F]/20 focus:border-[#0F510F]/40 disabled:opacity-50 bg-white"
               />
               {error && (
