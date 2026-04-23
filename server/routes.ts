@@ -33,6 +33,7 @@ import { registerStatisticsRoutes }    from './routes/statistics.routes';
 import { registerCustomerRoutes }      from './routes/customers.routes';
 import { registerPushRoutes }          from './routes/push.routes';
 import { registerRegistrationRoutes, ensureOnboardingColumns } from './routes/register.routes';
+import { ensureConfigTable, getTrialDays, getCompanyTrialStatus } from './lib/trial';
 import { ensureAgentsTable, registerAgentRoutes } from './agents';
 import { ensureSurveyTables, registerSurveyRoutes } from './surveys';
 import { requireAuth, requireAdmin }   from './middleware/auth';
@@ -67,6 +68,7 @@ export async function registerRoutes(
   await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS one_active_survey_per_company
     ON surveys(company_id) WHERE is_active = true`);
 
+  await ensureConfigTable();
   await ensureAgentsTable();
   await ensureSurveyTables();
   await ensureOnboardingColumns();
@@ -92,6 +94,30 @@ export async function registerRoutes(
   app.use('/api/book/', bookingLimiter);
   app.use('/api/register', authLimiter);
   app.use('/api/auth/login', authLimiter);
+
+  // ── Trial config endpoints ────────────────────────────────────────────────
+  // Public: lets the landing/register pages render the trial length without
+  // hardcoding it. Only returns the number of days, nothing sensitive.
+  app.get('/api/config/trial-days', async (_req, res) => {
+    try {
+      res.json({ trialDays: await getTrialDays() });
+    } catch {
+      res.status(500).json({ message: 'Failed to load config' });
+    }
+  });
+
+  // Authenticated: current company's trial status. Always recomputed from
+  // the DB so session tampering cannot change the answer.
+  app.get('/api/me/trial', async (req: any, res) => {
+    if (!req.session.authenticated || !req.session.companyId) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+    try {
+      res.json(await getCompanyTrialStatus(req.session.companyId));
+    } catch (err: any) {
+      res.status(500).json({ message: err.message });
+    }
+  });
 
   // ── Route modules ─────────────────────────────────────────────────────────
   await registerAuthRoutes(app);

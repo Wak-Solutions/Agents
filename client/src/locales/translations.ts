@@ -531,7 +531,7 @@ export const en = {
 
   // ── Registration / Onboarding ───────────────────────────────────────────
   regTitle: "Create your WAK account",
-  regSubtitle: "Start your 14-day free trial",
+  regSubtitle: "Start your {days}-day free trial",
   regStep1: "Account",
   regStep1Desc: "Create your login credentials",
   regStep2: "Business",
@@ -1170,7 +1170,7 @@ export const ar: Record<keyof typeof en, string> = {
 
   // ── Registration / Onboarding ───────────────────────────────────────────
   regTitle: "أنشئ حسابك في WAK",
-  regSubtitle: "ابدأ تجربتك المجانية لمدة 14 يوم",
+  regSubtitle: "ابدأ تجربتك المجانية لمدة {days} يوم",
   regStep1: "الحساب",
   regStep1Desc: "أنشئ بيانات تسجيل الدخول",
   regStep2: "الشركة",

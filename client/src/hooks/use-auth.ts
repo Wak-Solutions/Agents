@@ -51,6 +51,7 @@ export function useLogin() {
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         if (res.status === 403) throw new Error(body.error || "Account deactivated");
+        if (res.status === 402) throw new Error(body.message || "Your free trial has expired. Please contact support to continue.");
         throw new Error(body.message || "Invalid credentials");
       }
       return res.json();

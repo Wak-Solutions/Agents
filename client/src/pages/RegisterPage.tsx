@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
 import { nameError } from "@/lib/validate-name";
 import { useLanguage } from "@/lib/language-context";
@@ -719,6 +719,13 @@ export default function RegisterPage() {
 
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormData>(INITIAL_FORM);
+  const [trialDays, setTrialDays] = useState<number>(14);
+  useEffect(() => {
+    fetch("/api/config/trial-days")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.trialDays) setTrialDays(d.trialDays); })
+      .catch(() => {});
+  }, []);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [phoneError, setPhoneError] = useState("");
@@ -941,7 +948,7 @@ export default function RegisterPage() {
             <div className="mb-8">
               <h2 className="text-2xl font-bold text-gray-900">{stepTitles[step]}</h2>
               {step === 1 && (
-                <p className="text-gray-500 mt-1">{t("regSubtitle")}</p>
+                <p className="text-gray-500 mt-1">{t("regSubtitle").replace("{days}", String(trialDays))}</p>
               )}
             </div>
 

@@ -73,7 +73,7 @@ const copy = {
     popular: "Most popular",
     priceCta: "Get started",
     priceCtaEnterprise: "Contact sales",
-    priceNote: "All plans include 14-day free trial. No credit card required.",
+    priceNote: "All plans include {days}-day free trial. No credit card required.",
     ps1: ["1 agent", "500 conversations/month", "AI chatbot (Arabic & English)", "Meeting booking", "Basic analytics", "Email support"],
     ps2: ["5 agents", "2,000 conversations/month", "Everything in Starter", "Voice note transcription", "Smart escalation", "Priority support"],
     ps3: ["Unlimited agents", "Unlimited conversations", "Everything in Growth", "Custom integrations", "Dedicated account manager", "SLA guarantee"],
@@ -164,7 +164,7 @@ const copy = {
     popular: "الأكثر شعبية",
     priceCta: "ابدأ الآن",
     priceCtaEnterprise: "تواصل مع المبيعات",
-    priceNote: "جميع الباقات تشمل تجربة مجانية ١٤ يوم. بدون بطاقة ائتمان.",
+    priceNote: "جميع الباقات تشمل تجربة مجانية {days} يوم. بدون بطاقة ائتمان.",
     ps1: ["١ موظف", "٥٠٠ محادثة/شهرياً", "بوت ذكي (عربي وإنجليزي)", "حجز مواعيد", "تحليلات أساسية", "دعم بالإيميل"],
     ps2: ["٥ موظفين", "٢,٠٠٠ محادثة/شهرياً", "كل مميزات المبتدئ", "تفريغ رسائل صوتية", "تحويل ذكي", "دعم أولوية"],
     ps3: ["موظفين بلا حدود", "محادثات بلا حدود", "كل مميزات النمو", "تكاملات مخصصة", "مدير حساب مخصص", "ضمان مستوى خدمة"],
@@ -334,11 +334,19 @@ export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [demoOpen, setDemoOpen] = useState(false);
+  const [trialDays, setTrialDays] = useState<number>(14);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener("scroll", onScroll, { passive: true });
     return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    fetch("/api/config/trial-days")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.trialDays) setTrialDays(d.trialDays); })
+      .catch(() => {});
   }, []);
 
   const scrollTo = (id: string) => {
@@ -631,7 +639,7 @@ export default function LandingPage() {
           </div>
 
           <Reveal delay={300}>
-            <p className="text-center text-sm text-gray-500 mt-10">{t.priceNote}</p>
+            <p className="text-center text-sm text-gray-500 mt-10">{t.priceNote.replace("{days}", String(trialDays))}</p>
           </Reveal>
         </div>
       </section>

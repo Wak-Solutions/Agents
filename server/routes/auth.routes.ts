@@ -22,6 +22,7 @@ import { pool } from '../db';
 import { requireAuth } from '../middleware/auth';
 import { createLogger } from '../lib/logger';
 import { api } from '@shared/routes';
+import { getCompanyTrialStatus } from '../lib/trial';
 
 const logger = createLogger('auth');
 
@@ -79,6 +80,21 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
       if (!valid) {
         logger.warn('Login failed — wrong password', `email: ${email}`);
         return res.status(401).json({ message: 'Invalid credentials' });
+      }
+      // Trial gate: block login for companies whose trial has expired.
+      // Computed from companies.created_at + config.trial_days — never from
+      // the client or session — so it cannot be bypassed by request manipulation.
+      if (agent.company_id) {
+        const trial = await getCompanyTrialStatus(agent.company_id);
+        if (trial.expired) {
+          logger.warn('Login blocked — trial expired', `agentId: ${agent.id}, companyId: ${agent.company_id}`);
+          return res.status(402).json({
+            message: 'Your free trial has expired. Please contact support to continue.',
+            trialExpired: true,
+            trialDays: trial.trialDays,
+            expiresAt: trial.expiresAt,
+          });
+        }
       }
       const termsAcceptedAt = agent.terms_accepted_at
         ? new Date(agent.terms_accepted_at).toISOString()
@@ -294,6 +310,19 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
       if (!stored.company_id) {
         logger.error('WebAuthn login — agent has no company_id', `agentId: ${stored.agent_id}`);
         return res.status(403).json({ message: 'Account configuration error. Please contact support.' });
+      }
+      // Trial gate (WebAuthn): same DB-derived check as password login.
+      {
+        const trial = await getCompanyTrialStatus(stored.company_id);
+        if (trial.expired) {
+          logger.warn('WebAuthn login blocked — trial expired', `agentId: ${stored.agent_id}, companyId: ${stored.company_id}`);
+          return res.status(402).json({
+            message: 'Your free trial has expired. Please contact support to continue.',
+            trialExpired: true,
+            trialDays: trial.trialDays,
+            expiresAt: trial.expiresAt,
+          });
+        }
       }
 
       const publicKeyUint8 = new Uint8Array(Buffer.from(stored.public_key, 'hex'));
