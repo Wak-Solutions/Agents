@@ -234,10 +234,11 @@ function WorkHoursPanel() {
 }
 
 function buildWhatsAppLink(phone: string, meetingLink: string): string {
-  // Strip +, leading 00, dashes, spaces, and parentheses
-  let cleaned = phone.trim().replace(/^\+/, "").replace(/^00/, "").replace(/[-\s()]/g, "");
+  // Sanitize: strip everything except digits, then drop leading 00 (international trunk)
+  let cleaned = (phone ?? "").replace(/\D/g, "").replace(/^00/, "");
+  if (!cleaned) return "#";
   const message = `Hello! Here is your meeting link: ${meetingLink}`;
-  return `https://wa.me/${cleaned}?text=${encodeURIComponent(message)}`;
+  return `https://wa.me/${encodeURIComponent(cleaned)}?text=${encodeURIComponent(message)}`;
 }
 
 function getMondayOf(d: Date): Date {
