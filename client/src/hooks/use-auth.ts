@@ -6,10 +6,18 @@ export function useAuth() {
   const { data, isLoading, error } = useQuery({
     queryKey: [api.auth.me.path],
     queryFn: async () => {
+      console.log("[use-auth] fetching /api/me");
       const res = await fetch(api.auth.me.path, { credentials: "include" });
+      console.log("[use-auth] /api/me status:", res.status);
       if (res.status === 401) return { authenticated: false, role: undefined, agentId: null, agentName: undefined };
-      if (!res.ok) throw new Error("Failed to fetch auth state");
-      return api.auth.me.responses[200].parse(await res.json());
+      if (!res.ok) {
+        const text = await res.text().catch(() => "");
+        console.error("[use-auth] /api/me error:", res.status, text);
+        throw new Error("Failed to fetch auth state");
+      }
+      const json = await res.json();
+      console.log("[use-auth] /api/me response:", json);
+      return api.auth.me.responses[200].parse(json);
     },
     retry: false,
     staleTime: 5 * 60 * 1000,
@@ -48,9 +56,7 @@ export function useLogin() {
       return res.json();
     },
     onSuccess: (data) => {
-      // Populate the auth cache immediately from the login response.
-      // This avoids a second /api/me round-trip (which takes 1300ms+ on cold
-      // connections) and lets the redirect fire as soon as login completes.
+      console.log("[use-auth] login success, raw data:", data);
       queryClient.setQueryData([api.auth.me.path], {
         authenticated: true,
         role: data.role,
@@ -58,6 +64,7 @@ export function useLogin() {
         agentName: data.agentName,
         termsAcceptedAt: data.termsAcceptedAt ?? null,
       });
+      console.log("[use-auth] auth cache populated from login response");
     },
   });
 }

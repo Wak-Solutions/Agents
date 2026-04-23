@@ -25,26 +25,38 @@ export default function Login() {
   const isRtl = lang === "ar";
 
   useEffect(() => {
+    console.log("[login] auth state →", { isAuthenticated, isAuthLoading, termsAcceptedAt });
     if (isAuthenticated && !isAuthLoading) {
-      if (termsAcceptedAt === null) setShowTermsModal(true);
-      else setLocation("/dashboard");
+      if (termsAcceptedAt === null) {
+        console.log("[login] authenticated but termsAcceptedAt=null → showing terms modal");
+        setShowTermsModal(true);
+      } else {
+        console.log("[login] authenticated + terms accepted → redirecting to /dashboard");
+        setLocation("/dashboard");
+      }
     }
   }, [isAuthenticated, isAuthLoading, termsAcceptedAt, setLocation]);
 
   const handleAcceptTerms = async () => {
     setTermsAccepting(true);
     try {
+      console.log("[login] submitting accept-terms");
       const res = await fetch("/api/agents/accept-terms", { method: "POST", credentials: "include" });
+      console.log("[login] accept-terms response status:", res.status);
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
-        // Update cache so termsAcceptedAt is no longer null — prevents the modal
-        // from reappearing on the next login without a DB round-trip.
+        console.log("[login] accept-terms data:", data);
         queryClient.setQueryData([api.auth.me.path], (prev: any) =>
           prev ? { ...prev, termsAcceptedAt: data.termsAcceptedAt ?? new Date().toISOString() } : prev
         );
         setLocation("/dashboard");
+      } else {
+        const body = await res.text().catch(() => "");
+        console.error("[login] accept-terms failed:", res.status, body);
       }
-    } catch {}
+    } catch (e) {
+      console.error("[login] accept-terms exception:", e);
+    }
     setTermsAccepting(false);
   };
 
@@ -94,6 +106,7 @@ export default function Login() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!password) return;
+    console.log("[login] submitting login, identifier:", identifier ? "set" : "empty");
     login({ email: identifier || undefined, password });
   };
 
