@@ -42,6 +42,9 @@ async function ensureOnboardingColumns(): Promise<void> {
   }
   // phone on agents for phone-only accounts (email is optional)
   await pool.query(`ALTER TABLE agents ADD COLUMN IF NOT EXISTS phone TEXT`);
+  // allow email to be null on both tables (email is now optional at signup)
+  await pool.query(`ALTER TABLE companies ALTER COLUMN email DROP NOT NULL`);
+  await pool.query(`ALTER TABLE agents ALTER COLUMN email DROP NOT NULL`);
   // Fix sequences after manual inserts / seeding to prevent duplicate key errors
   await pool.query(`SELECT setval('companies_id_seq', GREATEST((SELECT COALESCE(MAX(id),0) FROM companies) + 1, nextval('companies_id_seq')), false)`);
   await pool.query(`SELECT setval('agents_id_seq', GREATEST((SELECT COALESCE(MAX(id),0) FROM agents) + 1, nextval('agents_id_seq')), false)`);
