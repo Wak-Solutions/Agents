@@ -17,6 +17,7 @@ import { notifyAgent, notifyAll } from '../push';
 import { notifyManagerNewBooking, sendEmail } from '../email';
 import { sendSurveyToCustomer } from '../surveys';
 import { createDailyRoom } from '../integrations/daily';
+import { sendWhatsAppText } from '../lib/whatsapp';
 import { KSA_OFFSET_MS, formatKsaDate, formatKsaDateTime } from '../lib/timezone';
 import { getSlotsForDay, isWithinWorkHours } from '../lib/slots';
 import { getWorkHours } from './settings.routes';
@@ -431,6 +432,13 @@ export function registerMeetingRoutes(app: Express): void {
         meetingLink: brandedLink,
         scheduledUtc,
       }).catch((e: any) => logger.error('Manager email failed', e.message));
+
+      // WhatsApp booking confirmation to customer (non-blocking)
+      sendWhatsAppText(
+        companyId,
+        meeting.customer_phone,
+        `Your meeting with WAK Solutions is confirmed for ${ksaLabel} (KSA time).\n\nYou will receive your meeting link 15 minutes before the start time.`
+      ).catch((e: any) => logger.error('Booking WhatsApp failed', e.message));
 
       // Push notification
       const meetingPush = {

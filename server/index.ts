@@ -279,6 +279,9 @@ app.use((req, res, next) => {
 
   await registerRoutes(httpServer, app);
 
+  const { startMeetingReminderCron } = await import("./lib/meeting-reminders");
+  startMeetingReminderCron();
+
   app.use((err: any, req: Request, res: Response, next: NextFunction) => {
     const status = err.status || err.statusCode || 500;
     const message = err.message || "Internal Server Error";
