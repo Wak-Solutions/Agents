@@ -40,11 +40,11 @@ export function useLogin() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ email, password }: { email?: string; password: string }) => {
+    mutationFn: async ({ identifier, password }: { identifier: string; password: string }) => {
       const res = await fetch(api.auth.login.path, {
         method: api.auth.login.method,
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(email ? { email, password } : { password }),
+        body: JSON.stringify({ email: identifier, password }),
         credentials: "include",
       });
 
@@ -56,7 +56,7 @@ export function useLogin() {
       return res.json();
     },
     onSuccess: (data) => {
-      console.log("[use-auth] login success, raw data:", data);
+      console.log("[use-auth] login success, setting cache:", data);
       queryClient.setQueryData([api.auth.me.path], {
         authenticated: true,
         role: data.role,
@@ -64,7 +64,6 @@ export function useLogin() {
         agentName: data.agentName,
         termsAcceptedAt: data.termsAcceptedAt ?? null,
       });
-      console.log("[use-auth] auth cache populated from login response");
     },
   });
 }

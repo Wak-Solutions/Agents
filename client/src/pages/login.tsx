@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { Lock, Fingerprint, Mail, ArrowLeft } from "lucide-react";
-import { useAuth, useLogin } from "@/hooks/use-auth";
+import { useLogin } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/language-context";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@shared/routes";
@@ -11,7 +11,6 @@ export default function Login() {
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [, setLocation] = useLocation();
-  const { isAuthenticated, isLoading: isAuthLoading, termsAcceptedAt } = useAuth();
   const { mutate: login, isPending, error } = useLogin();
   const queryClient = useQueryClient();
   const [biometricAvailable, setBiometricAvailable] = useState(false);
@@ -24,18 +23,8 @@ export default function Login() {
   const { t, lang } = useLanguage();
   const isRtl = lang === "ar";
 
-  useEffect(() => {
-    console.log("[login] auth state →", { isAuthenticated, isAuthLoading, termsAcceptedAt });
-    if (isAuthenticated && !isAuthLoading) {
-      if (termsAcceptedAt === null) {
-        console.log("[login] authenticated but termsAcceptedAt=null → showing terms modal");
-        setShowTermsModal(true);
-      } else {
-        console.log("[login] authenticated + terms accepted → redirecting to /dashboard");
-        setLocation("/dashboard");
-      }
-    }
-  }, [isAuthenticated, isAuthLoading, termsAcceptedAt, setLocation]);
+  // No auto-redirect: login page always shows the form.
+  // Navigation only happens after explicit user action (login button / biometric).
 
   const handleAcceptTerms = async () => {
     setTermsAccepting(true);
@@ -96,6 +85,11 @@ export default function Login() {
         agentName: verifyData.agentName,
         termsAcceptedAt: verifyData.termsAcceptedAt ?? null,
       });
+      if (!verifyData.termsAcceptedAt) {
+        setShowTermsModal(true);
+      } else {
+        setLocation("/dashboard");
+      }
     } catch (e: any) {
       setBiometricError(e.message || t("loginErrorBiometricLogin"));
     } finally {
@@ -107,7 +101,18 @@ export default function Login() {
     e.preventDefault();
     if (!password) return;
     console.log("[login] submitting login, identifier:", identifier ? "set" : "empty");
-    login({ email: identifier || undefined, password });
+    login(
+      { identifier: identifier.trim(), password },
+      {
+        onSuccess: (data) => {
+          if (!data.termsAcceptedAt) {
+            setShowTermsModal(true);
+          } else {
+            setLocation("/dashboard");
+          }
+        },
+      }
+    );
   };
 
   return (
