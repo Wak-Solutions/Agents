@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useLocation } from "wouter";
-import { Video, ChevronLeft, ChevronRight, Ban, Clock, MessageCircle } from "lucide-react";
+import { Video, ChevronLeft, ChevronRight, Ban, Clock } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/language-context";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -231,14 +231,6 @@ function WorkHoursPanel() {
       </div>
     </div>
   );
-}
-
-function buildWhatsAppLink(phone: string, meetingLink: string): string {
-  // Sanitize: strip everything except digits, then drop leading 00 (international trunk)
-  let cleaned = (phone ?? "").replace(/\D/g, "").replace(/^00/, "");
-  if (!cleaned) return "#";
-  const message = `Hello! Here is your meeting link: ${meetingLink}`;
-  return `https://wa.me/${encodeURIComponent(cleaned)}?text=${encodeURIComponent(message)}`;
 }
 
 function getMondayOf(d: Date): Date {
@@ -488,16 +480,6 @@ export default function Meetings() {
                             >
                               Complete
                             </button>
-                          )}
-                          {m.status !== "completed" && (
-                            <a
-                              href={buildWhatsAppLink(m.customer_phone, m.meeting_link)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 text-xs font-medium text-[#128C7E] border border-[#128C7E]/30 bg-[#128C7E]/5 px-3.5 py-2 rounded-lg hover:bg-[#128C7E]/10 transition-colors"
-                            >
-                              <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
-                            </a>
                           )}
                         </div>
                       </td>
