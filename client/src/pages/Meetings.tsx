@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useLocation } from "wouter";
-import { Video, ChevronLeft, ChevronRight, Ban, Clock } from "lucide-react";
+import { Video, ChevronLeft, ChevronRight, Ban, Clock, MessageCircle } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/language-context";
 import DashboardLayout from "@/components/DashboardLayout";
@@ -233,6 +233,13 @@ function WorkHoursPanel() {
   );
 }
 
+function buildWhatsAppLink(phone: string, meetingLink: string): string {
+  // Strip +, leading 00, dashes, spaces, and parentheses
+  let cleaned = phone.trim().replace(/^\+/, "").replace(/^00/, "").replace(/[-\s()]/g, "");
+  const message = `Hello! Here is your meeting link: ${meetingLink}`;
+  return `https://wa.me/${cleaned}?text=${encodeURIComponent(message)}`;
+}
+
 function getMondayOf(d: Date): Date {
   const x = new Date(d);
   const day = x.getDay();
@@ -462,24 +469,36 @@ export default function Meetings() {
 
                       {/* Actions */}
                       <td className="px-5 py-4">
-                        {m.status === "pending" && (
-                          <button
-                            onClick={() => startMeeting(m.id, m.meeting_link)}
-                            disabled={starting === m.id}
-                            className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-700 border border-gray-200 bg-white px-3.5 py-2 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
-                          >
-                            <Video className="w-3.5 h-3.5" /> Join
-                          </button>
-                        )}
-                        {m.status === "in_progress" && (
-                          <button
-                            onClick={() => markComplete(m.id)}
-                            disabled={completing === m.id}
-                            className="inline-flex items-center gap-1.5 text-xs font-medium bg-[#0F510F] text-white px-3.5 py-2 rounded-lg hover:bg-[#0d4510] disabled:opacity-50 transition-colors"
-                          >
-                            Complete
-                          </button>
-                        )}
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {m.status === "pending" && (
+                            <button
+                              onClick={() => startMeeting(m.id, m.meeting_link)}
+                              disabled={starting === m.id}
+                              className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-700 border border-gray-200 bg-white px-3.5 py-2 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                            >
+                              <Video className="w-3.5 h-3.5" /> Join
+                            </button>
+                          )}
+                          {m.status === "in_progress" && (
+                            <button
+                              onClick={() => markComplete(m.id)}
+                              disabled={completing === m.id}
+                              className="inline-flex items-center gap-1.5 text-xs font-medium bg-[#0F510F] text-white px-3.5 py-2 rounded-lg hover:bg-[#0d4510] disabled:opacity-50 transition-colors"
+                            >
+                              Complete
+                            </button>
+                          )}
+                          {m.status !== "completed" && (
+                            <a
+                              href={buildWhatsAppLink(m.customer_phone, m.meeting_link)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 text-xs font-medium text-[#128C7E] border border-[#128C7E]/30 bg-[#128C7E]/5 px-3.5 py-2 rounded-lg hover:bg-[#128C7E]/10 transition-colors"
+                            >
+                              <MessageCircle className="w-3.5 h-3.5" /> WhatsApp
+                            </a>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   ))}
