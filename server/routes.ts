@@ -75,7 +75,13 @@ export async function registerRoutes(
   await ensureOnboardingColumns();
   await ensureBlockedSlotsCompanyId(); // multi-tenant isolation: scope blocked_slots to company
   await ensureWorkHoursColumn();       // per-company working hours
-  await ensureContactCompanies();      // join-table linking contacts to companies
+  // Heavy migration: run in background so startup isn't blocked and Railway
+  // healthcheck passes quickly. The join table and backfill are idempotent;
+  // routes that read contacts tolerate a brief window where the migration is
+  // still running (all queries already use contact_companies via LEFT JOIN).
+  ensureContactCompanies().catch((err) => {
+    console.error('[migration] ensureContactCompanies failed', err);
+  });
 
   // ── Rate limiting on public-facing endpoints ──────────────────────────────
   // Prevents abuse of the demo booking page, registration, and login.

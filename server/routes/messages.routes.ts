@@ -105,7 +105,19 @@ export function registerMessageRoutes(app: Express): void {
           'Meta Cloud API send failed',
           `phone: ${maskPhone(data.customer_phone)}, status: ${metaRes.status}, body: ${errBody.slice(0, 200)}`
         );
-        return res.status(502).json({ message: 'Failed to send message via WhatsApp. Check credentials.' });
+        let metaCode: number | undefined;
+        try { metaCode = JSON.parse(errBody)?.error?.code; } catch {}
+        let userMessage = 'Failed to send message via WhatsApp. Check credentials.';
+        if (metaCode === 190) {
+          userMessage = 'WhatsApp access token is invalid or expired. Generate a permanent System User token in Meta Business Manager and update it in Settings.';
+        } else if (metaCode === 131047) {
+          userMessage = 'The 24-hour customer service window has expired. The customer must message you first, or you must send an approved template.';
+        } else if (metaCode === 100) {
+          userMessage = 'WhatsApp phone number ID is wrong or does not belong to this app. Update it in Settings.';
+        } else if (metaCode === 10 || metaCode === 200) {
+          userMessage = 'WhatsApp access token is missing required permissions (whatsapp_business_messaging).';
+        }
+        return res.status(502).json({ message: userMessage, metaCode });
       }
 
       // Save the outbound message — reuse or start a conversation_id (24-hour session)
