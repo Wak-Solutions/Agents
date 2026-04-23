@@ -64,11 +64,17 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
       const agentId = req.session.agentId;
       const companyId: number = req.session.companyId;
       if (!agentId) return res.status(400).json({ message: 'No agent ID in session' });
-      await pool.query(
-        `UPDATE agents SET terms_accepted_at = NOW() WHERE id = $1 AND company_id = $2`,
+      const result = await pool.query(
+        `UPDATE agents SET terms_accepted_at = NOW() WHERE id = $1 AND company_id = $2 RETURNING terms_accepted_at`,
         [agentId, companyId]
       );
-      res.json({ success: true });
+      const acceptedAt = result.rows[0]?.terms_accepted_at
+        ? new Date(result.rows[0].terms_accepted_at).toISOString()
+        : new Date().toISOString();
+      // Persist in session so /api/me never falls back to the DB for this
+      (req.session as any).termsAcceptedAt = acceptedAt;
+      req.session.save(() => {});
+      res.json({ success: true, termsAcceptedAt: acceptedAt });
     } catch (err: any) {
       res.status(500).json({ message: err.message });
     }

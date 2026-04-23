@@ -35,7 +35,15 @@ export default function Login() {
     setTermsAccepting(true);
     try {
       const res = await fetch("/api/agents/accept-terms", { method: "POST", credentials: "include" });
-      if (res.ok) setLocation("/dashboard");
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        // Update cache so termsAcceptedAt is no longer null — prevents the modal
+        // from reappearing on the next login without a DB round-trip.
+        queryClient.setQueryData([api.auth.me.path], (prev: any) =>
+          prev ? { ...prev, termsAcceptedAt: data.termsAcceptedAt ?? new Date().toISOString() } : prev
+        );
+        setLocation("/dashboard");
+      }
     } catch {}
     setTermsAccepting(false);
   };
@@ -88,14 +96,6 @@ export default function Login() {
     if (!password) return;
     login({ email: identifier || undefined, password });
   };
-
-  if (isAuthLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-white">
-        <div className="w-8 h-8 border-4 border-[#0F510F]/20 border-t-[#0F510F] rounded-full animate-spin" />
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4 relative overflow-hidden font-sans antialiased" dir={isRtl ? "rtl" : "ltr"}>
