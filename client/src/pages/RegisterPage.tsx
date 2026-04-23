@@ -2,6 +2,8 @@ import { useState } from "react";
 import { useLocation, Link } from "wouter";
 import { nameError } from "@/lib/validate-name";
 import { useLanguage } from "@/lib/language-context";
+import { queryClient } from "@/lib/queryClient";
+import { api } from "@shared/routes";
 import {
   User, Building2, MessageSquare, Users, Rocket,
   Check, ChevronRight, ChevronLeft, Eye, EyeOff, Globe,
@@ -865,11 +867,23 @@ export default function RegisterPage() {
           }
         }
       } else if (step === 5) {
-        await fetch("/api/register/complete", {
+        const completeRes = await fetch("/api/register/complete", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
         });
+        const completeData = await completeRes.json().catch(() => ({}));
+        // Populate auth cache immediately so DashboardLayout renders without
+        // waiting for a cold /api/me fetch (avoids white screen).
+        if (completeData.authenticated) {
+          queryClient.setQueryData([api.auth.me.path], {
+            authenticated: true,
+            role: completeData.role,
+            agentId: completeData.agentId,
+            agentName: completeData.agentName,
+            termsAcceptedAt: completeData.termsAcceptedAt ?? null,
+          });
+        }
         setLocation("/dashboard");
         return;
       }

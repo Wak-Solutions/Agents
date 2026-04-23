@@ -127,12 +127,13 @@ export function registerRegistrationRoutes(app: Express): void {
 
       await client.query('COMMIT');
 
-      // Set session
+      // Set session — new users haven't accepted terms yet (null)
       req.session.authenticated = true;
       req.session.agentId = agentId;
       req.session.companyId = companyId;
       req.session.role = 'admin';
       req.session.agentName = `${firstName} ${lastName}`;
+      (req.session as any).termsAcceptedAt = null;
 
       req.session.save((err: any) => {
         if (err) {
@@ -387,7 +388,16 @@ export function registerRegistrationRoutes(app: Express): void {
         [companyId]
       );
       logger.info('Onboarding complete', `companyId: ${companyId}`);
-      res.json({ success: true });
+      // Return full auth shape so the frontend can populate its cache immediately
+      // without a second /api/me round-trip (avoids white screen on dashboard redirect).
+      res.json({
+        success: true,
+        authenticated: true,
+        role: req.session.role,
+        agentId: req.session.agentId,
+        agentName: req.session.agentName,
+        termsAcceptedAt: (req.session as any).termsAcceptedAt ?? null,
+      });
     } catch (err: any) {
       logger.error('Complete onboarding failed', `companyId: ${companyId}, error: ${err.message}`);
       res.status(500).json({ error: 'Failed to complete onboarding' });
