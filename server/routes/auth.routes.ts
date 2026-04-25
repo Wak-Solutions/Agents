@@ -84,7 +84,7 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
 
     try {
       const agentRes = await pool.query(
-        `SELECT * FROM agents WHERE email=$1 OR phone=$1 LIMIT 1`,
+        `SELECT * FROM agents WHERE lower(email)=lower($1) OR phone=$1 LIMIT 1`,
         [identifier]
       );
       if (agentRes.rows.length === 0) {
@@ -458,7 +458,7 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
     }
     try {
       const agentRes = await pool.query(
-        `SELECT id, name, email, is_active FROM agents WHERE email = $1 OR phone = $1 LIMIT 1`,
+        `SELECT id, name, email, is_active FROM agents WHERE lower(email) = lower($1) OR phone = $1 LIMIT 1`,
         [identifier]
       );
       const agent = agentRes.rows[0];

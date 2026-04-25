@@ -314,8 +314,14 @@ export function registerRegistrationRoutes(app: Express): void {
           );
           invited.push({ email: agent.email });
 
-          // Send invitation email with credentials
-          const dashboardUrl = process.env.DASHBOARD_URL || 'https://your-dashboard.up.railway.app';
+          // Send invitation email with credentials. Derive the dashboard URL
+          // from the request host so the link always points to the same domain
+          // the admin is currently using — avoids stale DASHBOARD_URL env vars.
+          const protocol = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'https';
+          const host = (req.headers['x-forwarded-host'] as string) || req.headers.host;
+          const dashboardUrl = host
+            ? `${protocol}://${host}`
+            : (process.env.APP_URL || process.env.DASHBOARD_URL || '');
           const _iYear = new Date().getFullYear();
           const inviteHtml = `<!DOCTYPE html>
 <html>

@@ -674,12 +674,16 @@ function Step4({
    STEP 5: GO LIVE
    ═══════════════════════════════════════════════════════════════════════════ */
 
-function Step5({ currentStep, t }: { currentStep: number; t: (k: string) => string }) {
+function Step5({ currentStep, form, t }: { currentStep: number; form: FormData; t: (k: string) => string }) {
+  // WhatsApp is only "connected" if Meta verification succeeded — not just if
+  // the user advanced past the step (they can skip without verifying).
+  const whatsappConnected = !!form.whatsappVerified;
+  const teamInvited = form.agents.some((a) => a.email && a.name);
   const checks = [
     { key: "regChecklist1", done: currentStep >= 2 },
     { key: "regChecklist2", done: currentStep >= 3 },
-    { key: "regChecklist3", done: currentStep >= 4 },
-    { key: "regChecklist4", done: currentStep >= 5 },
+    { key: "regChecklist3", done: whatsappConnected },
+    { key: "regChecklist5", done: teamInvited },
   ];
 
   return (
@@ -694,12 +698,30 @@ function Step5({ currentStep, t }: { currentStep: number; t: (k: string) => stri
         {checks.map((c, i) => (
           <div
             key={i}
-            className="flex items-center gap-3 p-3 rounded-xl bg-green-50 border border-green-100"
+            className={`flex items-center gap-3 p-3 rounded-xl border ${
+              c.done
+                ? "bg-green-50 border-green-100"
+                : "bg-gray-50 border-gray-200"
+            }`}
           >
-            <div className="w-6 h-6 rounded-full bg-green-500 flex items-center justify-center shrink-0">
-              <Check className="w-3.5 h-3.5 text-white" />
+            <div
+              className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${
+                c.done ? "bg-green-500" : "bg-gray-300"
+              }`}
+            >
+              {c.done ? (
+                <Check className="w-3.5 h-3.5 text-white" />
+              ) : (
+                <span className="w-2 h-2 rounded-full bg-white" />
+              )}
             </div>
-            <span className="text-sm text-green-800 font-medium">{t(c.key)}</span>
+            <span
+              className={`text-sm font-medium ${
+                c.done ? "text-green-800" : "text-gray-500"
+              }`}
+            >
+              {t(c.key)}
+            </span>
           </div>
         ))}
       </div>
@@ -957,7 +979,7 @@ export default function RegisterPage() {
             {step === 2 && <Step2 form={form} setForm={setForm} t={t} />}
             {step === 3 && <Step3 form={form} setForm={setForm} t={t} />}
             {step === 4 && <Step4 form={form} setForm={setForm} t={t} emailErrors={inviteEmailErrors} setEmailErrors={setInviteEmailErrors} nameErrors={inviteNameErrors} setNameErrors={setInviteNameErrors} />}
-            {step === 5 && <Step5 currentStep={step} t={t} />}
+            {step === 5 && <Step5 currentStep={step} form={form} t={t} />}
 
             {/* Error */}
             {error && (
