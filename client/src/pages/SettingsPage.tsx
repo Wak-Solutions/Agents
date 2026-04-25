@@ -68,6 +68,8 @@ function WhatsAppPanel({ t }: { t: (k: string) => string }) {
     setVerifyStatus("verifying");
     setVerifyError("");
     setVerifiedName("");
+    setSaveStatus("idle");
+    setSaveError("");
     try {
       const resp = await fetch("/api/register/whatsapp/verify", {
         method: "POST",
@@ -80,42 +82,36 @@ function WhatsAppPanel({ t }: { t: (k: string) => string }) {
         }),
       });
       const data = await resp.json();
-      if (data.verified) {
-        setVerifyStatus("verified");
-        setVerifiedName(data.displayName ?? "");
-      } else {
+      if (!data.verified) {
         setVerifyStatus("error");
         setVerifyError(data.wabaError || data.error || t("settingsLoadError"));
+        return;
       }
-    } catch {
-      setVerifyStatus("error");
-      setVerifyError(t("settingsLoadError"));
-    }
-  };
+      setVerifyStatus("verified");
+      setVerifiedName(data.displayName ?? "");
 
-  const handleSave = async () => {
-    if (verifyStatus !== "verified") {
-      setSaveError(t("settingsVerifyFirst"));
-      return;
-    }
-    setSaveStatus("saving");
-    setSaveError("");
-    try {
-      const resp = await fetch("/api/settings/whatsapp", {
+      // Auto-save on successful verify — no separate Save button.
+      setSaveStatus("saving");
+      const saveResp = await fetch("/api/settings/whatsapp", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
         body: JSON.stringify(creds),
       });
-      if (!resp.ok) {
-        const d = await resp.json().catch(() => ({}));
+      if (!saveResp.ok) {
+        const d = await saveResp.json().catch(() => ({}));
         throw new Error(d.message || t("settingsSaveError"));
       }
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus("idle"), 3000);
     } catch (err: any) {
-      setSaveStatus("error");
-      setSaveError(err.message || t("settingsSaveError"));
+      if (verifyStatus === "verifying") {
+        setVerifyStatus("error");
+        setVerifyError(t("settingsLoadError"));
+      } else {
+        setSaveStatus("error");
+        setSaveError(err.message || t("settingsSaveError"));
+      }
     }
   };
 
@@ -247,25 +243,18 @@ function WhatsAppPanel({ t }: { t: (k: string) => string }) {
           {verifyStatus === "error" && (
             <span className="text-sm text-red-500">{verifyError}</span>
           )}
-        </div>
-
-        {/* Save row */}
-        <div className="pt-2 border-t border-gray-100 flex items-center gap-3">
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={saveStatus === "saving"}
-            className="inline-flex items-center gap-2 bg-gray-900 text-white px-5 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-40 hover:bg-gray-700 transition-colors"
-          >
-            {saveStatus === "saving" ? (
-              <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{t("settingsSaving")}</>
-            ) : saveStatus === "saved" ? (
-              <><Check className="w-4 h-4" />{t("settingsSaved")}</>
-            ) : (
-              t("settingsSave")
-            )}
-          </button>
-          {saveError && (
+          {saveStatus === "saving" && (
+            <span className="text-sm text-gray-500 inline-flex items-center gap-2">
+              <div className="w-3.5 h-3.5 border-2 border-gray-300 border-t-gray-700 rounded-full animate-spin" />
+              {t("settingsSaving")}
+            </span>
+          )}
+          {saveStatus === "saved" && (
+            <span className="text-sm text-green-600 font-medium inline-flex items-center gap-1">
+              <Check className="w-4 h-4" />{t("settingsSaved")}
+            </span>
+          )}
+          {saveStatus === "error" && saveError && (
             <span className="text-sm text-red-500">{saveError}</span>
           )}
         </div>

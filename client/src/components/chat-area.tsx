@@ -12,6 +12,7 @@ import { useSendMessage, useMessages } from "@/hooks/use-messages";
 // ESCALATION — hidden for now
 // import { useCloseEscalation } from "@/hooks/use-escalations";
 import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
 
 /* ────────────────────────────────────────────────────────────
    WhatsApp SVG wallpaper pattern — identical doodle background
@@ -223,6 +224,7 @@ function ActiveChat({ conversation, onClose }: { conversation: Conversation; onC
   // ESCALATION — hidden for now
   // const { mutate: closeEscalation, isPending: isClosing } = useCloseEscalation();
   const { isAdmin } = useAuth();
+  const { toast } = useToast();
 
   const [text, setText] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -264,7 +266,16 @@ function ActiveChat({ conversation, onClose }: { conversation: Conversation; onC
     if (!text.trim() || isSending) return;
     sendMessage(
       { customer_phone: conversation.customer_phone, message: text },
-      { onSuccess: () => setText("") },
+      {
+        onSuccess: () => setText(""),
+        onError: (err: Error) => {
+          toast({
+            title: "Message not sent",
+            description: err.message,
+            variant: "destructive",
+          });
+        },
+      },
     );
   };
 

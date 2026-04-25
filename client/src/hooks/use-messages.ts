@@ -29,7 +29,14 @@ export function useSendMessage() {
         body: JSON.stringify({ customer_phone, message }),
         credentials: "include",
       });
-      if (!res.ok) throw new Error("Failed to send message");
+      if (!res.ok) {
+        let serverMessage = "Failed to send message";
+        try {
+          const body = await res.json();
+          if (body?.message) serverMessage = body.message;
+        } catch {}
+        throw new Error(serverMessage);
+      }
       const data = await res.json();
       return data as Message;
     },
