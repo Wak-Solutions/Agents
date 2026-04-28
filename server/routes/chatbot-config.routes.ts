@@ -9,13 +9,13 @@
  * and consumed by the Python bot.
  */
 
-import { timingSafeEqual } from 'crypto';
 import type { Express } from 'express';
 import OpenAI from 'openai';
 
 import { pool } from '../db';
 import { requireAuth } from '../middleware/auth';
 import { createLogger } from '../lib/logger';
+import { resolveCompanyFromSecret } from '../helpers/resolveCompanyFromSecret';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
@@ -149,22 +149,12 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
         }
         companyId = req.session.companyId;
       } else {
-        // Python bot / unauthenticated — requires webhook secret + explicit ?company_id param
-        const incoming = req.headers['x-webhook-secret'];
-        const expected = process.env.WEBHOOK_SECRET;
-        if (
-          typeof incoming !== 'string' ||
-          !expected ||
-          incoming.length !== expected.length ||
-          !timingSafeEqual(Buffer.from(incoming), Buffer.from(expected))
-        ) {
+        // Python bot / unauthenticated — authenticate via per-tenant webhook secret
+        const company = await resolveCompanyFromSecret(req.headers['x-webhook-secret'] as string);
+        if (!company) {
           return res.status(401).json({ message: 'Unauthorized' });
         }
-        const parsed = parseInt(req.query.company_id);
-        if (!parsed) {
-          return res.status(400).json({ message: 'company_id required' });
-        }
-        companyId = parsed;
+        companyId = company.id;
       }
 
       logger.info('getChatbotConfig', `companyId: ${companyId}`);

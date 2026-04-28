@@ -14,6 +14,7 @@ import { requireAuth, requireWebhookSecret } from '../middleware/auth';
 import { notifyAgent, notifyAll, notifiedChats } from '../push';
 import { createLogger, maskPhone } from '../lib/logger';
 import { api } from '@shared/routes';
+import { resolveCompanyFromSecret } from '../helpers/resolveCompanyFromSecret';
 
 const logger = createLogger('messages');
 
@@ -148,16 +149,17 @@ export function registerMessageRoutes(app: Express): void {
   });
 
   // POST /api/incoming — webhook from Python bot (new inbound customer message)
-  app.post(api.messages.incoming.path, requireWebhookSecret, async (req: any, res: any) => {
+  app.post(api.messages.incoming.path, async (req: any, res: any) => {
     try {
+      const company = await resolveCompanyFromSecret(req.headers['x-webhook-secret'] as string);
+      if (!company) return res.status(401).json({ message: 'Unauthorized' });
+      const companyId = company.id;
+
       const data = api.messages.incoming.input.parse(req.body);
       logger.info(
         'Inbound message received from bot',
         `phone: ${maskPhone(data.customer_phone)}, type: text`
       );
-
-      const companyId = parseInt(req.body.company_id);
-      if (!companyId) return res.status(400).json({ message: 'company_id is required' });
 
       // Detect whether this is the start of a new conversation session by
       // checking the conversation_id of the most recent message. A new

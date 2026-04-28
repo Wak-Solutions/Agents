@@ -84,14 +84,17 @@ describe('POST /api/incoming (webhook from Python bot)', () => {
     expect(res.status).toBe(401);
   });
 
-  it('returns 200 with correct webhook secret', async () => {
-    process.env.WEBHOOK_SECRET = 'test-secret';
+  it('returns 200 when secret resolves a company in DB', async () => {
     const { app } = await buildConvApp();
-    (pool.query as any).mockResolvedValue({ rows: [] });
+    // First call: resolveCompanyFromSecret → company id=1
+    // Second call: SELECT conversation_id for notifiedChats dedup
+    (pool.query as any)
+      .mockResolvedValueOnce({ rows: [{ id: 1, name: 'WAK' }] })
+      .mockResolvedValueOnce({ rows: [] });
     const res = await request(app)
       .post('/api/incoming')
-      .set('x-webhook-secret', 'test-secret')
-      .send({ customer_phone: '971501234567', message_text: 'hello', company_id: 1 });
+      .set('x-webhook-secret', 'per-tenant-secret')
+      .send({ customer_phone: '971501234567', message_text: 'hello' });
     expect(res.status).toBe(200);
   });
 });

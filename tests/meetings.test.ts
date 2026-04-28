@@ -64,34 +64,53 @@ function buildMeetingApp() {
 describe('POST /api/meetings/create-token', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('returns 401 without webhook secret', async () => {
+  it('returns 401 with no x-webhook-secret header', async () => {
     const { app } = await buildMeetingApp();
-    const res = await request(app)
-      .post('/api/meetings/create-token')
-      .send({ customer_phone: '971501234567', company_id: 1 });
-    expect(res.status).toBe(401);
-  });
-
-  it('creates token with valid secret', async () => {
-    process.env.WEBHOOK_SECRET = 'test-secret';
-    const { app } = await buildMeetingApp();
+    // No secret in header → resolveCompanyFromSecret returns null
     (pool.query as any).mockResolvedValue({ rows: [] });
     const res = await request(app)
       .post('/api/meetings/create-token')
-      .set('x-webhook-secret', 'test-secret')
-      .send({ customer_phone: '971501234567', company_id: 1 });
+      .send({ customer_phone: '971501234567' });
+    expect(res.status).toBe(401);
+  });
+
+  it('returns 401 with wrong x-webhook-secret (unknown in DB)', async () => {
+    const { app } = await buildMeetingApp();
+    // resolveCompanyFromSecret queries DB and gets no match
+    (pool.query as any).mockResolvedValue({ rows: [] });
+    const res = await request(app)
+      .post('/api/meetings/create-token')
+      .set('x-webhook-secret', 'wrong-secret')
+      .send({ customer_phone: '971501234567' });
+    expect(res.status).toBe(401);
+  });
+
+  it('creates token with correct secret and derives companyId from DB (not body)', async () => {
+    const { app } = await buildMeetingApp();
+    // First call: resolveCompanyFromSecret returns company with id=7
+    // Second call: pool.query INSERT for the meeting row
+    (pool.query as any)
+      .mockResolvedValueOnce({ rows: [{ id: 7, name: 'Tenant B' }] })
+      .mockResolvedValueOnce({ rows: [] });
+    const res = await request(app)
+      .post('/api/meetings/create-token')
+      .set('x-webhook-secret', 'tenant-b-secret')
+      .send({ customer_phone: '971501234567' });
     expect(res.status).toBe(200);
     expect(typeof res.body.token).toBe('string');
     expect(res.body.token.length).toBeGreaterThan(10);
+    // The INSERT must carry companyId=7 (from secret, not body)
+    const insertCall = (pool.query as any).mock.calls[1];
+    expect(insertCall[1]).toContain(7);
   });
 
   it('returns 400 when customer_phone missing', async () => {
-    process.env.WEBHOOK_SECRET = 'test-secret';
     const { app } = await buildMeetingApp();
+    (pool.query as any).mockResolvedValue({ rows: [{ id: 1, name: 'WAK' }] });
     const res = await request(app)
       .post('/api/meetings/create-token')
-      .set('x-webhook-secret', 'test-secret')
-      .send({ company_id: 1 });
+      .set('x-webhook-secret', 'any-secret')
+      .send({});
     expect(res.status).toBe(400);
   });
 });

@@ -95,22 +95,35 @@ describe('GET /api/chatbot-config', () => {
     expect(res.body.system_prompt_preview).toContain('2. Track Order');
   });
 
-  it('returns prompt with valid webhook secret (Python bot access)', async () => {
-    process.env.WEBHOOK_SECRET = 'test-secret';
+  it('returns 401 with wrong x-webhook-secret (unknown in DB)', async () => {
     const { app } = await buildConfigApp();
-    (pool.query as any).mockResolvedValue({
-      rows: [{
-        system_prompt: 'Prompt for bot.',
-        structured_config: null,
-        menu_config: [],
-        override_active: false,
-        demo_conversation: null,
-      }],
-    });
+    (pool.query as any).mockResolvedValue({ rows: [] });
     const res = await request(app)
-      .get('/api/chatbot-config?company_id=1')
-      .set('x-webhook-secret', 'test-secret');
+      .get('/api/chatbot-config')
+      .set('x-webhook-secret', 'wrong-secret');
+    expect(res.status).toBe(401);
+  });
+
+  it('returns prompt when secret resolves a company (Python bot access)', async () => {
+    const { app } = await buildConfigApp();
+    // First call: resolveCompanyFromSecret → company id=1
+    // Second call: SELECT chatbot_config
+    (pool.query as any)
+      .mockResolvedValueOnce({ rows: [{ id: 1, name: 'WAK' }] })
+      .mockResolvedValueOnce({
+        rows: [{
+          system_prompt: 'Prompt for bot.',
+          structured_config: null,
+          menu_config: [],
+          override_active: false,
+          demo_conversation: null,
+        }],
+      });
+    const res = await request(app)
+      .get('/api/chatbot-config')
+      .set('x-webhook-secret', 'wak-per-tenant-secret');
     expect(res.status).toBe(200);
+    expect(res.body.system_prompt).toBe('Prompt for bot.');
   });
 });
 

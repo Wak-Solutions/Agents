@@ -13,6 +13,7 @@ import type { Express } from 'express';
 import { pool } from '../db';
 import { requireAuth } from '../middleware/auth';
 import { requireWebhookSecret } from '../middleware/auth';
+import { resolveCompanyFromSecret } from '../helpers/resolveCompanyFromSecret';
 import { notifyAgent, notifyAll } from '../push';
 import { notifyManagerNewBooking, sendEmail } from '../email';
 import { sendSurveyToCustomer } from '../surveys';
@@ -49,14 +50,16 @@ export async function ensureBlockedSlotsCompanyId(): Promise<void> {
 export function registerMeetingRoutes(app: Express): void {
 
   // ── Internal: create booking token (called by Python bot) ────────────────
-  app.post('/api/meetings/create-token', requireWebhookSecret, async (req: any, res: any) => {
+  app.post('/api/meetings/create-token', async (req: any, res: any) => {
     try {
+      const company = await resolveCompanyFromSecret(req.headers['x-webhook-secret'] as string);
+      if (!company) return res.status(401).json({ message: 'Unauthorized' });
+      const companyId = company.id;
+
       const { customer_phone } = req.body;
       if (!customer_phone) {
         return res.status(400).json({ message: 'customer_phone is required' });
       }
-      const companyId = parseInt(req.body.company_id);
-      if (!companyId) return res.status(400).json({ message: 'company_id is required' });
       const token = crypto.randomUUID();
       const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
       await pool.query(
