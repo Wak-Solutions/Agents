@@ -10,6 +10,15 @@ vi.mock('../server/db', () => ({
   db: {},
 }));
 
+vi.mock('../server/lib/trial', () => ({
+  isCompanyTrialExpired: vi.fn().mockResolvedValue(false),
+  getCompanyTrialStatus: vi.fn().mockResolvedValue({
+    expired: false, trialDays: 14, daysRemaining: 10, createdAt: null, expiresAt: null,
+  }),
+  ensureConfigTable: vi.fn().mockResolvedValue(undefined),
+  getTrialDays: vi.fn().mockResolvedValue(14),
+}));
+
 vi.mock('../server/push', () => ({
   notifyAgent: vi.fn().mockResolvedValue(undefined),
   notifyAll: vi.fn().mockResolvedValue(undefined),

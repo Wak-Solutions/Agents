@@ -10,6 +10,25 @@ vi.mock('../server/db', () => ({
   db: {},
 }));
 
+vi.mock('openai', () => ({
+  default: class MockOpenAI {
+    chat = {
+      completions: {
+        create: async () => ({ choices: [{ message: { content: '[]' } }] }),
+      },
+    };
+  },
+}));
+
+vi.mock('../server/lib/trial', () => ({
+  isCompanyTrialExpired: vi.fn().mockResolvedValue(false),
+  getCompanyTrialStatus: vi.fn().mockResolvedValue({
+    expired: false, trialDays: 14, daysRemaining: 10, createdAt: null, expiresAt: null,
+  }),
+  ensureConfigTable: vi.fn().mockResolvedValue(undefined),
+  getTrialDays: vi.fn().mockResolvedValue(14),
+}));
+
 import { pool } from '../server/db';
 import { adminSession, buildApp } from './helpers/app';
 
@@ -72,7 +91,7 @@ describe('GET /api/chatbot-config', () => {
     const res = await request(app).get('/api/chatbot-config');
     expect(res.status).toBe(200);
     expect(res.body.system_prompt_preview).toContain('1. Product Inquiry');
-    expect(res.body.system_prompt_preview).toContain('1.1. Robots');
+    expect(res.body.system_prompt_preview).toContain('a. Robots');
     expect(res.body.system_prompt_preview).toContain('2. Track Order');
   });
 

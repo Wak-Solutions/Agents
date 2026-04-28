@@ -13,6 +13,15 @@ vi.mock('../server/db', () => ({
   db: {},
 }));
 
+vi.mock('../server/lib/trial', () => ({
+  isCompanyTrialExpired: vi.fn().mockResolvedValue(false),
+  getCompanyTrialStatus: vi.fn().mockResolvedValue({
+    expired: false, trialDays: 14, daysRemaining: 10, createdAt: null, expiresAt: null,
+  }),
+  ensureConfigTable: vi.fn().mockResolvedValue(undefined),
+  getTrialDays: vi.fn().mockResolvedValue(14),
+}));
+
 // bcrypt is slow in tests — mock it so password checks are instant
 vi.mock('bcrypt', () => ({
   default: {
@@ -97,7 +106,7 @@ describe('POST /api/login', () => {
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
     expect(res.body.role).toBe('admin');
-    expect(res.body.name).toBe('Alice');
+    expect(res.body.agentName).toBe('Alice');
   });
 });
 
@@ -114,10 +123,11 @@ describe('POST /api/logout', () => {
 describe('GET /api/me', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('returns 401 with no session', async () => {
+  it('returns 200 with authenticated:false when no session', async () => {
     const { app } = await buildAuthApp();
     const res = await request(app).get('/api/me');
-    expect(res.status).toBe(401);
+    expect(res.status).toBe(200);
+    expect(res.body.authenticated).toBe(false);
   });
 
   it('returns 200 with session data when authenticated', async () => {
