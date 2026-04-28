@@ -11,7 +11,7 @@ if (!process.env.DATABASE_URL) {
 }
 
 export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
-// Prevent unhandled 'error' events from crashing the process when Neon
+// Prevent unhandled 'error' events from crashing the process when the pool
 // drops an idle connection — the pool will reconnect automatically.
 pool.on('error', (err) => {
   console.error('[db] Idle pool client error (non-fatal):', err.message);
