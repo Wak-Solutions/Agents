@@ -387,6 +387,17 @@ export function registerRegistrationRoutes(app: Express): void {
     const companyId = req.companyId;
 
     try {
+      const brandingCheck = await pool.query(
+        `SELECT app_url, brand_name FROM companies WHERE id = $1`,
+        [companyId]
+      );
+      const row = brandingCheck.rows[0];
+      if (!row?.app_url || !row?.brand_name) {
+        return res.status(400).json({
+          error: 'Please set your App URL and Brand Name in Settings → Branding to complete onboarding.',
+        });
+      }
+
       await pool.query(
         `UPDATE companies
          SET onboarding_complete = true, onboarding_step = 6, is_active = true

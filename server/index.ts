@@ -83,16 +83,14 @@ function validateStartupEnv() {
   process.exit(1);
 }
 
+// Mask phone numbers (10+ digits) in URL paths to prevent PII in logs.
+function maskPathPhones(path: string): string {
+  return path.replace(/\b\d{10,}\b/g, '[phone]');
+}
+
 app.use((req, res, next) => {
   const start = Date.now();
   const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
 
   res.on("finish", () => {
     const duration = Date.now() - start;
@@ -103,12 +101,7 @@ app.use((req, res, next) => {
         path === "/api/chatbot-config"
       )) return;
 
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      log(logLine);
+      log(`${req.method} ${maskPathPhones(path)} ${res.statusCode} in ${duration}ms`);
     }
   });
 

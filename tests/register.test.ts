@@ -62,6 +62,51 @@ const validBody = {
   password: 'password123',
 };
 
+describe('POST /api/register/complete — branding guard', () => {
+  it('returns 400 when app_url is null', async () => {
+    // setSession so requireAuth passes
+    const built2 = buildApp();
+    const { app: app2, setSession } = built2;
+    (pool.query as any).mockResolvedValue({ rows: [] });
+    const { registerRegistrationRoutes } = await import('../server/routes/register.routes');
+    registerRegistrationRoutes(app2);
+    setSession({ authenticated: true, agentId: 1, companyId: 3, role: 'admin' });
+    (pool.query as any).mockResolvedValueOnce({ rows: [{ app_url: null, brand_name: null }] });
+    const res = await request(app2).post('/api/register/complete');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('App URL');
+  });
+
+  it('returns 400 when brand_name is null even if app_url is set', async () => {
+    const built2 = buildApp();
+    const { app: app2, setSession } = built2;
+    (pool.query as any).mockResolvedValue({ rows: [] });
+    const { registerRegistrationRoutes } = await import('../server/routes/register.routes');
+    registerRegistrationRoutes(app2);
+    setSession({ authenticated: true, agentId: 1, companyId: 3, role: 'admin' });
+    (pool.query as any).mockResolvedValueOnce({ rows: [{ app_url: 'https://app.example.com', brand_name: null }] });
+    const res = await request(app2).post('/api/register/complete');
+    expect(res.status).toBe(400);
+    expect(res.body.error).toContain('Brand Name');
+  });
+
+  it('returns 200 when both app_url and brand_name are set', async () => {
+    const built2 = buildApp();
+    const { app: app2, setSession } = built2;
+    (pool.query as any).mockResolvedValue({ rows: [] });
+    const { registerRegistrationRoutes } = await import('../server/routes/register.routes');
+    registerRegistrationRoutes(app2);
+    setSession({ authenticated: true, agentId: 1, companyId: 3, role: 'admin' });
+    // branding check: rows present with values
+    (pool.query as any)
+      .mockResolvedValueOnce({ rows: [{ app_url: 'https://app.example.com', brand_name: 'My Brand' }] })
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 }); // UPDATE
+    const res = await request(app2).post('/api/register/complete');
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+});
+
 describe('POST /api/register — phone uniqueness', () => {
   it('returns 409 when DB raises a 23505 violation on agents_phone_uniq', async () => {
     const client = makeClient();

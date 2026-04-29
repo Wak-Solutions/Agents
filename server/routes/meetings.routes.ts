@@ -437,7 +437,15 @@ export function registerMeetingRoutes(app: Express): void {
       const meetingLink = room.url;
 
       // Build branded meeting link for the customer
-      const { appUrl, brandName } = await getCompanyBranding(companyId);
+      let appUrl: string, brandName: string;
+      try {
+        ({ appUrl, brandName } = await getCompanyBranding(companyId));
+      } catch {
+        logger.error('bookMeeting failed — app_url not set', `companyId: ${companyId}`);
+        return res.status(400).json({
+          message: 'Booking is not configured. Please set your App URL in Settings → Branding before accepting bookings.',
+        });
+      }
       const brandedLink = `${appUrl}/meeting/${meeting.meeting_token}`;
 
       await pool.query(

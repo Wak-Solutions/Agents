@@ -7,6 +7,30 @@ import DashboardLayout from "@/components/DashboardLayout";
 import { Sidebar } from "@/components/sidebar";
 import { ChatArea } from "@/components/chat-area";
 
+function BrandingWarning() {
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/settings/branding", { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then((data: { appUrl: string; brandName: string } | null) => {
+        if (data && (!data.appUrl || !data.brandName)) setShow(true);
+      })
+      .catch(() => {});
+  }, []);
+
+  if (!show) return null;
+  return (
+    <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-sm text-amber-800 flex items-center gap-2">
+      <span>⚠</span>
+      <span>
+        Booking links won't work until you set your App URL in{" "}
+        <a href="/settings" className="underline font-medium">Settings → Branding</a>.
+      </span>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [, setLocation] = useLocation();
   const { isAuthenticated, isLoading: isAuthLoading } = useAuth();
@@ -31,6 +55,7 @@ export default function Dashboard() {
 
   return (
     <DashboardLayout noPadding>
+      <BrandingWarning />
       <div className="flex h-full overflow-hidden">
         {/* Conversation list */}
         <div className={`${selectedPhone ? "hidden md:flex" : "flex w-full md:w-80"} md:w-80 h-full shrink-0`}>

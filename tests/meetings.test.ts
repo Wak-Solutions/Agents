@@ -68,6 +68,7 @@ vi.mock('../server/lib/timezone', () => ({
 
 import { pool } from '../server/db';
 import { adminSession, buildApp } from './helpers/app';
+import { getCompanyBranding } from '../server/routes/settings.routes';
 
 function buildMeetingApp() {
   const { app, setSession } = buildApp();
@@ -447,5 +448,78 @@ describe('GET /api/demo-booking/:token (public)', () => {
     (pool.query as any).mockResolvedValue({ rows: [{ id: 1, meeting_link: '', scheduled_at: null, status: 'pending' }] });
     const res = await request(app).get('/api/demo-booking/some-token');
     expect(res.status).not.toBe(401);
+  });
+});
+
+// ── Fix 2 — bookMeeting returns 400 (not 500) when app_url is missing ────────
+
+describe('POST /api/book/:token — app_url guard', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('returns 400 with clear message when app_url is not set (not 500)', async () => {
+    const { app } = await buildMeetingApp();
+
+    // Make getCompanyBranding throw (simulates app_url=null in DB)
+    (getCompanyBranding as any).mockRejectedValueOnce(
+      new Error('companies.app_url is not set for companyId=2')
+    );
+
+    // Meeting token lookup: valid, unexpired, unbooked
+    const futureExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    (pool.query as any)
+      .mockResolvedValueOnce({
+        rows: [{
+          id: 1,
+          customer_phone: '971501234567',
+          meeting_token: 'tok-abc',
+          scheduled_at: null,
+          token_expires_at: futureExpiry,
+          agent_id: 1,
+          company_id: 2,
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [] }) // work hours
+      .mockResolvedValueOnce({ rows: [] }) // slot taken check
+      .mockResolvedValueOnce({ rows: [] }); // blocked slots
+
+    const res = await request(app)
+      .post('/api/book/tok-abc')
+      .send({ date: '2026-12-01', time: '10:00', customerEmail: '' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain('App URL');
+    expect(res.body.message).toContain('Settings');
+  });
+
+  it('proceeds normally when app_url is set', async () => {
+    const { app } = await buildMeetingApp();
+
+    // getCompanyBranding already returns a good value from the module mock
+    const futureExpiry = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    (pool.query as any)
+      .mockResolvedValueOnce({
+        rows: [{
+          id: 2,
+          customer_phone: '971501234567',
+          meeting_token: 'tok-xyz',
+          scheduled_at: null,
+          token_expires_at: futureExpiry,
+          agent_id: 1,
+          company_id: 1,
+        }],
+      })
+      .mockResolvedValueOnce({ rows: [] }) // work hours
+      .mockResolvedValueOnce({ rows: [] }) // slot taken
+      .mockResolvedValueOnce({ rows: [] }) // blocked slots
+      .mockResolvedValueOnce({ rows: [], rowCount: 1 }) // UPDATE meetings
+      .mockResolvedValueOnce({ rows: [] }); // email/notifications
+
+    const res = await request(app)
+      .post('/api/book/tok-xyz')
+      .send({ date: '2026-12-01', time: '10:00', customerEmail: '' });
+
+    // Should not be 400 or 500 (Daily room creation is mocked to succeed)
+    expect(res.status).not.toBe(400);
+    expect(res.status).not.toBe(500);
   });
 });

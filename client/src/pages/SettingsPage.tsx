@@ -535,6 +535,27 @@ function ChangePasswordPanel({ t }: { t: (k: string) => string }) {
    Page
 ───────────────────────────────────────────────────────────────────────────── */
 
+function BrandingWarningBanner() {
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/settings/branding", { credentials: "include" })
+      .then(r => r.ok ? r.json() : null)
+      .then((data: { appUrl: string; brandName: string } | null) => {
+        if (data && (!data.appUrl || !data.brandName)) setShow(true);
+      })
+      .catch(() => {});
+  }, []);
+
+  if (!show) return null;
+  return (
+    <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800 flex items-center gap-2">
+      <span>⚠</span>
+      <span>Booking links won't work until you set your App URL and Brand Name below.</span>
+    </div>
+  );
+}
+
 export default function SettingsPage() {
   const { t: rawT, lang } = useLanguage();
   const t = rawT as unknown as (key: string) => string;
@@ -548,6 +569,7 @@ export default function SettingsPage() {
         <div className="mb-8">
           <h1 className="text-2xl font-bold text-gray-900">{t("settings")}</h1>
         </div>
+        <BrandingWarningBanner />
 
         <div className="flex gap-6 items-start">
           {/* Left section nav */}
