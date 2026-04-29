@@ -149,6 +149,19 @@ export function registerMeetingRoutes(app: Express): void {
     try {
       const companyId = req.companyId;
       const agentId = req.session.agentId ?? null;
+      const source = req.body?.source === 'demo' ? 'demo' : 'meeting';
+
+      if (source === 'demo') {
+        const result = await pool.query(
+          `UPDATE demo_bookings SET status = 'in_progress', agent_id = $2 WHERE id = $1
+           RETURNING *, (SELECT name FROM agents WHERE id = $2) AS agent_name`,
+          [req.params.id, agentId]
+        );
+        if (result.rows.length === 0) return res.status(404).json({ message: 'Meeting not found' });
+        logger.info('Demo meeting started', `meetingId: ${req.params.id}, agentId: ${agentId}`);
+        return res.json(result.rows[0]);
+      }
+
       const result = await pool.query(
         `UPDATE meetings SET status = 'in_progress', agent_id = $2 WHERE id = $1 AND company_id = $3
          RETURNING meetings.*, (SELECT name FROM agents WHERE id = $2) AS agent_name`,
@@ -167,6 +180,18 @@ export function registerMeetingRoutes(app: Express): void {
   app.patch('/api/meetings/:id/complete', requireAuth, async (req: any, res: any) => {
     try {
       const companyId = req.companyId;
+      const source = req.body?.source === 'demo' ? 'demo' : 'meeting';
+
+      if (source === 'demo') {
+        const result = await pool.query(
+          `UPDATE demo_bookings SET status = 'completed' WHERE id = $1 RETURNING *`,
+          [req.params.id]
+        );
+        if (result.rows.length === 0) return res.status(404).json({ message: 'Meeting not found' });
+        logger.info('Demo meeting completed', `meetingId: ${req.params.id}`);
+        return res.json(result.rows[0]);
+      }
+
       const result = await pool.query(
         `UPDATE meetings SET status = 'completed' WHERE id = $1 AND company_id = $2 RETURNING *`,
         [req.params.id, companyId]

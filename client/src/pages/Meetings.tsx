@@ -342,22 +342,30 @@ export default function Meetings() {
     return () => document.removeEventListener("visibilitychange", hv);
   }, [fetchMeetings, fetchSlots, isAuthenticated]);
 
-  const startMeeting = async (id: number, meetingLink: string) => {
+  const startMeeting = async (id: number, meetingLink: string, source: 'meeting' | 'demo' = 'meeting') => {
     window.open(meetingLink, "_blank", "noopener,noreferrer");
     setStarting(id);
     try {
-      const res = await fetch(`/api/meetings/${id}/start`, { method: "PATCH", credentials: "include" });
+      const res = await fetch(`/api/meetings/${id}/start`, {
+        method: "PATCH", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source }),
+      });
       if (!res.ok) throw new Error(t("meetingsErrorLoad"));
       const updated = await res.json();
       setMeetings(prev => prev.map(m => m.id === id ? { ...m, status: "in_progress", agent_name: updated.agent_name ?? m.agent_name } : m));
     } catch (e: any) { setError(e.message); } finally { setStarting(null); }
   };
 
-  const markComplete = async (id: number) => {
+  const markComplete = async (id: number, source: 'meeting' | 'demo' = 'meeting') => {
     if (!window.confirm(t("meetingsBtnMarkCompleteConfirm"))) return;
     setCompleting(id);
     try {
-      const res = await fetch(`/api/meetings/${id}/complete`, { method: "PATCH", credentials: "include" });
+      const res = await fetch(`/api/meetings/${id}/complete`, {
+        method: "PATCH", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source }),
+      });
       if (!res.ok) throw new Error(t("meetingsErrorLoad"));
       setMeetings(prev => prev.map(m => m.id === id ? { ...m, status: "completed" } : m));
     } catch (e: any) { setError(e.message); } finally { setCompleting(null); }
@@ -476,7 +484,7 @@ export default function Meetings() {
                         <div className="flex items-center gap-2 flex-wrap">
                           {m.status === "pending" && (
                             <button
-                              onClick={() => startMeeting(m.id, m.meeting_link)}
+                              onClick={() => startMeeting(m.id, m.meeting_link, m.source ?? 'meeting')}
                               disabled={starting === m.id}
                               className="inline-flex items-center gap-1.5 text-xs font-medium text-gray-700 border border-gray-200 bg-white px-3.5 py-2 rounded-lg hover:bg-gray-50 disabled:opacity-50 transition-colors"
                             >
@@ -485,7 +493,7 @@ export default function Meetings() {
                           )}
                           {m.status === "in_progress" && (
                             <button
-                              onClick={() => markComplete(m.id)}
+                              onClick={() => markComplete(m.id, m.source ?? 'meeting')}
                               disabled={completing === m.id}
                               className="inline-flex items-center gap-1.5 text-xs font-medium bg-[#0F510F] text-white px-3.5 py-2 rounded-lg hover:bg-[#0d4510] disabled:opacity-50 transition-colors"
                             >

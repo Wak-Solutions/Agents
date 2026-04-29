@@ -169,19 +169,76 @@ describe('PATCH /api/meetings/:id/start', () => {
     const res = await request(app).patch('/api/meetings/1/start');
     expect(res.status).toBe(401);
   });
+
+  it('source=demo updates demo_bookings not meetings', async () => {
+    const { app, setSession } = await buildMeetingApp();
+    (pool.query as any).mockResolvedValue({ rows: [{ id: 5, status: 'in_progress' }] });
+    setSession(adminSession);
+    const res = await request(app).patch('/api/meetings/5/start').send({ source: 'demo' });
+    expect(res.status).toBe(200);
+    const calls: any[][] = (pool.query as any).mock.calls;
+    const updateCall = calls.find(([sql]) => typeof sql === 'string' && /UPDATE/i.test(sql));
+    expect(updateCall![0]).toMatch(/demo_bookings/i);
+    expect(updateCall![0]).not.toMatch(/\bUPDATE\s+meetings\b/i);
+  });
+
+  it('source=meeting updates meetings not demo_bookings', async () => {
+    const { app, setSession } = await buildMeetingApp();
+    (pool.query as any).mockResolvedValue({ rows: [{ id: 1, status: 'in_progress' }] });
+    setSession(adminSession);
+    const res = await request(app).patch('/api/meetings/1/start').send({ source: 'meeting' });
+    expect(res.status).toBe(200);
+    const calls: any[][] = (pool.query as any).mock.calls;
+    const updateCall = calls.find(([sql]) => typeof sql === 'string' && /UPDATE/i.test(sql));
+    expect(updateCall![0]).toMatch(/UPDATE\s+meetings/i);
+    expect(updateCall![0]).not.toMatch(/demo_bookings/i);
+  });
 });
 
 describe('PATCH /api/meetings/:id/complete', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (pool.query as any).mockReset();
+  });
 
   it('sets status to completed', async () => {
     const { app, setSession } = await buildMeetingApp();
     (pool.query as any)
       .mockResolvedValueOnce({ rows: [{ id: 1, customer_phone: '971501234567', agent_id: 1, company_id: 1 }] })
-      .mockResolvedValueOnce({ rows: [] }); // update query
+      .mockResolvedValueOnce({ rows: [] });
     setSession(adminSession);
     const res = await request(app).patch('/api/meetings/1/complete');
     expect(res.status).toBe(200);
+  });
+
+  it('source=demo updates demo_bookings and does NOT call sendSurveyToCustomer', async () => {
+    const { sendSurveyToCustomer } = await import('../server/surveys');
+    const { app, setSession } = await buildMeetingApp();
+    // mockResolvedValue covers both the trial-gate query and the UPDATE
+    (pool.query as any).mockResolvedValue({ rows: [{ id: 5, status: 'completed' }] });
+    setSession(adminSession);
+    const res = await request(app).patch('/api/meetings/5/complete').send({ source: 'demo' });
+    expect(res.status).toBe(200);
+    const calls: any[][] = (pool.query as any).mock.calls;
+    const updateCall = calls.find(([sql]) => typeof sql === 'string' && /UPDATE/i.test(sql));
+    expect(updateCall![0]).toMatch(/demo_bookings/i);
+    expect(updateCall![0]).not.toMatch(/\bUPDATE\s+meetings\b/i);
+    expect(sendSurveyToCustomer).not.toHaveBeenCalled();
+  });
+
+  it('source=meeting updates meetings and calls sendSurveyToCustomer', async () => {
+    const { sendSurveyToCustomer } = await import('../server/surveys');
+    const { app, setSession } = await buildMeetingApp();
+    (pool.query as any).mockResolvedValue({
+      rows: [{ id: 1, customer_phone: '971501234567', agent_id: 1, company_id: 1 }],
+    });
+    setSession(adminSession);
+    const res = await request(app).patch('/api/meetings/1/complete').send({ source: 'meeting' });
+    expect(res.status).toBe(200);
+    const calls: any[][] = (pool.query as any).mock.calls;
+    const updateCall = calls.find(([sql]) => typeof sql === 'string' && /UPDATE/i.test(sql));
+    expect(updateCall![0]).toMatch(/UPDATE\s+meetings/i);
+    expect(sendSurveyToCustomer).toHaveBeenCalled();
   });
 });
 
