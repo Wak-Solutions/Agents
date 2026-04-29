@@ -133,6 +133,11 @@ export function registerMeetingRoutes(app: Express): void {
          ORDER BY scheduled_at DESC NULLS LAST`,
         [companyId]
       );
+      logger.info('meetings query result', {
+        count: result.rows.length,
+        firstRow: result.rows[0],
+        companyId,
+      });
       res.json(result.rows);
     } catch (err: any) {
       logger.error('listMeetings failed', err.message);
