@@ -113,20 +113,24 @@ export function registerMeetingRoutes(app: Express): void {
       if (filter === 'upcoming') statusFilter = " AND status IN ('pending', 'in_progress')";
       else if (filter === 'completed') statusFilter = " AND status = 'completed'";
       const result = await pool.query(
-        `SELECT m.id, m.company_id, m.agent_id, a.name AS agent_name,
-                m.customer_phone, NULL::text AS customer_name,
-                m.customer_email, m.meeting_link, m.meeting_token,
-                m.agreed_time, m.scheduled_at, m.status, m.created_at,
-                'meeting' AS source
+        `SELECT m.id::integer, m.company_id::integer, m.agent_id::integer,
+                a.name AS agent_name,
+                m.customer_phone::text, NULL::text AS customer_name,
+                m.customer_email::text, m.meeting_link::text,
+                m.meeting_token::text,
+                m.agreed_time::text, m.scheduled_at, m.status::text,
+                m.created_at, 'meeting'::text AS source
          FROM meetings m
          LEFT JOIN agents a ON a.id = m.agent_id
          WHERE m.company_id = $1${statusFilter}
          UNION ALL
-         SELECT d.id, 1::integer AS company_id, d.agent_id, a.name AS agent_name,
-                NULL::text AS customer_phone, d.customer_name,
-                d.customer_email, d.meeting_link, d.meeting_token,
-                NULL::text AS agreed_time, d.scheduled_at, d.status, d.created_at,
-                'demo' AS source
+         SELECT d.id::integer, 1::integer AS company_id, d.agent_id::integer,
+                a.name AS agent_name,
+                NULL::text AS customer_phone, d.customer_name::text,
+                d.customer_email::text, d.meeting_link::text,
+                d.meeting_token::text,
+                NULL::text AS agreed_time, d.scheduled_at, d.status::text,
+                d.created_at, 'demo'::text AS source
          FROM demo_bookings d
          LEFT JOIN agents a ON a.id = d.agent_id
          WHERE $1 = 1${statusFilter}
