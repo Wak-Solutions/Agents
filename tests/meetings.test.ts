@@ -359,7 +359,7 @@ describe('GET /api/demo-booking/slots', () => {
     expect(res.status).toBe(401);
   });
 
-  it('reads booked slots from demo_bookings only — never meetings', async () => {
+  it('reads booked slots from BOTH demo_bookings AND Tenant 1 meetings (shared calendar)', async () => {
     const { app, setSession } = await buildMeetingApp();
     (pool.query as any).mockResolvedValue({ rows: [] });
     setSession(adminSession);
@@ -367,15 +367,18 @@ describe('GET /api/demo-booking/slots', () => {
     expect(res.status).toBe(200);
 
     const calls: any[][] = (pool.query as any).mock.calls;
-    // No SELECT against meetings table — all "taken slot" reads go through demo_bookings
-    const meetingsRead = calls.find(
-      ([sql]) => typeof sql === 'string' && /from\s+meetings/i.test(sql)
+    // Both tables are queried (in a single UNION) so slots booked in either
+    // table block availability on the demo booking page.
+    const takenCall = calls.find(
+      ([sql]) =>
+        typeof sql === 'string' &&
+        /from\s+demo_bookings/i.test(sql) &&
+        /from\s+meetings/i.test(sql)
     );
-    expect(meetingsRead).toBeUndefined();
-    const demoRead = calls.find(
-      ([sql]) => typeof sql === 'string' && /from\s+demo_bookings/i.test(sql)
-    );
-    expect(demoRead).toBeDefined();
+    expect(takenCall).toBeDefined();
+    // The meetings half must be scoped to company_id = 1 (WAK)
+    expect(takenCall![0]).toMatch(/company_id\s*=\s*\$\d/);
+    expect(takenCall![1]).toContain(1);
   });
 
   it('reads blocked_slots scoped to WAK (company_id 1) — platform owner is intentional', async () => {
@@ -418,13 +421,15 @@ describe('POST /api/demo-booking/book', () => {
     expect(res.status).toBe(200);
 
     const calls: any[][] = (pool.query as any).mock.calls;
-    // No INSERT/UPDATE/SELECT against the meetings table
-    const meetingsTouched = calls.find(
+    // The INSERT/UPDATE must never target the meetings table — demo bookings
+    // live exclusively in demo_bookings. (A SELECT FROM meetings is allowed
+    // for slot-conflict detection on Tenant 1's shared calendar.)
+    const meetingsWritten = calls.find(
       ([sql]) =>
         typeof sql === 'string' &&
-        /(insert\s+into|from|update)\s+meetings\b/i.test(sql)
+        /(insert\s+into|update)\s+meetings\b/i.test(sql)
     );
-    expect(meetingsTouched).toBeUndefined();
+    expect(meetingsWritten).toBeUndefined();
 
     const insertCall = calls.find(
       ([sql]) => typeof sql === 'string' && /insert\s+into\s+demo_bookings/i.test(sql)
@@ -458,6 +463,28 @@ describe('POST /api/demo-booking/book', () => {
     expect(notifyAll).toHaveBeenCalled();
     const lastCall = (notifyAll as any).mock.calls.at(-1);
     expect(lastCall[1]).toBe(1);
+  });
+
+  it('slot-conflict check unions demo_bookings with Tenant 1 meetings', async () => {
+    const { app, setSession } = await buildMeetingApp();
+    (pool.query as any)
+      .mockResolvedValueOnce({ rows: [{ name: 'Jane Agent', email: 'jane@example.com' }] })
+      .mockResolvedValueOnce({ rows: [] }) // takenRes (UNION)
+      .mockResolvedValueOnce({ rows: [] }) // blockedRes
+      .mockResolvedValueOnce({ rows: [] }); // INSERT
+    setSession(adminSession);
+
+    await request(app).post('/api/demo-booking/book').send({ date: '2026-05-01', time: '10:00' });
+    const calls: any[][] = (pool.query as any).mock.calls;
+    const conflictCall = calls.find(
+      ([sql]) =>
+        typeof sql === 'string' &&
+        /from\s+demo_bookings/i.test(sql) &&
+        /from\s+meetings/i.test(sql)
+    );
+    expect(conflictCall).toBeDefined();
+    expect(conflictCall![0]).toMatch(/company_id\s*=\s*\$\d/);
+    expect(conflictCall![1]).toContain(1);
   });
 
   it('returns 409 when the slot is already taken (in demo_bookings)', async () => {

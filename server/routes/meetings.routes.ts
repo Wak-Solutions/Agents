@@ -270,14 +270,14 @@ export function registerMeetingRoutes(app: Express): void {
         `SELECT scheduled_at FROM meetings
          WHERE scheduled_at >= $1 AND scheduled_at < $2
            AND scheduled_at IS NOT NULL
-           AND status != 'completed'
+           AND status NOT IN ('completed', 'cancelled')
            AND company_id = $3
          UNION ALL
          SELECT scheduled_at FROM demo_bookings
          WHERE $3 = 1
            AND scheduled_at >= $1 AND scheduled_at < $2
            AND scheduled_at IS NOT NULL
-           AND status != 'completed'`,
+           AND status NOT IN ('completed', 'cancelled')`,
         [weekStartUtc, weekEndUtc, companyId]
       );
       const rows = result.rows.map((r: { scheduled_at: Date }) => {
@@ -371,13 +371,13 @@ export function registerMeetingRoutes(app: Express): void {
         pool.query(
           `SELECT scheduled_at FROM meetings
            WHERE scheduled_at >= $1 AND scheduled_at < $2
-             AND status != 'completed' AND id != $3
+             AND status NOT IN ('completed', 'cancelled') AND id != $3
              AND company_id = $4
            UNION ALL
            SELECT scheduled_at FROM demo_bookings
            WHERE $4 = 1
              AND scheduled_at >= $1 AND scheduled_at < $2
-             AND status != 'completed'`,
+             AND status NOT IN ('completed', 'cancelled')`,
           [windowStart, windowEnd, meeting.id, companyId]
         ),
       ]);
@@ -461,13 +461,19 @@ export function registerMeetingRoutes(app: Express): void {
       const h = time === '00:00' ? 24 : parseInt(time.split(':')[0]);
       const scheduledUtc = new Date(Date.UTC(yr, mo - 1, dy, h - 3, 0, 0, 0));
 
-      // Verify slot is still available
+      // Verify slot is still available. For Tenant 1 the demo calendar shares
+      // the same slot space, so a demo booking also blocks regular bookings.
       const [takenRes, blockedRes] = await Promise.all([
         pool.query(
           `SELECT 1 FROM meetings
            WHERE scheduled_at >= $1 AND scheduled_at < $2
-             AND status != 'completed' AND id != $3
-             AND company_id = $4`,
+             AND status NOT IN ('completed', 'cancelled') AND id != $3
+             AND company_id = $4
+           UNION
+           SELECT 1 FROM demo_bookings
+           WHERE $4 = 1
+             AND scheduled_at >= $1 AND scheduled_at < $2
+             AND status NOT IN ('completed', 'cancelled')`,
           [scheduledUtc, new Date(scheduledUtc.getTime() + 3600000), meeting.id, companyId]
         ),
         // Multi-tenant isolation: check only this company's blocked slots
@@ -662,11 +668,20 @@ export function registerMeetingRoutes(app: Express): void {
              AND date >= $2::date AND date < $2::date + INTERVAL '32 days'`,
           [wakCompanyId, blockedWindowStart]
         ),
+        // Demo calendar = demo_bookings ∪ Tenant 1 regular meetings.
+        // Both tables share WAK Solutions's calendar; either kind of booking
+        // blocks the same slot.
         pool.query(
           `SELECT scheduled_at FROM demo_bookings
            WHERE scheduled_at >= $1 AND scheduled_at < $2
-             AND status != 'completed'`,
-          [windowStart, windowEnd]
+             AND status NOT IN ('completed', 'cancelled')
+           UNION
+           SELECT scheduled_at FROM meetings
+           WHERE company_id = $3
+             AND scheduled_at >= $1 AND scheduled_at < $2
+             AND scheduled_at IS NOT NULL
+             AND status NOT IN ('completed', 'cancelled')`,
+          [windowStart, windowEnd, wakCompanyId]
         ),
       ]);
 
@@ -744,11 +759,19 @@ export function registerMeetingRoutes(app: Express): void {
       const scheduledUtc = new Date(Date.UTC(yr, mo - 1, dy, h - 3, 0, 0, 0));
 
       const [takenRes, blockedRes] = await Promise.all([
+        // Slot conflict spans both demo_bookings and Tenant 1's meetings —
+        // they share the same calendar.
         pool.query(
           `SELECT 1 FROM demo_bookings
            WHERE scheduled_at >= $1 AND scheduled_at < $2
-             AND status != 'completed'`,
-          [scheduledUtc, new Date(scheduledUtc.getTime() + 3600000)]
+             AND status NOT IN ('completed', 'cancelled')
+           UNION
+           SELECT 1 FROM meetings
+           WHERE company_id = $3
+             AND scheduled_at >= $1 AND scheduled_at < $2
+             AND scheduled_at IS NOT NULL
+             AND status NOT IN ('completed', 'cancelled')`,
+          [scheduledUtc, new Date(scheduledUtc.getTime() + 3600000), wakCompanyId]
         ),
         pool.query(
           'SELECT 1 FROM blocked_slots WHERE company_id=$1 AND date=$2::date AND time=$3',
