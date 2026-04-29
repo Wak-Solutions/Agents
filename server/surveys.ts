@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { pool } from './db';
 import { z } from 'zod';
 import { createLogger } from './lib/logger';
+import { getCompanyBranding } from './routes/settings.routes';
 
 const logger = createLogger('surveys');
 
@@ -93,16 +94,10 @@ export async function sendSurveyToCustomer(
       [surveyId, token, customerPhone, agentId, escalationId, meetingId, companyId]
     );
 
-    const rawBase = (
-      process.env.APP_URL ||
-      process.env.RAILWAY_PUBLIC_URL ||
-      process.env.RAILWAY_PUBLIC_DOMAIN ||
-      'wak-agent.up.railway.app'
-    ).replace(/\/$/, '');
-    const baseUrl = rawBase.startsWith('http') ? rawBase : `https://${rawBase}`;
-    const surveyLink = `${baseUrl}/survey/${token}`;
+    const { appUrl, brandName } = await getCompanyBranding(companyId);
+    const surveyLink = `${appUrl}/survey/${token}`;
     const message =
-      `Thank you for contacting WAK Solutions! 😊\n` +
+      `Thank you for contacting ${brandName}! 😊\n` +
       `We'd love to hear your feedback — it only takes 1 minute:\n` +
       `${surveyLink}\n` +
       `This link expires in 24 hours.`;
@@ -121,7 +116,7 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
 
   app.get('/api/surveys/active-summary', requireAuth, async (req: any, res: any) => {
     try {
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
       const activeSurveyRes = await pool.query(
         `SELECT id, title FROM surveys WHERE is_active = true AND company_id = $1 LIMIT 1`,
         [companyId]
@@ -161,7 +156,7 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
           : null,
       });
     } catch (err: any) {
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
@@ -169,7 +164,7 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
 
   app.get('/api/surveys', requireAuth, async (req: any, res: any) => {
     try {
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
       const result = await pool.query(
         `SELECT s.*,
            (SELECT COUNT(*) FROM survey_questions sq WHERE sq.survey_id = s.id)::int AS question_count,
@@ -182,13 +177,13 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
       );
       res.json(result.rows);
     } catch (err: any) {
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
   app.post('/api/surveys', requireAuth, async (req: any, res: any) => {
     try {
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
       const { title, description } = z.object({
         title: z.string().min(1),
         description: z.string().optional().default(''),
@@ -205,7 +200,7 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
 
   app.get('/api/surveys/:id', requireAuth, async (req: any, res: any) => {
     try {
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
       const surveyRes = await pool.query(
         `SELECT * FROM surveys WHERE id = $1 AND company_id = $2`,
         [req.params.id, companyId]
@@ -217,13 +212,13 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
       );
       res.json({ ...surveyRes.rows[0], questions: questionsRes.rows });
     } catch (err: any) {
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
   app.put('/api/surveys/:id', requireAuth, async (req: any, res: any) => {
     try {
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
       const { title, description } = z.object({
         title: z.string().min(1),
         description: z.string().optional().default(''),
@@ -241,7 +236,7 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
 
   app.delete('/api/surveys/:id', requireAuth, async (req: any, res: any) => {
     try {
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
       const survey = await pool.query(
         `SELECT is_default FROM surveys WHERE id=$1 AND company_id=$2`,
         [req.params.id, companyId]
@@ -253,13 +248,13 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
       await pool.query(`DELETE FROM surveys WHERE id=$1 AND company_id=$2`, [req.params.id, companyId]);
       res.json({ success: true });
     } catch (err: any) {
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
   app.post('/api/surveys/:id/activate', requireAuth, async (req: any, res: any) => {
     try {
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
       await pool.query(`UPDATE surveys SET is_active=false, updated_at=NOW() WHERE company_id=$1`, [companyId]);
       const result = await pool.query(
         `UPDATE surveys SET is_active=true, updated_at=NOW() WHERE id=$1 AND company_id=$2 RETURNING *`,
@@ -268,13 +263,13 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
       if (result.rows.length === 0) return res.status(404).json({ message: 'Survey not found' });
       res.json(result.rows[0]);
     } catch (err: any) {
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
   app.post('/api/surveys/:id/deactivate', requireAuth, async (req: any, res: any) => {
     try {
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
       const result = await pool.query(
         `UPDATE surveys SET is_active=false, updated_at=NOW() WHERE id=$1 AND company_id=$2 RETURNING *`,
         [req.params.id, companyId]
@@ -282,7 +277,7 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
       if (result.rows.length === 0) return res.status(404).json({ message: 'Survey not found' });
       res.json(result.rows[0]);
     } catch (err: any) {
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
@@ -291,7 +286,7 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
   app.post('/api/surveys/:id/questions', requireAuth, async (req: any, res: any) => {
     try {
       // Verify the survey belongs to this company before adding questions
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
       const surveyCheck = await pool.query(
         `SELECT id FROM surveys WHERE id=$1 AND company_id=$2`,
         [req.params.id, companyId]
@@ -317,7 +312,7 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
   // IMPORTANT: reorder must come BEFORE /:qid
   app.put('/api/surveys/:id/questions/reorder', requireAuth, async (req: any, res: any) => {
     try {
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
       // Verify survey belongs to this company before touching its questions.
       const surveyCheck = await pool.query(
         `SELECT id FROM surveys WHERE id=$1 AND company_id=$2`,
@@ -332,8 +327,8 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
         await client.query('BEGIN');
         for (const item of items) {
           await client.query(
-            `UPDATE survey_questions SET order_index=$1 WHERE id=$2 AND survey_id=$3`,
-            [item.order_index, item.id, req.params.id]
+            `UPDATE survey_questions SET order_index=$1 WHERE id=$2 AND survey_id=$3 AND company_id=$4`,
+            [item.order_index, item.id, req.params.id, companyId]
           );
         }
         await client.query('COMMIT');
@@ -351,7 +346,7 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
 
   app.put('/api/surveys/:id/questions/:qid', requireAuth, async (req: any, res: any) => {
     try {
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
       // Verify survey belongs to this company before updating its questions.
       const surveyCheck = await pool.query(
         `SELECT id FROM surveys WHERE id=$1 AND company_id=$2`,
@@ -367,8 +362,8 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
       const result = await pool.query(
         `UPDATE survey_questions
          SET question_text=$1, question_type=$2, order_index=$3
-         WHERE id=$4 AND survey_id=$5 RETURNING *`,
-        [question_text, question_type, order_index, req.params.qid, req.params.id]
+         WHERE id=$4 AND survey_id=$5 AND company_id=$6 RETURNING *`,
+        [question_text, question_type, order_index, req.params.qid, req.params.id, companyId]
       );
       if (result.rows.length === 0) return res.status(404).json({ message: 'Question not found' });
       res.json(result.rows[0]);
@@ -379,7 +374,7 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
 
   app.delete('/api/surveys/:id/questions/:qid', requireAuth, async (req: any, res: any) => {
     try {
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
       // Verify survey belongs to this company before deleting its questions.
       const surveyCheck = await pool.query(
         `SELECT id FROM surveys WHERE id=$1 AND company_id=$2`,
@@ -388,12 +383,12 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
       if (surveyCheck.rows.length === 0) return res.status(404).json({ message: 'Survey not found' });
 
       await pool.query(
-        `DELETE FROM survey_questions WHERE id=$1 AND survey_id=$2`,
-        [req.params.qid, req.params.id]
+        `DELETE FROM survey_questions WHERE id=$1 AND survey_id=$2 AND company_id=$3`,
+        [req.params.qid, req.params.id, companyId]
       );
       res.json({ success: true });
     } catch (err: any) {
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
@@ -401,7 +396,7 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
 
   app.get('/api/surveys/:id/results', requireAuth, async (req: any, res: any) => {
     try {
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
       const surveyRes = await pool.query(
         `SELECT * FROM surveys WHERE id=$1 AND company_id=$2`,
         [req.params.id, companyId]
@@ -483,7 +478,7 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
         per_agent,
       });
     } catch (err: any) {
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
@@ -517,7 +512,7 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
         questions: questionsRes.rows,
       });
     } catch (err: any) {
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
@@ -539,11 +534,12 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
         answer_yes_no: z.boolean().optional().nullable(),
       })).parse(req.body.answers ?? []);
 
+      if (!response.company_id) throw new Error('Missing company_id on survey_response');
       for (const a of answers) {
         await pool.query(
           `INSERT INTO survey_answers (response_id, question_id, answer_text, answer_rating, answer_yes_no, company_id)
            VALUES ($1, $2, $3, $4, $5, $6)`,
-          [response.id, a.question_id, a.answer_text ?? null, a.answer_rating ?? null, a.answer_yes_no ?? null, response.company_id ?? 1]
+          [response.id, a.question_id, a.answer_text ?? null, a.answer_rating ?? null, a.answer_yes_no ?? null, response.company_id]
         );
       }
 

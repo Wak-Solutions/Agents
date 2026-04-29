@@ -1,6 +1,7 @@
 import { pool } from '../db';
 import { createLogger, maskPhone } from './logger';
 import { sendWhatsAppText } from './whatsapp';
+import { getCompanyBranding } from '../routes/settings.routes';
 
 const logger = createLogger('meeting-reminders');
 
@@ -31,10 +32,11 @@ async function tick(): Promise<void> {
       );
       if (claim.rows.length === 0) continue;
 
+      const { brandName } = await getCompanyBranding(m.company_id);
       const ok = await sendWhatsAppText(
         m.company_id,
         m.customer_phone,
-        `Your meeting with WAK Solutions starts in 15 minutes.\n\nJoin here: ${m.meeting_link}`
+        `Your meeting with ${brandName} starts in 15 minutes.\n\nJoin here: ${m.meeting_link}`
       );
 
       if (ok) {

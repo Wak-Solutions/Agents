@@ -17,6 +17,7 @@ import { pool } from '../db';
 import { requireAuth } from '../middleware/auth';
 import { createLogger } from '../lib/logger';
 import { sendEmail } from '../email';
+import { getCompanyBranding } from './settings.routes';
 
 const logger = createLogger('register');
 
@@ -145,6 +146,9 @@ export function registerRegistrationRoutes(app: Express): void {
       });
     } catch (err: any) {
       await client.query('ROLLBACK');
+      if (err.code === '23505' && err.constraint === 'agents_phone_uniq') {
+        return res.status(409).json({ error: 'An account with this phone number already exists.' });
+      }
       logger.error('Registration failed', `error: ${err.message}`);
       res.status(500).json({ error: 'Registration failed' });
     } finally {
@@ -155,7 +159,7 @@ export function registerRegistrationRoutes(app: Express): void {
   // ── Step 2: Business details ────────────────────────────────────────────
   app.put('/api/register/business', requireAuth, async (req: any, res: any) => {
     const { businessName, industry, country, website, teamSize } = req.body;
-    const companyId = req.session.companyId;
+    const companyId = req.companyId;
 
     try {
       await pool.query(
@@ -180,7 +184,7 @@ export function registerRegistrationRoutes(app: Express): void {
   // ── Step 3: WhatsApp credentials ────────────────────────────────────────
   app.put('/api/register/whatsapp', requireAuth, async (req: any, res: any) => {
     const { phoneNumberId, wabaId, accessToken, appSecret } = req.body;
-    const companyId = req.session.companyId;
+    const companyId = req.companyId;
 
     try {
       await pool.query(
@@ -266,7 +270,7 @@ export function registerRegistrationRoutes(app: Express): void {
   // This endpoint is kept as a no-op so in-flight frontend calls don't 404
   // during the transition period; it will be removed once the UI is updated.
   app.put('/api/register/chatbot', requireAuth, async (req: any, res: any) => {
-    const companyId = req.session.companyId;
+    const companyId = req.companyId;
     try {
       await pool.query(
         `UPDATE companies SET onboarding_step = GREATEST(onboarding_step, 5) WHERE id = $1`,
@@ -283,7 +287,7 @@ export function registerRegistrationRoutes(app: Express): void {
   // ── Step 5: Invite agents ───────────────────────────────────────────────
   app.post('/api/register/invite', requireAuth, async (req: any, res: any) => {
     const { agents } = req.body;
-    const companyId = req.session.companyId;
+    const companyId = req.companyId;
     const invited: Array<{ email: string }> = [];
 
     try {
@@ -317,11 +321,7 @@ export function registerRegistrationRoutes(app: Express): void {
           // Send invitation email with credentials. Derive the dashboard URL
           // from the request host so the link always points to the same domain
           // the admin is currently using — avoids stale DASHBOARD_URL env vars.
-          const protocol = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'https';
-          const host = (req.headers['x-forwarded-host'] as string) || req.headers.host;
-          const dashboardUrl = host
-            ? `${protocol}://${host}`
-            : (process.env.APP_URL || process.env.DASHBOARD_URL || '');
+          const { appUrl: _inviteAppUrl, brandName: _inviteBrand } = await getCompanyBranding(companyId);
           const _iYear = new Date().getFullYear();
           const inviteHtml = `<!DOCTYPE html>
 <html>
@@ -331,19 +331,19 @@ export function registerRegistrationRoutes(app: Express): void {
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
         <tr><td style="background:#0F510F;padding:28px 32px;">
-          <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">WAK Solutions</h1>
+          <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">${_inviteBrand}</h1>
           <p style="margin:4px 0 0;color:rgba(255,255,255,0.7);font-size:13px;">You've been invited to join your team</p>
         </td></tr>
         <tr><td style="padding:32px;">
           <p style="margin:0 0 24px;color:#222;font-size:15px;line-height:1.6;">Hi ${agent.name},</p>
-          <p style="margin:0 0 24px;color:#555;font-size:14px;line-height:1.6;">You've been added as a team member on WAK Solutions — an AI-powered customer engagement platform. Use the credentials below to sign in and get started.</p>
+          <p style="margin:0 0 24px;color:#555;font-size:14px;line-height:1.6;">You've been added as a team member on ${_inviteBrand} — an AI-powered customer engagement platform. Use the credentials below to sign in and get started.</p>
           <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f9f0;border:1px solid #c8e6c9;border-radius:10px;margin-bottom:28px;">
             <tr><td style="padding:22px 26px;">
               <p style="margin:0 0 4px;font-size:11px;color:#666;text-transform:uppercase;font-weight:700;">Login Email</p>
               <p style="margin:0 0 20px;font-size:15px;font-weight:700;color:#222;">${agent.email}</p>
               <p style="margin:0 0 4px;font-size:11px;color:#666;text-transform:uppercase;font-weight:700;">Temporary Password</p>
               <p style="margin:0 0 20px;font-size:15px;font-weight:700;color:#0F510F;letter-spacing:1px;">${tempPass}</p>
-              <a href="${dashboardUrl}/login" style="display:inline-block;background:#0F510F;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;">Sign In to Dashboard</a>
+              <a href="${_inviteAppUrl}/login" style="display:inline-block;background:#0F510F;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;">Sign In to Dashboard</a>
             </td></tr>
           </table>
           <p style="margin:0 0 10px;color:#444;font-size:14px;font-weight:700;">Getting started</p>
@@ -355,7 +355,7 @@ export function registerRegistrationRoutes(app: Express): void {
           <p style="margin:0;color:#555;font-size:13px;line-height:1.6;">If you have any trouble signing in or did not expect this invitation, please contact your team administrator.</p>
         </td></tr>
         <tr><td style="background:#f9f9f9;border-top:1px solid #eee;padding:16px 32px;">
-          <p style="margin:0;font-size:11px;color:#aaa;text-align:center;">&copy; ${_iYear} WAK Solutions. All rights reserved.</p>
+          <p style="margin:0;font-size:11px;color:#aaa;text-align:center;">&copy; ${_iYear} ${_inviteBrand}. All rights reserved.</p>
         </td></tr>
       </table>
     </td></tr>
@@ -363,7 +363,7 @@ export function registerRegistrationRoutes(app: Express): void {
 </body></html>`;
           sendEmail(
             agent.email,
-            `You've been invited to WAK Solutions`,
+            `You've been invited to ${_inviteBrand}`,
             inviteHtml,
           ).catch((e: any) => logger.warn('Invite email failed', `email: ${agent.email}, error: ${e.message}`));
         }
@@ -384,7 +384,7 @@ export function registerRegistrationRoutes(app: Express): void {
 
   // ── Step 6: Complete onboarding ─────────────────────────────────────────
   app.post('/api/register/complete', requireAuth, async (req: any, res: any) => {
-    const companyId = req.session.companyId;
+    const companyId = req.companyId;
 
     try {
       await pool.query(
@@ -412,7 +412,7 @@ export function registerRegistrationRoutes(app: Express): void {
 
   // ── Resume: get registration status ─────────────────────────────────────
   app.get('/api/register/status', requireAuth, async (req: any, res: any) => {
-    const companyId = req.session.companyId;
+    const companyId = req.companyId;
 
     try {
       const result = await pool.query(

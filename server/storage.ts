@@ -10,6 +10,15 @@ import {
 } from "@shared/schema";
 import { eq, desc, asc, sql, inArray, and } from "drizzle-orm";
 
+// Defense-in-depth: every storage call that scopes by companyId asserts the
+// value is a positive integer. The route middleware already validates, but
+// storage functions are called from background jobs and other entry points.
+function assertCompanyId(companyId: number): void {
+  if (!Number.isInteger(companyId) || companyId <= 0) {
+    throw new Error('Invalid companyId');
+  }
+}
+
 export interface StatsPerDay {
   date: string;   // 'YYYY-MM-DD'
   count: number;
@@ -30,6 +39,7 @@ export interface IStorage {
 
 export class DatabaseStorage implements IStorage {
   async getConversations(companyId: number): Promise<Conversation[]> {
+    assertCompanyId(companyId);
     const result = await db.execute(sql`
       SELECT
         m.customer_phone,
@@ -45,6 +55,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getOpenEscalations(companyId: number): Promise<Escalation[]> {
+    assertCompanyId(companyId);
     return await db.select().from(escalations)
       .where(and(
         inArray(escalations.status, ['open', 'in_progress']),
@@ -54,6 +65,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getEscalation(phone: string, companyId: number): Promise<Escalation | undefined> {
+    assertCompanyId(companyId);
     const [escalation] = await db.select().from(escalations).where(
       and(eq(escalations.customer_phone, phone), eq(escalations.company_id as any, companyId))
     );
@@ -66,12 +78,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async closeEscalation(phone: string, companyId: number): Promise<void> {
+    assertCompanyId(companyId);
     await db.update(escalations)
       .set({ status: 'closed' })
       .where(and(eq(escalations.customer_phone, phone), eq(escalations.company_id as any, companyId)));
   }
 
   async getMessages(phone: string, companyId: number): Promise<Message[]> {
+    assertCompanyId(companyId);
     return await db.select().from(messages).where(
       and(eq(messages.customer_phone, phone), eq(messages.company_id as any, companyId))
     ).orderBy(asc(messages.created_at));
@@ -83,6 +97,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getStatsCustomersPerDay(from: Date, to: Date, companyId: number): Promise<StatsPerDay[]> {
+    assertCompanyId(companyId);
     const result = await db.execute(sql`
       SELECT
         DATE(created_at) AS date,
@@ -99,6 +114,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getTotalUniqueCustomers(from: Date, to: Date, companyId: number): Promise<number> {
+    assertCompanyId(companyId);
     const result = await db.execute(sql`
       SELECT COUNT(DISTINCT customer_phone)::int AS total
       FROM messages
@@ -112,6 +128,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getInboundMessagesForSummary(from: Date, to: Date, companyId: number): Promise<Pick<Message, 'customer_phone' | 'message_text' | 'sender' | 'created_at'>[]> {
+    assertCompanyId(companyId);
     const result = await db.execute(sql`
       SELECT customer_phone, message_text, sender, created_at
       FROM messages

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { MessageSquare, Eye, EyeOff, Check, AlertCircle, Lock } from "lucide-react";
+import { MessageSquare, Eye, EyeOff, Check, AlertCircle, Lock, Building2 } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useLanguage } from "@/lib/language-context";
 
@@ -264,10 +264,129 @@ function WhatsAppPanel({ t }: { t: (k: string) => string }) {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
+   Branding Panel
+───────────────────────────────────────────────────────────────────────────── */
+
+function BrandingPanel({ t }: { t: (k: string) => string }) {
+  const [brandName, setBrandName] = useState("");
+  const [appUrl, setAppUrl] = useState("");
+  const [loadError, setLoadError] = useState("");
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [saveError, setSaveError] = useState("");
+  const [urlError, setUrlError] = useState("");
+
+  useEffect(() => {
+    fetch("/api/settings/branding", { credentials: "include" })
+      .then(r => r.ok ? r.json() : Promise.reject(r))
+      .then((data: { brandName: string; appUrl: string }) => {
+        setBrandName(data.brandName || "");
+        setAppUrl(data.appUrl || "");
+      })
+      .catch(() => setLoadError(t("settingsLoadError")));
+  }, []);
+
+  const handleSave = async () => {
+    setUrlError("");
+    setSaveError("");
+    if (appUrl && !appUrl.startsWith("http://") && !appUrl.startsWith("https://")) {
+      setUrlError(t("settingsAppUrlInvalid"));
+      return;
+    }
+    setSaveStatus("saving");
+    try {
+      const resp = await fetch("/api/settings/branding", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ brandName, appUrl }),
+      });
+      if (!resp.ok) {
+        const d = await resp.json().catch(() => ({}));
+        throw new Error(d.message || t("settingsSaveError"));
+      }
+      setSaveStatus("saved");
+      setTimeout(() => setSaveStatus("idle"), 3000);
+    } catch (err: any) {
+      setSaveStatus("error");
+      setSaveError(err.message || t("settingsSaveError"));
+    }
+  };
+
+  const canSave = !!(brandName.trim() && appUrl.trim()) && saveStatus !== "saving";
+
+  if (loadError) {
+    return (
+      <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-100 rounded-xl p-4">
+        <AlertCircle className="w-4 h-4 shrink-0" />
+        {loadError}
+      </div>
+    );
+  }
+
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden">
+      <div className="px-6 py-5 border-b border-gray-100">
+        <h2 className="text-base font-semibold text-gray-900">{t("settingsBranding")}</h2>
+        <p className="text-sm text-gray-500 mt-1">{t("settingsBrandingDesc")}</p>
+      </div>
+
+      <div className="px-6 py-6 space-y-5 max-w-lg">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            {t("settingsBrandName")}
+          </label>
+          <input
+            className={inputClass}
+            value={brandName}
+            onChange={e => { setBrandName(e.target.value); setSaveStatus("idle"); }}
+            placeholder="e.g. Acme Corp"
+          />
+          <p className="text-xs text-gray-400 mt-1">{t("settingsBrandNameHint")}</p>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            {t("settingsAppUrl")}
+          </label>
+          <input
+            className={inputClass}
+            value={appUrl}
+            onChange={e => { setAppUrl(e.target.value); setSaveStatus("idle"); setUrlError(""); }}
+            placeholder="https://app.example.com"
+          />
+          <p className="text-xs text-gray-400 mt-1">{t("settingsAppUrlHint")}</p>
+          {urlError && <p className="text-xs text-red-500 mt-1">{urlError}</p>}
+        </div>
+
+        <div className="flex items-center gap-3 pt-1">
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={!canSave}
+            className="inline-flex items-center gap-2 bg-[#0F510F] text-white px-5 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-40 hover:bg-[#0d4510] transition-colors"
+          >
+            {saveStatus === "saving" ? (
+              <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />{t("settingsSaving")}</>
+            ) : saveStatus === "saved" ? (
+              <><Check className="w-4 h-4" />{t("settingsSaved")}</>
+            ) : (
+              t("settingsSave")
+            )}
+          </button>
+          {saveStatus === "error" && saveError && (
+            <span className="text-sm text-red-500">{saveError}</span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
    Settings Sections (left nav)
 ───────────────────────────────────────────────────────────────────────────── */
 
-type SectionId = "whatsapp" | "password";
+type SectionId = "whatsapp" | "branding" | "password";
 
 interface Section {
   id: SectionId;
@@ -277,6 +396,7 @@ interface Section {
 
 const SECTIONS: Section[] = [
   { id: "whatsapp", icon: <MessageSquare className="w-4 h-4" />, labelKey: "settingsWhatsApp" },
+  { id: "branding", icon: <Building2 className="w-4 h-4" />, labelKey: "settingsBranding" },
   { id: "password", icon: <Lock className="w-4 h-4" />, labelKey: "settingsChangePassword" },
 ];
 
@@ -456,6 +576,7 @@ export default function SettingsPage() {
           {/* Right panel */}
           <div className="flex-1 min-w-0">
             {activeSection === "whatsapp" && <WhatsAppPanel t={t} />}
+            {activeSection === "branding" && <BrandingPanel t={t} />}
             {activeSection === "password" && <ChangePasswordPanel t={t} />}
           </div>
         </div>

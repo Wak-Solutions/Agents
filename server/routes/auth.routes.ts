@@ -26,6 +26,7 @@ import { createLogger } from '../lib/logger';
 import { api } from '@shared/routes';
 import { getCompanyTrialStatus } from '../lib/trial';
 import { sendEmail } from '../email';
+import { getCompanyBranding } from './settings.routes';
 
 const logger = createLogger('auth');
 
@@ -88,7 +89,7 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
         [identifier]
       );
       if (agentRes.rows.length === 0) {
-        logger.warn('Login failed — agent not found', `email: ${email}`);
+        logger.warn('Login failed — agent not found', `email: ${email.replace(/^[^@]+/, '***')}`);
         return res.status(401).json({ message: 'Invalid credentials' });
       }
       const agent = agentRes.rows[0];
@@ -145,7 +146,7 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
       });
     } catch (err: any) {
       logger.error('Login error', err.message);
-      return res.status(500).json({ message: err.message });
+      return res.status(500).json({ message: 'Internal error' });
     }
   });
 
@@ -192,7 +193,6 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
         authenticated: true,
         role: req.session.role || 'admin',
         agentId: req.session.agentId || null,
-        companyId: req.session.companyId || null,
         agentName: req.session.agentName || 'Admin',
         termsAcceptedAt: termsAcceptedAt ?? null,
       });
@@ -233,7 +233,7 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
       res.json(options);
     } catch (err: any) {
       logger.error('WebAuthn register options error', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
@@ -274,18 +274,25 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
   });
 
   // ── WebAuthn: login options ───────────────────────────────────────────────
+  // Scoped to a single user by email — never returns a cross-tenant credential
+  // inventory. Always returns the same envelope shape so callers cannot tell
+  // an unknown email apart from a known email with no passkeys.
   app.post('/api/auth/webauthn/login/options', async (req: any, res: any) => {
     try {
-      // Only return credentials for active agents to avoid cross-tenant credential exposure
-      const result = await pool.query(
-        `SELECT wc.credential_id FROM webauthn_credentials wc
-         JOIN agents a ON a.id = wc.agent_id
-         WHERE a.is_active = true`
-      );
-      if (result.rows.length === 0) {
-        return res.status(400).json({ message: 'No biometric registered' });
+      const email = typeof req.body?.email === 'string' ? req.body.email.trim() : '';
+
+      let allowCredentials: { id: string }[] = [];
+      if (email) {
+        const result = await pool.query(
+          `SELECT wc.credential_id FROM webauthn_credentials wc
+           JOIN agents a ON a.id = wc.agent_id
+           WHERE lower(a.email) = lower($1)
+             AND a.is_active = true`,
+          [email]
+        );
+        allowCredentials = result.rows.map((r: any) => ({ id: r.credential_id }));
       }
-      const allowCredentials = result.rows.map((r: any) => ({ id: r.credential_id }));
+
       const options = await generateAuthenticationOptions({
         rpID: getRpId(req),
         allowCredentials,
@@ -296,7 +303,7 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
       res.json(options);
     } catch (err: any) {
       logger.error('WebAuthn login options error', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
@@ -402,11 +409,20 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
     }
   });
 
-  // ── WebAuthn: check registration status ──────────────────────────────────
-  app.get('/api/auth/webauthn/registered', async (_req: any, res: any) => {
+  // ── WebAuthn: check registration status (per-user, by email) ────────────
+  // Same envelope shape regardless of whether the email exists, so callers
+  // cannot enumerate accounts.
+  app.get('/api/auth/webauthn/registered', async (req: any, res: any) => {
     try {
-      const result = await pool.query(`SELECT COUNT(*)::int AS n FROM webauthn_credentials`);
-      res.json({ registered: result.rows[0].n > 0 });
+      const email = typeof req.query?.email === 'string' ? req.query.email.trim() : '';
+      if (!email) return res.json({ registered: false });
+      const result = await pool.query(
+        `SELECT 1 FROM webauthn_credentials wc
+         JOIN agents a ON a.id = wc.agent_id
+         WHERE lower(a.email) = lower($1) LIMIT 1`,
+        [email]
+      );
+      res.json({ registered: (result.rowCount ?? 0) > 0 });
     } catch {
       res.json({ registered: false });
     }
@@ -458,7 +474,7 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
     }
     try {
       const agentRes = await pool.query(
-        `SELECT id, name, email, is_active FROM agents WHERE lower(email) = lower($1) OR phone = $1 LIMIT 1`,
+        `SELECT id, name, email, is_active, company_id FROM agents WHERE lower(email) = lower($1) OR phone = $1 LIMIT 1`,
         [identifier]
       );
       const agent = agentRes.rows[0];
@@ -485,17 +501,18 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
         [agent.id, tokenHash, expiresAt]
       );
 
+      const { brandName } = await getCompanyBranding(agent.company_id);
       const resetUrl = `${getAppBaseUrl(req)}/reset-password/${rawToken}`;
       const html = `
         <div style="font-family:Arial,Helvetica,sans-serif;background:#f5f5f5;padding:32px 16px;">
           <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;">
             <div style="background:#0F510F;padding:22px 28px;">
-              <h1 style="margin:0;color:#fff;font-size:20px;">WAK Solutions</h1>
+              <h1 style="margin:0;color:#fff;font-size:20px;">${brandName}</h1>
               <p style="margin:4px 0 0;color:rgba(255,255,255,0.8);font-size:13px;">Password reset</p>
             </div>
             <div style="padding:28px;color:#333;font-size:14px;line-height:1.6;">
               <p>Hi ${agent.name || 'there'},</p>
-              <p>We received a request to reset the password for your WAK Solutions account. Click the button below to choose a new password. This link is valid for ${RESET_TTL_MINUTES} minutes and can only be used once.</p>
+              <p>We received a request to reset the password for your ${brandName} account. Click the button below to choose a new password. This link is valid for ${RESET_TTL_MINUTES} minutes and can only be used once.</p>
               <p style="text-align:center;margin:28px 0;">
                 <a href="${resetUrl}" style="background:#0F510F;color:#fff;text-decoration:none;padding:12px 26px;border-radius:8px;font-weight:600;display:inline-block;">Reset Password</a>
               </p>
@@ -505,7 +522,7 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
           </div>
         </div>
       `;
-      sendEmail(agent.email, 'Reset your WAK Solutions password', html)
+      sendEmail(agent.email, `Reset your ${brandName} password`, html)
         .catch((e: any) => logger.error('forgotPassword — email send failed', e.message));
 
       logger.info('forgotPassword — reset email dispatched', `agentId: ${agent.id}`);

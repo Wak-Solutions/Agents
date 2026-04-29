@@ -23,12 +23,12 @@ export function registerPushRoutes(app: Express): void {
         return res.status(400).json({ message: 'Invalid subscription object' });
       }
       const agentId = req.session.agentId as number;
-      const companyId = (req.session.companyId as number) ?? 1;
+      const companyId = req.companyId as number;
       await registerSubscription(agentId, companyId, subscription);
       res.json({ success: true });
     } catch (err: any) {
       logger.error('Subscribe failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
@@ -40,7 +40,7 @@ export function registerPushRoutes(app: Express): void {
       res.json({ success: true });
     } catch (err: any) {
       logger.error('Unsubscribe failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 }

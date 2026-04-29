@@ -6,6 +6,7 @@
  */
 
 import type { Express } from 'express';
+import { z } from 'zod';
 import { pool } from '../db';
 import { requireAdmin } from '../middleware/auth';
 import { createLogger, maskPhone } from '../lib/logger';
@@ -20,7 +21,7 @@ export function registerCustomerRoutes(app: Express): void {
     const limit  = 20;
     const offset = (page - 1) * limit;
     const search = ((req.query.search as string) || '').trim();
-    const companyId = req.session.companyId;
+    const companyId = req.companyId;
 
     try {
       const searchClause = search
@@ -88,13 +89,13 @@ export function registerCustomerRoutes(app: Express): void {
       });
     } catch (err: any) {
       logger.error('getCustomers failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
   // GET /api/customers/funnel — conversion stage counts
   app.get('/api/customers/funnel', requireAdmin, async (req: any, res: any) => {
-    const companyId = req.session.companyId;
+    const companyId = req.companyId;
     try {
       const result = await pool.query(`
         SELECT
@@ -116,14 +117,14 @@ export function registerCustomerRoutes(app: Express): void {
       });
     } catch (err: any) {
       logger.error('getFunnel failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
   // GET /api/customers/:phone/journey — full sorted timeline for one customer
   app.get('/api/customers/:phone/journey', requireAdmin, async (req: any, res: any) => {
     const phone = decodeURIComponent(req.params.phone);
-    const companyId = req.session.companyId;
+    const companyId = req.companyId;
     try {
       const [msgRes, escRes, meetRes, survRes, ordRes, contactRes] = await Promise.all([
         pool.query(
@@ -260,14 +261,14 @@ export function registerCustomerRoutes(app: Express): void {
       });
     } catch (err: any) {
       logger.error('getCustomerJourney failed', `phone: ${maskPhone(phone)}, error: ${err.message}`);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
   // ── Contacts CRUD ──────────────────────────────────────────────────────────
 
   app.get('/api/contacts', requireAdmin, async (req: any, res: any) => {
-    const companyId = req.session.companyId;
+    const companyId = req.companyId;
     try {
       const result = await pool.query(
         `SELECT c.id, c.phone_number, c.name, cc.source, cc.created_at
@@ -280,7 +281,7 @@ export function registerCustomerRoutes(app: Express): void {
       res.json(result.rows);
     } catch (err: any) {
       logger.error('getContacts failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
@@ -289,7 +290,7 @@ export function registerCustomerRoutes(app: Express): void {
     if (!phone_number) return res.status(400).json({ message: 'Phone number is required' });
     const phone = String(phone_number).trim().replace(/[\s\-().]/g, '');
     if (!/^\+?\d{7,15}$/.test(phone)) return res.status(400).json({ message: 'invalid_phone' });
-    const companyId = req.session.companyId;
+    const companyId = req.companyId;
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
@@ -324,7 +325,7 @@ export function registerCustomerRoutes(app: Express): void {
     } catch (err: any) {
       await client.query('ROLLBACK').catch(() => {});
       logger.error('createContact failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     } finally {
       client.release();
     }
@@ -333,7 +334,7 @@ export function registerCustomerRoutes(app: Express): void {
   app.patch('/api/contacts/:id', requireAdmin, async (req: any, res: any) => {
     const id = Number(req.params.id);
     const { name } = req.body;
-    const companyId = req.session.companyId;
+    const companyId = req.companyId;
     try {
       const result = await pool.query(
         `UPDATE contacts c SET name = $1
@@ -346,18 +347,19 @@ export function registerCustomerRoutes(app: Express): void {
       res.json(result.rows[0]);
     } catch (err: any) {
       logger.error('updateContact failed', `contactId: ${id}, error: ${err.message}`);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
   app.delete('/api/contacts/:id', requireAdmin, async (req: any, res: any) => {
-    const companyId = req.session.companyId;
+    const companyId = req.companyId;
     try {
       const id = Number(req.params.id);
-      await pool.query(
-        `DELETE FROM contact_companies WHERE contact_id = $1 AND company_id = $2`,
+      const link = await pool.query(
+        `DELETE FROM contact_companies WHERE contact_id = $1 AND company_id = $2 RETURNING contact_id`,
         [id, companyId]
       );
+      if (link.rowCount === 0) return res.status(404).json({ message: 'Contact not found' });
       await pool.query(
         `DELETE FROM contacts WHERE id = $1
          AND NOT EXISTS (SELECT 1 FROM contact_companies WHERE contact_id = $1)`,
@@ -367,16 +369,18 @@ export function registerCustomerRoutes(app: Express): void {
       res.json({ success: true });
     } catch (err: any) {
       logger.error('deleteContact failed', `contactId: ${req.params.id}, error: ${err.message}`);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
   app.post('/api/contacts/bulk-delete', requireAdmin, async (req: any, res: any) => {
-    const { ids } = req.body;
-    if (!Array.isArray(ids) || ids.length === 0) {
-      return res.status(400).json({ message: 'No ids provided' });
+    let ids: number[];
+    try {
+      ids = z.array(z.number().int().positive()).min(1).parse(req.body.ids);
+    } catch {
+      return res.status(400).json({ message: 'ids must be an array of positive integers' });
     }
-    const companyId = req.session.companyId;
+    const companyId = req.companyId;
     try {
       await pool.query(
         `DELETE FROM contact_companies WHERE contact_id = ANY($1::int[]) AND company_id = $2`,
@@ -391,14 +395,14 @@ export function registerCustomerRoutes(app: Express): void {
       res.json({ success: true });
     } catch (err: any) {
       logger.error('bulkDeleteContacts failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
   app.post('/api/contacts/import', requireAdmin, async (req: any, res: any) => {
     const { contacts: rows } = req.body;
     if (!Array.isArray(rows)) return res.status(400).json({ message: 'Invalid payload' });
-    const companyId = req.session.companyId;
+    const companyId = req.companyId;
     let added = 0, duplicates = 0, invalid = 0;
     for (const row of rows) {
       const phone = String(row.phone || '').trim().replace(/[\s\-().]/g, '');

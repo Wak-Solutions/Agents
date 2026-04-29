@@ -8,6 +8,7 @@
 import { BrevoClient } from '@getbrevo/brevo';
 import { pool } from "./db";
 import { createLogger } from "./lib/logger";
+import { getCompanyBranding } from "./routes/settings.routes";
 
 const logger = createLogger("email");
 
@@ -110,7 +111,7 @@ export async function sendEmail(to: string, subject: string, body: string): Prom
     const result = await brevoClient.transactionalEmails.sendTransacEmail({
       sender: {
         email: process.env.BREVO_FROM_EMAIL!,
-        name: process.env.BREVO_FROM_NAME || 'WAK Solutions',
+        name: process.env.BREVO_FROM_NAME || 'Notifications',
       },
       to: [{ email: to }],
       subject,
@@ -140,8 +141,10 @@ export async function notifyManagerNewBooking(opts: {
     return;
   }
 
+  const { brandName } = await getCompanyBranding(opts.companyId);
+
   const calUrl = buildGoogleCalendarUrl({
-    title: `WAK Solutions Meeting — ${opts.customerPhone}`,
+    title: `${brandName} Meeting — ${opts.customerPhone}`,
     scheduledUtc: opts.scheduledUtc,
     meetingLink: opts.meetingLink,
   });
@@ -155,7 +158,7 @@ export async function notifyManagerNewBooking(opts: {
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
         <tr><td style="background:#0F510F;padding:28px 32px;">
-          <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">WAK Solutions</h1>
+          <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">${brandName}</h1>
           <p style="margin:4px 0 0;color:rgba(255,255,255,0.7);font-size:13px;">New Meeting Booking</p>
         </td></tr>
         <tr><td style="padding:32px;">
@@ -175,7 +178,7 @@ export async function notifyManagerNewBooking(opts: {
           <p style="margin:0;color:#555;font-size:13px;">The customer will receive a WhatsApp reminder 15 minutes before the meeting.</p>
         </td></tr>
         <tr><td style="background:#f9f9f9;border-top:1px solid #eee;padding:16px 32px;">
-          <p style="margin:0;font-size:11px;color:#aaa;text-align:center;">&copy; ${year} WAK Solutions. All rights reserved.</p>
+          <p style="margin:0;font-size:11px;color:#aaa;text-align:center;">&copy; ${year} ${brandName}. All rights reserved.</p>
         </td></tr>
       </table>
     </td></tr>

@@ -12,7 +12,7 @@
  */
 
 import bcrypt from 'bcrypt';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import type { Express } from 'express';
 import { pool } from '../db';
 import { requireAuth, requireAdmin } from '../middleware/auth';
@@ -38,6 +38,23 @@ const ALL_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 function isValidTime(t: string): boolean {
   return /^\d{2}:\d{2}$/.test(t);
+}
+
+export interface CompanyBranding {
+  appUrl: string;
+  brandName: string;
+}
+
+/** Fetch app_url and brand_name for a company. Throws if either is missing. */
+export async function getCompanyBranding(companyId: number): Promise<CompanyBranding> {
+  const res = await pool.query(
+    `SELECT app_url, brand_name FROM companies WHERE id = $1`,
+    [companyId]
+  );
+  const row = res.rows[0];
+  if (!row?.app_url) throw new Error(`companies.app_url is not set for companyId=${companyId}`);
+  if (!row?.brand_name) throw new Error(`companies.brand_name is not set for companyId=${companyId}`);
+  return { appUrl: row.app_url, brandName: row.brand_name };
 }
 
 export async function getWorkHours(companyId: number): Promise<WorkHours> {
@@ -66,20 +83,20 @@ export function registerSettingsRoutes(app: Express): void {
   // GET /api/settings/work-hours
   app.get('/api/settings/work-hours', requireAuth, async (req: any, res: any) => {
     try {
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
       const wh = await getWorkHours(companyId);
       logger.info('getWorkHours', `companyId: ${companyId}`);
       res.json(wh);
     } catch (err: any) {
       logger.error('getWorkHours failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
   // PUT /api/settings/work-hours
   app.put('/api/settings/work-hours', requireAuth, async (req: any, res: any) => {
     try {
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
       const { days, start, end, timezone } = req.body;
 
       // Validate
@@ -109,14 +126,14 @@ export function registerSettingsRoutes(app: Express): void {
       res.json(wh);
     } catch (err: any) {
       logger.error('setWorkHours failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
   // GET /api/settings/whatsapp — return WhatsApp credentials for the company (admin only)
   app.get('/api/settings/whatsapp', requireAuth, requireAdmin, async (req: any, res: any) => {
     try {
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
       const result = await pool.query(
         `SELECT whatsapp_phone_number_id, whatsapp_waba_id, whatsapp_token, whatsapp_app_secret
          FROM companies WHERE id = $1`,
@@ -124,22 +141,23 @@ export function registerSettingsRoutes(app: Express): void {
       );
       const row = result.rows[0] ?? {};
       logger.info('getWhatsAppSettings', `companyId: ${companyId}`);
+      const maskSecret = (s: string) => s ? s.replace(/.(?=.{4})/g, '*') : '';
       res.json({
         phoneNumberId: row.whatsapp_phone_number_id ?? '',
         wabaId:        row.whatsapp_waba_id         ?? '',
-        accessToken:   row.whatsapp_token            ?? '',
-        appSecret:     row.whatsapp_app_secret      ?? '',
+        accessToken:   maskSecret(row.whatsapp_token     ?? ''),
+        appSecret:     maskSecret(row.whatsapp_app_secret ?? ''),
       });
     } catch (err: any) {
       logger.error('getWhatsAppSettings failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
   // PUT /api/settings/whatsapp — save WhatsApp credentials for the company (admin only)
   app.put('/api/settings/whatsapp', requireAuth, requireAdmin, async (req: any, res: any) => {
     try {
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
       const { phoneNumberId, wabaId, accessToken, appSecret } = req.body;
 
       if (!phoneNumberId || !wabaId || !accessToken) {
@@ -160,7 +178,48 @@ export function registerSettingsRoutes(app: Express): void {
       res.json({ success: true });
     } catch (err: any) {
       logger.error('setWhatsAppSettings failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
+    }
+  });
+
+  // GET /api/settings/branding — return app_url and brand_name (admin only)
+  app.get('/api/settings/branding', requireAuth, requireAdmin, async (req: any, res: any) => {
+    try {
+      const companyId: number = req.companyId;
+      const result = await pool.query(
+        `SELECT app_url, brand_name FROM companies WHERE id = $1`,
+        [companyId]
+      );
+      const row = result.rows[0] ?? {};
+      res.json({ appUrl: row.app_url ?? '', brandName: row.brand_name ?? '' });
+    } catch (err: any) {
+      logger.error('getBranding failed', err.message);
+      res.status(500).json({ message: 'Internal error' });
+    }
+  });
+
+  // PUT /api/settings/branding — save app_url and brand_name (admin only)
+  app.put('/api/settings/branding', requireAuth, requireAdmin, async (req: any, res: any) => {
+    try {
+      const companyId: number = req.companyId;
+      const appUrl = typeof req.body?.appUrl === 'string' ? req.body.appUrl.trim() : '';
+      const brandName = typeof req.body?.brandName === 'string' ? req.body.brandName.trim() : '';
+
+      if (!appUrl) return res.status(400).json({ message: 'appUrl is required' });
+      if (!brandName) return res.status(400).json({ message: 'brandName is required' });
+      if (!/^https?:\/\/.+/.test(appUrl)) {
+        return res.status(400).json({ message: 'appUrl must start with http:// or https://' });
+      }
+
+      await pool.query(
+        `UPDATE companies SET app_url = $1, brand_name = $2 WHERE id = $3`,
+        [appUrl.replace(/\/$/, ''), brandName, companyId]
+      );
+      logger.info('setBranding', `companyId: ${companyId}, appUrl: ${appUrl}`);
+      res.json({ success: true });
+    } catch (err: any) {
+      logger.error('setBranding failed', err.message);
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
@@ -172,7 +231,7 @@ export function registerSettingsRoutes(app: Express): void {
     max: 5,
     standardHeaders: true,
     legacyHeaders: false,
-    keyGenerator: (req: any) => `cp:${req.session?.agentId ?? req.ip}`,
+    keyGenerator: (req: any) => `cp:${req.session?.agentId ?? ipKeyGenerator(req) ?? req.ip ?? 'unknown'}`,
     message: { message: 'Too many password change attempts. Please try again later.' },
   });
 

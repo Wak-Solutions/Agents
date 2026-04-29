@@ -141,19 +141,92 @@ describe('GET /api/me', () => {
   });
 });
 
-describe('GET /api/auth/webauthn/registered', () => {
-  it('returns registered:false when no credentials exist', async () => {
+describe('GET /api/auth/webauthn/registered (per-user)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('returns registered:false when no email param is provided', async () => {
     const { app } = await buildAuthApp();
-    (pool.query as any).mockResolvedValueOnce({ rows: [{ n: 0 }] });
+    // Even if there are global credentials, no email = no lookup
+    (pool.query as any).mockResolvedValue({ rows: [{ '?column?': 1 }], rowCount: 1 });
     const res = await request(app).get('/api/auth/webauthn/registered');
     expect(res.status).toBe(200);
-    expect(res.body.registered).toBe(false);
+    expect(res.body).toEqual({ registered: false });
+    // No DB query should have been issued for the lookup
+    const lookupCall = (pool.query as any).mock.calls.find(
+      ([sql]: any[]) => typeof sql === 'string' && sql.includes('webauthn_credentials wc') && sql.includes('JOIN agents')
+    );
+    expect(lookupCall).toBeUndefined();
   });
 
-  it('returns registered:true when credentials exist', async () => {
+  it('returns registered:false for an unknown email (same shape, no enumeration)', async () => {
     const { app } = await buildAuthApp();
-    (pool.query as any).mockResolvedValueOnce({ rows: [{ n: 2 }] });
-    const res = await request(app).get('/api/auth/webauthn/registered');
-    expect(res.body.registered).toBe(true);
+    (pool.query as any).mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    const res = await request(app).get('/api/auth/webauthn/registered?email=ghost@example.com');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ registered: false });
+  });
+
+  it('returns registered:true for a known email with a passkey', async () => {
+    const { app } = await buildAuthApp();
+    (pool.query as any).mockResolvedValueOnce({ rows: [{ '?column?': 1 }], rowCount: 1 });
+    const res = await request(app).get('/api/auth/webauthn/registered?email=user@example.com');
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ registered: true });
+    // Confirm the query was scoped by email
+    const call = (pool.query as any).mock.calls.find(
+      ([sql]: any[]) => typeof sql === 'string' && sql.includes('JOIN agents') && sql.includes('webauthn_credentials')
+    );
+    expect(call).toBeDefined();
+    expect(call![1]).toEqual(['user@example.com']);
+  });
+});
+
+describe('POST /api/auth/webauthn/login/options (per-user)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('returns empty allowCredentials when no email is provided', async () => {
+    const { app } = await buildAuthApp();
+    (pool.query as any).mockResolvedValue({ rows: [{ credential_id: 'GLOBAL-LEAK' }] });
+    const res = await request(app)
+      .post('/api/auth/webauthn/login/options')
+      .send({});
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.allowCredentials ?? [])).toBe(true);
+    // The route never queries webauthn_credentials when email is missing
+    const lookupCall = (pool.query as any).mock.calls.find(
+      ([sql]: any[]) => typeof sql === 'string' && sql.includes('webauthn_credentials wc') && sql.includes('JOIN agents')
+    );
+    expect(lookupCall).toBeUndefined();
+  });
+
+  it('returns empty allowCredentials for an unknown email (same envelope shape)', async () => {
+    const { app } = await buildAuthApp();
+    (pool.query as any).mockResolvedValueOnce({ rows: [] });
+    const res = await request(app)
+      .post('/api/auth/webauthn/login/options')
+      .send({ email: 'ghost@example.com' });
+    expect(res.status).toBe(200);
+    // Envelope present, no credentials leaked
+    expect(res.body).toHaveProperty('challenge');
+  });
+
+  it('returns only the named user\'s credentials for a known email', async () => {
+    const { app } = await buildAuthApp();
+    (pool.query as any).mockResolvedValueOnce({
+      rows: [{ credential_id: 'USER-A-CRED-1' }, { credential_id: 'USER-A-CRED-2' }],
+    });
+    const res = await request(app)
+      .post('/api/auth/webauthn/login/options')
+      .send({ email: 'user@example.com' });
+    expect(res.status).toBe(200);
+    // Confirm the SQL scoped by lower(email) and bound the email param
+    const call = (pool.query as any).mock.calls.find(
+      ([sql]: any[]) =>
+        typeof sql === 'string' &&
+        sql.includes('webauthn_credentials wc') &&
+        sql.includes('lower(a.email) = lower($1)')
+    );
+    expect(call).toBeDefined();
+    expect(call![1]).toEqual(['user@example.com']);
   });
 });

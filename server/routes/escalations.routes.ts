@@ -33,7 +33,7 @@ export function registerEscalationRoutes(app: Express): void {
   //     res.json(result.rows);
   //   } catch (err: any) {
   //     logger.error('getOpenEscalations failed', err.message);
-  //     res.status(500).json({ message: err.message });
+  //     res.status(500).json({ message: 'Internal error' });
   //   }
   // });
 
@@ -105,7 +105,7 @@ export function registerEscalationRoutes(app: Express): void {
   //     res.json(result.rows);
   //   } catch (err: any) {
   //     logger.error('getUnassignedEscalations failed', err.message);
-  //     res.status(500).json({ message: err.message });
+  //     res.status(500).json({ message: 'Internal error' });
   //   }
   // });
 
@@ -135,7 +135,7 @@ export function registerEscalationRoutes(app: Express): void {
   //     res.json({ success: true });
   //   } catch (err: any) {
   //     logger.error('claimEscalation failed', err.message);
-  //     res.status(500).json({ message: err.message });
+  //     res.status(500).json({ message: 'Internal error' });
   //   }
   // });
 
@@ -153,7 +153,7 @@ export function registerEscalationRoutes(app: Express): void {
   //     res.json({ success: true });
   //   } catch (err: any) {
   //     logger.error('assignEscalation failed', err.message);
-  //     res.status(500).json({ message: err.message });
+  //     res.status(500).json({ message: 'Internal error' });
   //   }
   // });
 }

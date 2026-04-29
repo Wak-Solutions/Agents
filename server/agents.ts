@@ -62,7 +62,7 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
   app.post('/api/agents/accept-terms', requireAuth, async (req: any, res: any) => {
     try {
       const agentId = req.session.agentId;
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
       if (!agentId) return res.status(400).json({ message: 'No agent ID in session' });
       const result = await pool.query(
         `UPDATE agents SET terms_accepted_at = NOW() WHERE id = $1 AND company_id = $2 RETURNING terms_accepted_at`,
@@ -76,14 +76,14 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
       req.session.save(() => {});
       res.json({ success: true, termsAcceptedAt: acceptedAt });
     } catch (err: any) {
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
   // GET /api/agents/workload — must be before /api/agents/:id
   app.get('/api/agents/workload', requireAdmin, async (req: any, res: any) => {
     try {
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
       const result = await pool.query(`
         SELECT
           a.id   AS agent_id,
@@ -106,14 +106,14 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
       `, [companyId]);
       res.json(result.rows);
     } catch (err: any) {
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
   // GET /api/agents
   app.get('/api/agents', requireAdmin, async (req: any, res: any) => {
     try {
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
       const period = ['today', 'week', 'month', 'all'].includes(req.query.period)
         ? req.query.period : 'all';
       const dateFilter =
@@ -141,14 +141,14 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
       `, [companyId]);
       res.json(result.rows);
     } catch (err: any) {
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
   // POST /api/agents — create new agent
   app.post('/api/agents', requireAdmin, async (req: any, res: any) => {
     try {
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
       const { name, email, password, role } = z.object({
         name:     z.string().min(1),
         email:    z.string().email(),
@@ -174,7 +174,7 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
   // PUT /api/agents/:id — update name/email/role
   app.put('/api/agents/:id', requireAdmin, async (req: any, res: any) => {
     try {
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
       const { name, email, role } = z.object({
         name:  z.string().min(1),
         email: z.string().email(),
@@ -195,7 +195,7 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
   // PATCH /api/agents/:id/deactivate
   app.patch('/api/agents/:id/deactivate', requireAdmin, async (req: any, res: any) => {
     try {
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
       const id = parseInt(req.params.id);
       if (req.session.agentId === id) {
         return res.status(400).json({ message: 'You cannot deactivate your own account.' });
@@ -219,14 +219,14 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
       res.json({ success: true });
     } catch (err: any) {
       logger.error('deactivateAgent failed', `agentId: ${req.params.id}, error: ${err.message}`);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
   // PATCH /api/agents/:id/activate
   app.patch('/api/agents/:id/activate', requireAdmin, async (req: any, res: any) => {
     try {
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
       const result = await pool.query(
         `UPDATE agents SET is_active=true WHERE id=$1 AND company_id=$2 RETURNING id`,
         [req.params.id, companyId]
@@ -234,14 +234,14 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
       if (result.rows.length === 0) return res.status(404).json({ message: 'Agent not found' });
       res.json({ success: true });
     } catch (err: any) {
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
   // PATCH /api/agents/:id/reset-password
   app.patch('/api/agents/:id/reset-password', requireAdmin, async (req: any, res: any) => {
     try {
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
       const { new_password } = z.object({ new_password: z.string().min(6) }).parse(req.body);
       const hash = await bcrypt.hash(new_password, 10);
       const result = await pool.query(

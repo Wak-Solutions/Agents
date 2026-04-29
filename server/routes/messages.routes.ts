@@ -23,7 +23,7 @@ export function registerMessageRoutes(app: Express): void {
   // GET /api/messages/:phone — conversation history
   app.get(api.messages.list.path, requireAuth, async (req: any, res: any) => {
     const phone = req.params.phone;
-    const companyId = req.session.companyId;
+    const companyId = req.companyId;
     try {
       const result = await pool.query(
         `SELECT * FROM messages
@@ -34,7 +34,7 @@ export function registerMessageRoutes(app: Express): void {
       res.json(result.rows);
     } catch (err: any) {
       logger.error('getMessages failed', `phone: ${maskPhone(phone)}, error: ${err.message}`);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
@@ -42,7 +42,7 @@ export function registerMessageRoutes(app: Express): void {
   app.get('/api/voice-notes/:id', requireAuth, async (req: any, res: any) => {
     const { id } = req.params;
     try {
-      const companyId = req.session.companyId;
+      const companyId = req.companyId;
       const result = await pool.query(
         'SELECT audio_data, mime_type FROM voice_notes WHERE id = $1::uuid AND company_id = $2',
         [id, companyId]
@@ -58,7 +58,7 @@ export function registerMessageRoutes(app: Express): void {
       res.send(audio_data);
     } catch (err: any) {
       logger.error('getVoiceNote failed', `id: ${id}, error: ${err.message}`);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
@@ -66,7 +66,7 @@ export function registerMessageRoutes(app: Express): void {
   app.post(api.messages.send.path, requireAuth, async (req: any, res: any) => {
     try {
       const data = api.messages.send.input.parse(req.body);
-      const companyId = req.session.companyId;
+      const companyId = req.companyId;
       logger.info(
         'Agent message send requested',
         `phone: ${maskPhone(data.customer_phone)}, type: text`
@@ -132,8 +132,8 @@ export function registerMessageRoutes(app: Express): void {
       );
       const conversationId = convRes.rows[0]?.conversation_id ?? null;
       await pool.query(
-        `INSERT INTO messages (customer_phone, direction, message_text, company_id, created_at, conversation_id)
-         VALUES ($1, 'outbound', $2, $3, NOW(), COALESCE($4::uuid, gen_random_uuid()))`,
+        `INSERT INTO messages (customer_phone, direction, sender, message_text, company_id, created_at, conversation_id)
+         VALUES ($1, 'outbound', 'agent', $2, $3, NOW(), COALESCE($4::uuid, gen_random_uuid()))`,
         [data.customer_phone, data.message, companyId, conversationId]
       );
 
@@ -173,7 +173,7 @@ export function registerMessageRoutes(app: Express): void {
         [data.customer_phone, companyId]
       );
       const convId: string | null = convRow.rows[0]?.conversation_id ?? null;
-      const notifKey = convId ? `conv:${convId}` : `new:${data.customer_phone}`;
+      const notifKey = convId ? `conv:${convId}` : `new:${companyId}:${data.customer_phone}`;
 
       if (!notifiedChats.has(notifKey)) {
         notifiedChats.add(notifKey);
@@ -222,7 +222,7 @@ export function registerMessageRoutes(app: Express): void {
   // POST /api/notifications/mark-read/:phone — clear notification dedup flag
   app.post('/api/notifications/mark-read/:phone', requireAuth, async (req: any, res: any) => {
     const phone = decodeURIComponent(req.params.phone);
-    const companyId = req.session.companyId;
+    const companyId = req.companyId;
     // Clear any active conversation session keys for this phone
     const convRow = await pool.query(
       `SELECT DISTINCT conversation_id FROM messages
@@ -232,7 +232,7 @@ export function registerMessageRoutes(app: Express): void {
     for (const row of convRow.rows) {
       notifiedChats.delete(`conv:${row.conversation_id}`);
     }
-    notifiedChats.delete(`new:${phone}`);
+    notifiedChats.delete(`new:${companyId}:${phone}`);
     res.json({ success: true });
   });
 }

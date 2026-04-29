@@ -26,7 +26,7 @@ import { registerAuthRoutes }          from './routes/auth.routes';
 import { registerEscalationRoutes }    from './routes/escalations.routes';
 import { registerMessageRoutes }       from './routes/messages.routes';
 import { registerInboxRoutes }         from './routes/inbox.routes';
-import { registerMeetingRoutes, ensureBlockedSlotsCompanyId } from './routes/meetings.routes';
+import { registerMeetingRoutes, ensureBlockedSlotsCompanyId, ensureDemoBookingsTable } from './routes/meetings.routes';
 import { registerSettingsRoutes, ensureWorkHoursColumn } from './routes/settings.routes';
 import { registerChatbotConfigRoutes } from './routes/chatbot-config.routes';
 import { registerStatisticsRoutes }    from './routes/statistics.routes';
@@ -74,6 +74,7 @@ export async function registerRoutes(
   await ensureSurveyTables();
   await ensureOnboardingColumns();
   await ensureBlockedSlotsCompanyId(); // multi-tenant isolation: scope blocked_slots to company
+  await ensureDemoBookingsTable();     // global lead funnel: demo bookings live in their own table
   await ensureWorkHoursColumn();       // per-company working hours
   // Heavy migration: run in background so startup isn't blocked and Railway
   // healthcheck passes quickly. The join table and backfill are idempotent;
@@ -117,13 +118,15 @@ export async function registerRoutes(
   // Authenticated: current company's trial status. Always recomputed from
   // the DB so session tampering cannot change the answer.
   app.get('/api/me/trial', async (req: any, res) => {
-    if (!req.session.authenticated || !req.session.companyId) {
+    const cid = Number(req.session.companyId);
+    if (!req.session.authenticated || !Number.isInteger(cid) || cid <= 0) {
       return res.status(401).json({ message: 'Unauthorized' });
     }
     try {
-      res.json(await getCompanyTrialStatus(req.session.companyId));
+      res.json(await getCompanyTrialStatus(cid));
     } catch (err: any) {
-      res.status(500).json({ message: err.message });
+      console.error('[ERROR] /api/me/trial failed:', err.message);
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 

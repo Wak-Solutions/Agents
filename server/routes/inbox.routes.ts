@@ -22,7 +22,7 @@ export function registerInboxRoutes(app: Express): void {
     try {
       const role = req.session.role || 'admin';
       const agentId = req.session.agentId || null;
-      const companyId = req.session.companyId;
+      const companyId = req.companyId;
 
       // Admin sees all; agents see only their assigned + unassigned chats.
       const isAdmin = role === 'admin';
@@ -47,13 +47,13 @@ export function registerInboxRoutes(app: Express): void {
         ) e ON true
         LEFT JOIN agents a ON a.id = e.assigned_agent_id
         WHERE 1=1
-          AND ($2 OR e.assigned_agent_id = $3 OR e.assigned_agent_id IS NULL OR m.customer_phone IS NULL)
+          AND ($2 OR e.assigned_agent_id = $3 OR e.assigned_agent_id IS NULL)
         ORDER BY last_message_at DESC NULLS LAST
       `, [companyId, isAdmin, agentId]);
       res.json(result.rows);
     } catch (err: any) {
       logger.error('getConversations failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
@@ -62,7 +62,7 @@ export function registerInboxRoutes(app: Express): void {
   // they appear as one item (chat type) with meeting fields attached.
   app.get('/api/inbox', requireAuth, async (req: any, res: any) => {
     try {
-      const companyId = req.session.companyId;
+      const companyId = req.companyId;
       const [escRes, meetRes] = await Promise.all([
         pool.query(`
           SELECT
@@ -131,7 +131,7 @@ export function registerInboxRoutes(app: Express): void {
       res.json(items);
     } catch (err: any) {
       logger.error('getInbox failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 }

@@ -94,7 +94,7 @@ describe('POST /api/survey/:token/submit', () => {
     const { app } = await buildSurveysApp();
     (pool.query as any)
       .mockResolvedValueOnce({
-        rows: [{ id: 5, survey_id: 1, submitted: false, expires_at: new Date(Date.now() + 86400000) }],
+        rows: [{ id: 5, survey_id: 1, submitted: false, expires_at: new Date(Date.now() + 86400000), company_id: 1 }],
       })
       .mockResolvedValueOnce({ rows: [{ id: 10 }] })
       .mockResolvedValueOnce({ rows: [] });

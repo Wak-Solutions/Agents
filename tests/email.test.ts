@@ -17,6 +17,11 @@ vi.mock('../server/db', () => ({
   db: {},
 }));
 
+vi.mock('../server/routes/settings.routes', () => ({
+  getCompanyBranding: vi.fn().mockResolvedValue({ appUrl: 'https://wak.example.com', brandName: 'WAK Solutions' }),
+  registerSettingsRoutes: vi.fn(),
+}));
+
 // Mock Brevo (the actual email client used by email.ts)
 vi.mock('@getbrevo/brevo', () => ({
   BrevoClient: class MockBrevoClient {

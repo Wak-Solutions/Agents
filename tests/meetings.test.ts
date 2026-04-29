@@ -28,6 +28,21 @@ vi.mock('../server/push', () => ({
 
 vi.mock('../server/email', () => ({
   notifyManagerNewBooking: vi.fn().mockResolvedValue(undefined),
+  sendEmail: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../server/integrations/daily', () => ({
+  createDailyRoom: vi.fn().mockResolvedValue({ url: 'https://daily.co/test-room', name: 'test-room' }),
+}));
+
+vi.mock('../server/lib/whatsapp', () => ({
+  sendWhatsAppText: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../server/routes/settings.routes', () => ({
+  getWorkHours: vi.fn().mockResolvedValue({}),
+  registerSettingsRoutes: vi.fn(),
+  getCompanyBranding: vi.fn().mockResolvedValue({ appUrl: 'https://wak.example.com', brandName: 'WAK Solutions' }),
 }));
 
 vi.mock('../server/surveys', () => ({
@@ -42,6 +57,7 @@ vi.mock('../server/lib/daily', () => ({
 
 vi.mock('../server/lib/slots', () => ({
   getSlotsForDay: vi.fn().mockReturnValue([]),
+  isWithinWorkHours: vi.fn().mockReturnValue(true),
 }));
 
 vi.mock('../server/lib/timezone', () => ({
@@ -230,5 +246,206 @@ describe('POST /api/availability/toggle', () => {
     calls
       .filter(([sql]) => typeof sql === 'string' && sql.includes('blocked_slots'))
       .forEach(([, params]) => expect(params).toContain(1));
+  });
+});
+
+// ── Demo booking (global lead funnel) ──────────────────────────────────────
+
+describe('GET /api/demo-booking/my-booking', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('returns 401 without session', async () => {
+    const { app } = await buildMeetingApp();
+    const res = await request(app).get('/api/demo-booking/my-booking');
+    expect(res.status).toBe(401);
+  });
+
+  it('reads from demo_bookings and never from meetings', async () => {
+    const { app, setSession } = await buildMeetingApp();
+    (pool.query as any).mockResolvedValue({
+      rows: [{ id: 5, meeting_link: 'https://daily.co/r/x', scheduled_at: new Date('2026-05-01T10:00:00Z'), status: 'pending' }],
+    });
+    setSession(adminSession);
+    const res = await request(app).get('/api/demo-booking/my-booking');
+    expect(res.status).toBe(200);
+    expect(res.body.booking).toBeTruthy();
+    expect(res.body.booking.id).toBe(5);
+
+    const calls: any[][] = (pool.query as any).mock.calls;
+    expect(calls.length).toBe(1);
+    const [sql, params] = calls[0];
+    expect(sql).toContain('demo_bookings');
+    // Must not query the per-tenant meetings table
+    expect(sql).not.toMatch(/from\s+meetings/i);
+    // Must not hardcode company_id = 1 in this query
+    expect(sql).not.toMatch(/company_id\s*=\s*1/);
+    expect(params).toEqual([adminSession.agentId]);
+  });
+
+  it('returns booking: null when no row found', async () => {
+    const { app, setSession } = await buildMeetingApp();
+    (pool.query as any).mockResolvedValue({ rows: [] });
+    setSession(adminSession);
+    const res = await request(app).get('/api/demo-booking/my-booking');
+    expect(res.status).toBe(200);
+    expect(res.body.booking).toBeNull();
+  });
+});
+
+describe('GET /api/demo-booking/slots', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('returns 401 without session', async () => {
+    const { app } = await buildMeetingApp();
+    const res = await request(app).get('/api/demo-booking/slots');
+    expect(res.status).toBe(401);
+  });
+
+  it('reads booked slots from demo_bookings only — never meetings', async () => {
+    const { app, setSession } = await buildMeetingApp();
+    (pool.query as any).mockResolvedValue({ rows: [] });
+    setSession(adminSession);
+    const res = await request(app).get('/api/demo-booking/slots');
+    expect(res.status).toBe(200);
+
+    const calls: any[][] = (pool.query as any).mock.calls;
+    // No SELECT against meetings table — all "taken slot" reads go through demo_bookings
+    const meetingsRead = calls.find(
+      ([sql]) => typeof sql === 'string' && /from\s+meetings/i.test(sql)
+    );
+    expect(meetingsRead).toBeUndefined();
+    const demoRead = calls.find(
+      ([sql]) => typeof sql === 'string' && /from\s+demo_bookings/i.test(sql)
+    );
+    expect(demoRead).toBeDefined();
+  });
+
+  it('reads blocked_slots scoped to WAK (company_id 1) — platform owner is intentional', async () => {
+    const { app, setSession } = await buildMeetingApp();
+    (pool.query as any).mockResolvedValue({ rows: [] });
+    setSession(adminSession);
+    await request(app).get('/api/demo-booking/slots');
+    const calls: any[][] = (pool.query as any).mock.calls;
+    const blockedCall = calls.find(
+      ([sql]) => typeof sql === 'string' && sql.includes('blocked_slots')
+    );
+    expect(blockedCall).toBeDefined();
+    expect(blockedCall![1]).toContain(1);
+  });
+});
+
+describe('POST /api/demo-booking/book', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('returns 401 without session', async () => {
+    const { app } = await buildMeetingApp();
+    const res = await request(app)
+      .post('/api/demo-booking/book')
+      .send({ date: '2026-05-01', time: '10:00' });
+    expect(res.status).toBe(401);
+  });
+
+  it('inserts into demo_bookings (not meetings) with correct customer_name and customer_email', async () => {
+    const { app, setSession } = await buildMeetingApp();
+    (pool.query as any)
+      .mockResolvedValueOnce({ rows: [{ name: 'Jane Agent', email: 'jane@example.com' }] }) // SELECT agent
+      .mockResolvedValueOnce({ rows: [] }) // SELECT taken from demo_bookings
+      .mockResolvedValueOnce({ rows: [] }) // SELECT blocked
+      .mockResolvedValueOnce({ rows: [] }); // INSERT demo_bookings
+    setSession(adminSession);
+
+    const res = await request(app)
+      .post('/api/demo-booking/book')
+      .send({ date: '2026-05-01', time: '10:00' });
+    expect(res.status).toBe(200);
+
+    const calls: any[][] = (pool.query as any).mock.calls;
+    // No INSERT/UPDATE/SELECT against the meetings table
+    const meetingsTouched = calls.find(
+      ([sql]) =>
+        typeof sql === 'string' &&
+        /(insert\s+into|from|update)\s+meetings\b/i.test(sql)
+    );
+    expect(meetingsTouched).toBeUndefined();
+
+    const insertCall = calls.find(
+      ([sql]) => typeof sql === 'string' && /insert\s+into\s+demo_bookings/i.test(sql)
+    );
+    expect(insertCall).toBeDefined();
+    const [insertSql, insertParams] = insertCall!;
+    // Q9 fix: customer_name and customer_email columns are present
+    expect(insertSql).toMatch(/customer_name/);
+    expect(insertSql).toMatch(/customer_email/);
+    // The agent name is bound as customer_name and email as customer_email
+    expect(insertParams).toContain('Jane Agent');
+    expect(insertParams).toContain('jane@example.com');
+    // No company_id column in demo_bookings INSERT
+    expect(insertSql).not.toMatch(/company_id/);
+  });
+
+  it('calls notifyAll with explicit companyId = 1 (not undefined)', async () => {
+    const { notifyAll } = await import('../server/push');
+    const { app, setSession } = await buildMeetingApp();
+    (pool.query as any)
+      .mockResolvedValueOnce({ rows: [{ name: 'Jane Agent', email: 'jane@example.com' }] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+    setSession(adminSession);
+
+    await request(app)
+      .post('/api/demo-booking/book')
+      .send({ date: '2026-05-01', time: '10:00' });
+
+    expect(notifyAll).toHaveBeenCalled();
+    const lastCall = (notifyAll as any).mock.calls.at(-1);
+    expect(lastCall[1]).toBe(1);
+  });
+
+  it('returns 409 when the slot is already taken (in demo_bookings)', async () => {
+    const { app, setSession } = await buildMeetingApp();
+    (pool.query as any)
+      .mockResolvedValueOnce({ rows: [{ name: 'Jane', email: 'j@e.com' }] })
+      .mockResolvedValueOnce({ rows: [{ '?column?': 1 }] }) // taken
+      .mockResolvedValueOnce({ rows: [] });
+    setSession(adminSession);
+
+    const res = await request(app)
+      .post('/api/demo-booking/book')
+      .send({ date: '2026-05-01', time: '10:00' });
+    expect(res.status).toBe(409);
+  });
+});
+
+describe('GET /api/demo-booking/:token (public)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('returns 404 for unknown token', async () => {
+    const { app } = await buildMeetingApp();
+    (pool.query as any).mockResolvedValue({ rows: [] });
+    const res = await request(app).get('/api/demo-booking/00000000-0000-0000-0000-000000000000');
+    expect(res.status).toBe(404);
+  });
+
+  it('returns row from demo_bookings and never queries meetings', async () => {
+    const { app } = await buildMeetingApp();
+    (pool.query as any).mockResolvedValue({
+      rows: [{ id: 9, meeting_link: 'https://daily.co/r/y', scheduled_at: new Date('2026-05-01T10:00:00Z'), status: 'pending' }],
+    });
+    const res = await request(app).get('/api/demo-booking/abc');
+    expect(res.status).toBe(200);
+    expect(res.body.meeting_id).toBe(9);
+    expect(res.body.meeting_link).toBe('https://daily.co/r/y');
+
+    const [sql] = (pool.query as any).mock.calls[0];
+    expect(sql).toMatch(/from\s+demo_bookings/i);
+    expect(sql).not.toMatch(/from\s+meetings/i);
+  });
+
+  it('does not require auth (public route)', async () => {
+    const { app } = await buildMeetingApp();
+    (pool.query as any).mockResolvedValue({ rows: [{ id: 1, meeting_link: '', scheduled_at: null, status: 'pending' }] });
+    const res = await request(app).get('/api/demo-booking/some-token');
+    expect(res.status).not.toBe(401);
   });
 });

@@ -143,11 +143,12 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
 
       if (req.session?.authenticated) {
         // Dashboard request — must use session company, never fall back to another
-        if (!req.session.companyId) {
+        const cid = Number(req.session.companyId);
+        if (!Number.isInteger(cid) || cid <= 0) {
           logger.warn('getChatbotConfig — authenticated but no companyId in session', `agentId: ${req.session.agentId}`);
           return res.status(401).json({ message: 'Session missing companyId' });
         }
-        companyId = req.session.companyId;
+        companyId = cid;
       } else {
         // Python bot / unauthenticated — authenticate via per-tenant webhook secret
         const company = await resolveCompanyFromSecret(req.headers['x-webhook-secret'] as string);
@@ -184,7 +185,7 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
       return res.json({ ...row, system_prompt_preview });
     } catch (err: any) {
       logger.error('getChatbotConfig failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
@@ -192,7 +193,7 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
   app.post('/api/chatbot-config', requireAuth, async (req: any, res: any) => {
     try {
       const { structured_config, override_active, raw_prompt, demo_conversation } = req.body;
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
 
       // Reject payloads with menu nesting deeper than 3 levels
       const menuItems: any[] = (structured_config || {}).menuConfig || [];
@@ -232,7 +233,7 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
       return res.json({ ...result.rows[0], system_prompt_preview });
     } catch (err: any) {
       logger.error('saveChatbotConfig failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
@@ -287,11 +288,11 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
       const cleaned = raw.replace(/^```(?:json)?\n?/i, '').replace(/\n?```$/i, '').trim();
       const conversation = JSON.parse(cleaned);
 
-      logger.info('generateConversation', `companyId: ${req.session.companyId}, messages: ${conversation.length}`);
+      logger.info('generateConversation', `companyId: ${req.companyId}, messages: ${conversation.length}`);
       return res.json({ conversation });
     } catch (err: any) {
       logger.error('generateConversation failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
@@ -302,7 +303,7 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
       res.json({ prompt: compiled });
     } catch (err: any) {
       logger.error('previewChatbotConfig failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
@@ -312,7 +313,7 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
   app.post('/api/chatbot-config/suggest', requireAuth, async (req: any, res: any) => {
     try {
       const { suggestion } = req.body;
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
 
       if (!suggestion || typeof suggestion !== 'string' || !suggestion.trim()) {
         return res.status(400).json({ message: 'suggestion is required' });
@@ -398,7 +399,7 @@ Apply the change to whichever field makes semantic sense. If the instruction say
       return res.json({ ...result.rows[0], system_prompt_preview });
     } catch (err: any) {
       logger.error('suggestChatbotConfig failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 }

@@ -26,7 +26,7 @@ export function registerStatisticsRoutes(app: Express): void {
       if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
         return res.status(400).json({ message: 'Invalid date format' });
       }
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
       const [totalCustomers, perDay] = await Promise.all([
         storage.getTotalUniqueCustomers(fromDate, toDate, companyId),
         storage.getStatsCustomersPerDay(fromDate, toDate, companyId),
@@ -34,7 +34,7 @@ export function registerStatisticsRoutes(app: Express): void {
       res.json({ totalCustomers, perDay });
     } catch (err: any) {
       logger.error('getStatistics failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
@@ -44,7 +44,7 @@ export function registerStatisticsRoutes(app: Express): void {
       const { from, to } = z.object({ from: z.string(), to: z.string() }).parse(req.body);
       const fromDate = new Date(from);
       const toDate = new Date(to);
-      const companyId: number = req.session.companyId;
+      const companyId: number = req.companyId;
 
       const apiKey = process.env.OPENAI_API_KEY;
       if (!apiKey) {
@@ -114,7 +114,7 @@ export function registerStatisticsRoutes(app: Express): void {
       res.json({ summary });
     } catch (err: any) {
       logger.error('getSummary failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 }

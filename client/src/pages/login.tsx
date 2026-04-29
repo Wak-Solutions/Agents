@@ -59,18 +59,40 @@ export default function Login() {
       const available = await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable();
       if (!available) return;
       setBiometricAvailable(true);
-      const res = await fetch("/api/auth/webauthn/registered");
-      const data = await res.json();
-      setBiometricRegistered(data.registered);
     };
     check();
   }, []);
+
+  // Re-check passkey registration whenever the identifier changes.
+  // Scoped to the typed email so the endpoint cannot leak global counts.
+  useEffect(() => {
+    const id = identifier.trim();
+    if (!id) {
+      setBiometricRegistered(false);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/auth/webauthn/registered?email=${encodeURIComponent(id)}`);
+        const data = await res.json();
+        if (!cancelled) setBiometricRegistered(!!data.registered);
+      } catch {
+        if (!cancelled) setBiometricRegistered(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [identifier]);
 
   const handleBiometricLogin = async () => {
     setBiometricError("");
     setBiometricPending(true);
     try {
-      const optRes = await fetch("/api/auth/webauthn/login/options", { method: "POST", headers: { "Content-Type": "application/json" } });
+      const optRes = await fetch("/api/auth/webauthn/login/options", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: identifier.trim() }),
+      });
       if (!optRes.ok) throw new Error(t("loginErrorNoBiometric"));
       const options = await optRes.json();
       const assertion = await startAuthentication({ optionsJSON: options });

@@ -9,6 +9,9 @@
 import { timingSafeEqual } from 'crypto';
 import type { Request, Response, NextFunction } from 'express';
 import { isCompanyTrialExpired, getCompanyTrialStatus } from '../lib/trial';
+import { requireCompanyId, getCompanyId } from './requireCompanyId';
+
+export { requireCompanyId, getCompanyId };
 
 // Paths that stay accessible even when the trial has expired so users can
 // still see their expired state, sign out, and view trial info.
@@ -51,10 +54,14 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     res.status(401).json({ message: 'Unauthorized' });
     return;
   }
-  if (!req.session.companyId) {
+  // Coerce companyId once; defends against connect-pg-simple deserialising
+  // integers as strings. Drizzle's sql template only safely binds numbers.
+  const cid = Number(req.session.companyId);
+  if (!Number.isInteger(cid) || cid <= 0) {
     res.status(401).json({ message: 'Session missing company context — please log in again' });
     return;
   }
+  req.companyId = cid;
   if (!(await trialGate(req, res))) return;
   next();
 }
@@ -68,6 +75,10 @@ export async function requireAdmin(req: Request, res: Response, next: NextFuncti
   if (req.session.role !== 'admin') {
     res.status(403).json({ message: 'Admin access required' });
     return;
+  }
+  const cid = Number(req.session.companyId);
+  if (Number.isInteger(cid) && cid > 0) {
+    req.companyId = cid;
   }
   if (!(await trialGate(req, res))) return;
   next();

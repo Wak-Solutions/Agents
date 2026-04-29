@@ -18,6 +18,7 @@ import { notifyAgent, notifyAll } from '../push';
 import { notifyManagerNewBooking, sendEmail } from '../email';
 import { sendSurveyToCustomer } from '../surveys';
 import { createDailyRoom } from '../integrations/daily';
+import { getCompanyBranding } from './settings.routes';
 import { sendWhatsAppText } from '../lib/whatsapp';
 import { KSA_OFFSET_MS, formatKsaDate, formatKsaDateTime } from '../lib/timezone';
 import { getSlotsForDay, isWithinWorkHours } from '../lib/slots';
@@ -25,6 +26,34 @@ import { getWorkHours } from './settings.routes';
 import { createLogger, maskPhone } from '../lib/logger';
 
 const logger = createLogger('meetings');
+
+export async function ensureDemoBookingsTable(): Promise<void> {
+  // Global lead funnel: demo bookings live in their own table, never joined
+  // into per-tenant queries. Intentionally has NO company_id column —
+  // all rows belong to WAK Solutions (the platform owner).
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS demo_bookings (
+      id              SERIAL PRIMARY KEY,
+      agent_id        INTEGER REFERENCES agents(id),
+      customer_name   TEXT NOT NULL,
+      customer_email  TEXT NOT NULL,
+      customer_phone  TEXT,
+      meeting_token   UUID NOT NULL DEFAULT gen_random_uuid(),
+      meeting_link    TEXT,
+      scheduled_at    TIMESTAMP WITH TIME ZONE,
+      status          TEXT NOT NULL DEFAULT 'pending',
+      created_at      TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+    )
+  `);
+  // Cleanup: prior broken code wrote demo bookings into meetings with
+  // agent.name stored in customer_phone. Real customer_phone values start
+  // with '+' or a digit; agent names do not.
+  await pool.query(
+    `DELETE FROM meetings
+     WHERE company_id = 1
+       AND customer_phone !~ '^[+0-9]'`
+  ).catch(() => {});
+}
 
 export async function ensureBlockedSlotsCompanyId(): Promise<void> {
   // Multi-tenant isolation: blocked_slots must be scoped to company_id.
@@ -71,14 +100,14 @@ export function registerMeetingRoutes(app: Express): void {
       return res.json({ token });
     } catch (err: any) {
       logger.error('create-token failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
   // ── List meetings (dashboard) ─────────────────────────────────────────────
   app.get('/api/meetings', requireAuth, async (req: any, res: any) => {
     try {
-      const companyId = req.session.companyId;
+      const companyId = req.companyId;
       const filter = (req.query.filter as string) || 'all';
       let where = 'WHERE m.company_id = $1';
       if (filter === 'upcoming') where += " AND status IN ('pending', 'in_progress')";
@@ -95,14 +124,14 @@ export function registerMeetingRoutes(app: Express): void {
       res.json(result.rows);
     } catch (err: any) {
       logger.error('listMeetings failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
   // ── Start a meeting ───────────────────────────────────────────────────────
   app.patch('/api/meetings/:id/start', requireAuth, async (req: any, res: any) => {
     try {
-      const companyId = req.session.companyId;
+      const companyId = req.companyId;
       const agentId = req.session.agentId ?? null;
       const result = await pool.query(
         `UPDATE meetings SET status = 'in_progress', agent_id = $2 WHERE id = $1 AND company_id = $3
@@ -114,14 +143,14 @@ export function registerMeetingRoutes(app: Express): void {
       res.json(result.rows[0]);
     } catch (err: any) {
       logger.error('startMeeting failed', `meetingId: ${req.params.id}, error: ${err.message}`);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
   // ── Complete a meeting ────────────────────────────────────────────────────
   app.patch('/api/meetings/:id/complete', requireAuth, async (req: any, res: any) => {
     try {
-      const companyId = req.session.companyId;
+      const companyId = req.companyId;
       const result = await pool.query(
         `UPDATE meetings SET status = 'completed' WHERE id = $1 AND company_id = $2 RETURNING *`,
         [req.params.id, companyId]
@@ -133,7 +162,7 @@ export function registerMeetingRoutes(app: Express): void {
       res.json(meeting);
     } catch (err: any) {
       logger.error('completeMeeting failed', `meetingId: ${req.params.id}, error: ${err.message}`);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
@@ -141,7 +170,7 @@ export function registerMeetingRoutes(app: Express): void {
   app.get('/api/availability', requireAuth, async (req: any, res: any) => {
     try {
       // Multi-tenant isolation: always filter by company_id
-      const companyId = req.session.companyId;
+      const companyId = req.companyId;
       const weekStart = (req.query.weekStart as string) || new Date().toISOString().slice(0, 10);
       const result = await pool.query(
         `SELECT date::text, time FROM blocked_slots
@@ -153,7 +182,7 @@ export function registerMeetingRoutes(app: Express): void {
       res.json(result.rows);
     } catch (err: any) {
       logger.error('getAvailability failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
@@ -161,7 +190,7 @@ export function registerMeetingRoutes(app: Express): void {
   app.post('/api/availability/toggle', requireAuth, async (req: any, res: any) => {
     try {
       // Multi-tenant isolation: scope all blocked_slots reads/writes to company_id
-      const companyId = req.session.companyId;
+      const companyId = req.companyId;
       const { date, time } = z.object({ date: z.string(), time: z.string() }).parse(req.body);
       const existing = await pool.query(
         'SELECT id FROM blocked_slots WHERE company_id=$1 AND date=$2::date AND time=$3',
@@ -184,14 +213,14 @@ export function registerMeetingRoutes(app: Express): void {
       }
     } catch (err: any) {
       logger.error('toggleAvailability failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
   // ── Availability: get booked slots for a week ─────────────────────────────
   app.get('/api/availability/booked', requireAuth, async (req: any, res: any) => {
     try {
-      const companyId = req.session.companyId;
+      const companyId = req.companyId;
       const weekStart = (req.query.weekStart as string) || new Date().toISOString().slice(0, 10);
       const [yr, mo, dy] = weekStart.split('-').map(Number);
       const weekStartUtc = new Date(Date.UTC(yr, mo - 1, dy + 1, 0, 0, 0) - KSA_OFFSET_MS);
@@ -216,7 +245,7 @@ export function registerMeetingRoutes(app: Express): void {
       res.json(rows);
     } catch (err: any) {
       logger.error('getBookedSlots failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
@@ -233,15 +262,18 @@ export function registerMeetingRoutes(app: Express): void {
       const scheduledTime = m.scheduled_at
         ? new Date(new Date(m.scheduled_at).getTime() + 3 * 60 * 60 * 1000).toISOString()
         : null;
+      const isExpired =
+        m.status === 'completed' ||
+        (m.scheduled_at && new Date(m.scheduled_at).getTime() + 2 * 60 * 60 * 1000 < Date.now());
       res.json({
         meeting_id: m.id,
-        meeting_link: m.meeting_link || null,
+        meeting_link: isExpired ? null : (m.meeting_link || null),
         scheduled_time: scheduledTime,
         status: m.status,
       });
     } catch (err: any) {
       logger.error('getMeeting failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
@@ -337,7 +369,7 @@ export function registerMeetingRoutes(app: Express): void {
       res.json({ valid: true, days });
     } catch (err: any) {
       logger.error('getBookingSlots failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
@@ -405,14 +437,8 @@ export function registerMeetingRoutes(app: Express): void {
       const meetingLink = room.url;
 
       // Build branded meeting link for the customer
-      const rawBase = (
-        process.env.APP_URL ||
-        process.env.RAILWAY_PUBLIC_URL ||
-        process.env.RAILWAY_PUBLIC_DOMAIN ||
-        'wak-agent.up.railway.app'
-      ).replace(/\/$/, '');
-      const baseUrl = rawBase.startsWith('http') ? rawBase : `https://${rawBase}`;
-      const brandedLink = `${baseUrl}/meeting/${meeting.meeting_token}`;
+      const { appUrl, brandName } = await getCompanyBranding(companyId);
+      const brandedLink = `${appUrl}/meeting/${meeting.meeting_token}`;
 
       await pool.query(
         `UPDATE meetings SET meeting_link=$1, scheduled_at=$2, link_sent=FALSE, customer_email=$3 WHERE id=$4 AND company_id=$5`,
@@ -440,7 +466,7 @@ export function registerMeetingRoutes(app: Express): void {
       sendWhatsAppText(
         companyId,
         meeting.customer_phone,
-        `Your meeting with WAK Solutions is confirmed for ${ksaLabel} (KSA time).\n\nYou will receive your meeting link 15 minutes before the start time.`
+        `Your meeting with ${brandName} is confirmed for ${ksaLabel} (KSA time).\n\nYou will receive your meeting link 15 minutes before the start time.`
       ).catch((e: any) => logger.error('Booking WhatsApp failed', e.message));
 
       // Push notification
@@ -465,7 +491,7 @@ export function registerMeetingRoutes(app: Express): void {
         const _pad = (n: number) => String(n).padStart(2, '0');
         const _fmt = (d: Date) => `${d.getUTCFullYear()}${_pad(d.getUTCMonth()+1)}${_pad(d.getUTCDate())}T${_pad(d.getUTCHours())}${_pad(d.getUTCMinutes())}00Z`;
         const _calEnd = new Date(scheduledUtc.getTime() + 3600000);
-        const customerCalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('Meeting with WAK Solutions')}&dates=${_fmt(scheduledUtc)}/${_fmt(_calEnd)}&details=${encodeURIComponent('Join your meeting: ' + brandedLink)}&sf=true&output=xml`;
+        const customerCalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(`Meeting with ${brandName}`)}&dates=${_fmt(scheduledUtc)}/${_fmt(_calEnd)}&details=${encodeURIComponent('Join your meeting: ' + brandedLink)}&sf=true&output=xml`;
         const _year = new Date().getFullYear();
         const customerConfirmHtml = `<!DOCTYPE html>
 <html>
@@ -475,11 +501,11 @@ export function registerMeetingRoutes(app: Express): void {
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
         <tr><td style="background:#0F510F;padding:28px 32px;">
-          <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">WAK Solutions</h1>
+          <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">${brandName}</h1>
           <p style="margin:4px 0 0;color:rgba(255,255,255,0.7);font-size:13px;">Meeting Confirmation</p>
         </td></tr>
         <tr><td style="padding:32px;">
-          <p style="margin:0 0 24px;color:#222;font-size:15px;line-height:1.6;">Your meeting with WAK Solutions is confirmed. We look forward to connecting with you — please save the details below so you have everything you need on the day.</p>
+          <p style="margin:0 0 24px;color:#222;font-size:15px;line-height:1.6;">Your meeting with ${brandName} is confirmed. We look forward to connecting with you — please save the details below so you have everything you need on the day.</p>
           <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f9f0;border:1px solid #c8e6c9;border-radius:10px;margin-bottom:28px;">
             <tr><td style="padding:22px 26px;">
               <p style="margin:0 0 4px;font-size:11px;color:#666;text-transform:uppercase;font-weight:700;">Date &amp; Time (AST — UTC+3)</p>
@@ -499,7 +525,7 @@ export function registerMeetingRoutes(app: Express): void {
           <p style="margin:0;color:#555;font-size:13px;line-height:1.6;">Need to reschedule or have a question? Simply reply to us on WhatsApp and we will be happy to help.</p>
         </td></tr>
         <tr><td style="background:#f9f9f9;border-top:1px solid #eee;padding:16px 32px;">
-          <p style="margin:0;font-size:11px;color:#aaa;text-align:center;">&copy; ${_year} WAK Solutions. All rights reserved.</p>
+          <p style="margin:0;font-size:11px;color:#aaa;text-align:center;">&copy; ${_year} ${brandName}. All rights reserved.</p>
         </td></tr>
       </table>
     </td></tr>
@@ -507,7 +533,7 @@ export function registerMeetingRoutes(app: Express): void {
 </body></html>`;
         sendEmail(
           customerEmail,
-          'Your meeting with WAK Solutions is confirmed',
+          `Your meeting with ${brandName} is confirmed`,
           customerConfirmHtml,
         ).catch((e: any) => logger.error('Customer confirmation email failed', e.message));
       }
@@ -515,7 +541,7 @@ export function registerMeetingRoutes(app: Express): void {
       res.json({ success: true, ksa_label: ksaLabel });
     } catch (err: any) {
       logger.error('bookMeeting failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
@@ -525,9 +551,8 @@ export function registerMeetingRoutes(app: Express): void {
       const agentId = req.session.agentId;
       const result = await pool.query(
         `SELECT id, meeting_link, scheduled_at, status
-         FROM meetings
+         FROM demo_bookings
          WHERE agent_id = $1
-           AND company_id = 1
            AND status IN ('pending', 'in_progress')
          ORDER BY created_at DESC
          LIMIT 1`,
@@ -546,14 +571,17 @@ export function registerMeetingRoutes(app: Express): void {
       });
     } catch (err: any) {
       logger.error('getMyDemoBooking failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
-  // ── Authenticated demo booking: get available slots (always company_id=1) ──
+  // ── Authenticated demo booking: get available slots ───────────────────────
+  // company_id 1 = WAK Solutions (platform owner — intentional). The demo
+  // funnel reads WAK's blocked_slots and work hours, but books into the
+  // global demo_bookings table (no company_id column).
   app.get('/api/demo-booking/slots', requireAuth, async (req: any, res: any) => {
     try {
-      const companyId = 1;
+      const wakCompanyId = 1;
 
       const now = new Date();
       const ksaNow = new Date(now.getTime() + KSA_OFFSET_MS);
@@ -572,18 +600,17 @@ export function registerMeetingRoutes(app: Express): void {
           `SELECT date::text, time FROM blocked_slots
            WHERE company_id = $1
              AND date >= $2::date AND date < $2::date + INTERVAL '32 days'`,
-          [companyId, blockedWindowStart]
+          [wakCompanyId, blockedWindowStart]
         ),
         pool.query(
-          `SELECT scheduled_at FROM meetings
+          `SELECT scheduled_at FROM demo_bookings
            WHERE scheduled_at >= $1 AND scheduled_at < $2
-             AND status != 'completed'
-             AND company_id = $3`,
-          [windowStart, windowEnd, companyId]
+             AND status != 'completed'`,
+          [windowStart, windowEnd]
         ),
       ]);
 
-      const workHours = await getWorkHours(companyId);
+      const workHours = await getWorkHours(wakCompanyId);
       const blockedSet = new Set(blockedRes.rows.map((r: any) => `${r.date}T${r.time}`));
       const takenMs = new Set(takenRes.rows.map((r: any) => new Date(r.scheduled_at).getTime()));
 
@@ -621,14 +648,18 @@ export function registerMeetingRoutes(app: Express): void {
       res.json({ days });
     } catch (err: any) {
       logger.error('getDemoBookingSlots failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
-  // ── Authenticated demo booking: confirm a slot (always company_id=1) ────────────
+  // ── Authenticated demo booking: confirm a slot ──────────────────────────
+  // Writes to the global demo_bookings table (no company_id column).
+  // company_id 1 = WAK Solutions (platform owner — intentional) is used only
+  // for reading WAK's blocked_slots/work hours and routing notifications to
+  // platform-owner staff.
   app.post('/api/demo-booking/book', requireAuth, async (req: any, res: any) => {
     try {
-      const companyId = 1;
+      const wakCompanyId = 1;
       const agentId = req.session.agentId;
 
       const { date, time } = z.object({
@@ -643,7 +674,7 @@ export function registerMeetingRoutes(app: Express): void {
       );
       const agent = agentRes.rows[0] ?? {};
 
-      const workHours = await getWorkHours(companyId);
+      const workHours = await getWorkHours(wakCompanyId);
       if (!isWithinWorkHours(date, time, workHours)) {
         return res.status(400).json({ message: 'This time slot is outside working hours. Please choose another.' });
       }
@@ -654,15 +685,14 @@ export function registerMeetingRoutes(app: Express): void {
 
       const [takenRes, blockedRes] = await Promise.all([
         pool.query(
-          `SELECT 1 FROM meetings
+          `SELECT 1 FROM demo_bookings
            WHERE scheduled_at >= $1 AND scheduled_at < $2
-             AND status != 'completed'
-             AND company_id = $3`,
-          [scheduledUtc, new Date(scheduledUtc.getTime() + 3600000), companyId]
+             AND status != 'completed'`,
+          [scheduledUtc, new Date(scheduledUtc.getTime() + 3600000)]
         ),
         pool.query(
           'SELECT 1 FROM blocked_slots WHERE company_id=$1 AND date=$2::date AND time=$3',
-          [companyId, new Date(Date.UTC(yr, mo - 1, dy) - KSA_OFFSET_MS).toISOString().slice(0, 10), time]
+          [wakCompanyId, new Date(Date.UTC(yr, mo - 1, dy) - KSA_OFFSET_MS).toISOString().slice(0, 10), time]
         ),
       ]);
 
@@ -681,28 +711,29 @@ export function registerMeetingRoutes(app: Express): void {
       const ksaLabel = formatKsaDateTime(ksaDt);
 
       await pool.query(
-        `INSERT INTO meetings
-           (customer_phone, meeting_link, meeting_token, scheduled_at, status, created_at, company_id, customer_email, agent_id)
-         VALUES ($1, $2, $3, $4, 'pending', NOW(), $5, $6, $7)`,
-        [agent.name || 'demo', meetingLink, demoToken, scheduledUtc, companyId, agent.email || null, agentId || null]
+        `INSERT INTO demo_bookings
+           (agent_id, customer_name, customer_email, meeting_link, meeting_token, scheduled_at, status, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, 'pending', NOW())`,
+        [agentId || null, agent.name || 'demo', agent.email || '', meetingLink, demoToken, scheduledUtc]
       );
 
       logger.info('Authenticated demo booked', `agentId: ${agentId}, time: ${ksaLabel}`);
 
       notifyManagerNewBooking({
-        companyId,
+        companyId: wakCompanyId,
         customerPhone: agent.name || 'Demo booking',
         dateTimeLabel: ksaLabel,
         meetingLink,
         scheduledUtc,
       }).catch((e: any) => logger.error('Demo manager email failed', e.message));
 
-      // Agent demo confirmation email
+      // Agent demo confirmation email — uses WAK Solutions branding (company 1)
       if (agent.email) {
+        const { brandName: wakBrandName } = await getCompanyBranding(wakCompanyId);
         const _dPad = (n: number) => String(n).padStart(2, '0');
         const _dFmt = (d: Date) => `${d.getUTCFullYear()}${_dPad(d.getUTCMonth()+1)}${_dPad(d.getUTCDate())}T${_dPad(d.getUTCHours())}${_dPad(d.getUTCMinutes())}00Z`;
         const _dCalEnd = new Date(scheduledUtc.getTime() + 3600000);
-        const demoCalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent('WAK Solutions Demo')}&dates=${_dFmt(scheduledUtc)}/${_dFmt(_dCalEnd)}&details=${encodeURIComponent('Join your demo: ' + meetingLink)}&sf=true&output=xml`;
+        const demoCalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(`${wakBrandName} Demo`)}&dates=${_dFmt(scheduledUtc)}/${_dFmt(_dCalEnd)}&details=${encodeURIComponent('Join your demo: ' + meetingLink)}&sf=true&output=xml`;
         const _dYear = new Date().getFullYear();
         const demoConfirmHtml = `<!DOCTYPE html>
 <html>
@@ -712,12 +743,12 @@ export function registerMeetingRoutes(app: Express): void {
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
         <tr><td style="background:#0F510F;padding:28px 32px;">
-          <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">WAK Solutions</h1>
+          <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">${wakBrandName}</h1>
           <p style="margin:4px 0 0;color:rgba(255,255,255,0.7);font-size:13px;">Demo Booking Confirmation</p>
         </td></tr>
         <tr><td style="padding:32px;">
           <p style="margin:0 0 24px;color:#222;font-size:15px;line-height:1.6;">Hi ${agent.name || 'there'},</p>
-          <p style="margin:0 0 24px;color:#555;font-size:14px;line-height:1.6;">Your demo session with WAK Solutions is confirmed. We're excited to walk you through the platform and show you how it can transform your customer engagement. Please save the details below.</p>
+          <p style="margin:0 0 24px;color:#555;font-size:14px;line-height:1.6;">Your demo session with ${wakBrandName} is confirmed. We're excited to walk you through the platform and show you how it can transform your customer engagement. Please save the details below.</p>
           <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f9f0;border:1px solid #c8e6c9;border-radius:10px;margin-bottom:28px;">
             <tr><td style="padding:22px 26px;">
               <p style="margin:0 0 4px;font-size:11px;color:#666;text-transform:uppercase;font-weight:700;">Date &amp; Time (AST — UTC+3)</p>
@@ -730,14 +761,14 @@ export function registerMeetingRoutes(app: Express): void {
           <a href="${demoCalUrl}" target="_blank" style="display:inline-block;background:#4285F4;color:#fff;text-decoration:none;padding:11px 22px;border-radius:6px;font-size:14px;font-weight:600;margin-bottom:28px;">&#128197; Add to Google Calendar</a>
           <p style="margin:0 0 10px;color:#444;font-size:14px;font-weight:700;">What to expect</p>
           <ul style="margin:0 0 24px;padding-left:20px;color:#555;font-size:13px;line-height:1.9;">
-            <li>A live walkthrough of the WAK Solutions platform tailored to your use case.</li>
+            <li>A live walkthrough of the ${wakBrandName} platform tailored to your use case.</li>
             <li>Time to ask questions and explore how the platform fits your team's workflow.</li>
             <li>No software to install — the meeting runs entirely in your browser.</li>
           </ul>
           <p style="margin:0;color:#555;font-size:13px;line-height:1.6;">If you need to reschedule, please get in touch with us and we'll find a time that works for you.</p>
         </td></tr>
         <tr><td style="background:#f9f9f9;border-top:1px solid #eee;padding:16px 32px;">
-          <p style="margin:0;font-size:11px;color:#aaa;text-align:center;">&copy; ${_dYear} WAK Solutions. All rights reserved.</p>
+          <p style="margin:0;font-size:11px;color:#aaa;text-align:center;">&copy; ${_dYear} ${wakBrandName}. All rights reserved.</p>
         </td></tr>
       </table>
     </td></tr>
@@ -745,21 +776,47 @@ export function registerMeetingRoutes(app: Express): void {
 </body></html>`;
         sendEmail(
           agent.email,
-          'Your demo with WAK Solutions is confirmed',
+          `Your demo with ${wakBrandName} is confirmed`,
           demoConfirmHtml,
         ).catch((e: any) => logger.error('Demo confirmation email failed', e.message));
       }
 
+      // company_id 1 = WAK Solutions (platform owner — intentional)
       notifyAll({
         title: 'Meeting Booked',
         body: `${agent.name || 'Agent'} — ${ksaLabel}`,
         url: '/meetings',
-      }).catch((e: any) => logger.error('Demo push failed', e.message));
+      }, wakCompanyId).catch((e: any) => logger.error('Demo push failed', e.message));
 
       res.json({ success: true, ksa_label: ksaLabel, meeting_link: meetingLink });
     } catch (err: any) {
       logger.error('bookAuthDemo failed', err.message);
-      res.status(500).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
+    }
+  });
+
+  // ── Public: get demo booking details by token ────────────────────────────
+  app.get('/api/demo-booking/:token', async (req: any, res: any) => {
+    try {
+      const result = await pool.query(
+        `SELECT id, meeting_link, scheduled_at, status
+         FROM demo_bookings WHERE meeting_token=$1 LIMIT 1`,
+        [req.params.token]
+      );
+      if (result.rows.length === 0) return res.status(404).json({ message: 'Demo booking not found.' });
+      const m = result.rows[0];
+      const scheduledTime = m.scheduled_at
+        ? new Date(new Date(m.scheduled_at).getTime() + KSA_OFFSET_MS).toISOString()
+        : null;
+      res.json({
+        meeting_id: m.id,
+        meeting_link: m.meeting_link || null,
+        scheduled_time: scheduledTime,
+        status: m.status,
+      });
+    } catch (err: any) {
+      logger.error('getDemoBooking failed', err.message);
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
