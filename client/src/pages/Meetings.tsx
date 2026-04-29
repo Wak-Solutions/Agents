@@ -11,6 +11,7 @@ type FilterType = "all" | "upcoming" | "completed";
 interface Meeting {
   id: number;
   customer_phone: string | null;
+  customer_name: string | null;
   agent_id: number | null;
   agent_name: string | null;
   meeting_link: string;
@@ -434,7 +435,7 @@ export default function Meetings() {
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2">
                           <span className="font-medium text-gray-900 text-sm">
-                            {m.customer_phone ?? m.agent_name ?? "—"}
+                            {m.customer_name ?? m.customer_phone ?? m.agent_name ?? "—"}
                           </span>
                           {m.source === 'demo' && (
                             <span className="inline-flex text-xs font-semibold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200">

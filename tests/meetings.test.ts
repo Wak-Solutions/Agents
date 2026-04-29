@@ -495,8 +495,8 @@ describe('GET /api/meetings — demo_bookings merge for company_id=1', () => {
   it('returns only meetings rows for company_id=2 (no demo_bookings)', async () => {
     const { app, setSession } = await buildMeetingApp();
     const meetingRow = {
-      id: 5, customer_phone: '971509999999', agent_id: null, agent_name: null,
-      meeting_link: '', meeting_token: null, agreed_time: null,
+      id: 5, customer_phone: '971509999999', customer_name: null, agent_id: null,
+      agent_name: null, meeting_link: '', meeting_token: null, agreed_time: null,
       scheduled_at: null, customer_email: null, status: 'pending',
       created_at: new Date().toISOString(), source: 'meeting',
     };
@@ -505,11 +505,61 @@ describe('GET /api/meetings — demo_bookings merge for company_id=1', () => {
 
     const res = await request(app).get('/api/meetings');
     expect(res.status).toBe(200);
-    // All rows must be source='meeting'; no demo rows
     res.body.forEach((r: any) => expect(r.source).toBe('meeting'));
-    // The $1 = 1 guard in the UNION means demo_bookings returns nothing for companyId=2
     const [, params] = (pool.query as any).mock.calls[0];
     expect(params).toContain(2);
+  });
+
+  it('demo rows have customer_name populated and customer_phone null', async () => {
+    const { app, setSession } = await buildMeetingApp();
+    const demoRow = {
+      id: 10, customer_phone: null, customer_name: 'Ammar Alkhateeb',
+      agent_id: null, agent_name: null,
+      meeting_link: 'https://daily.co/demo', meeting_token: null, agreed_time: null,
+      scheduled_at: new Date('2026-04-30T10:00:00Z').toISOString(),
+      customer_email: 'ammar@example.com', status: 'pending',
+      created_at: new Date().toISOString(), source: 'demo',
+    };
+    (pool.query as any).mockResolvedValueOnce({ rows: [demoRow] });
+    setSession({ authenticated: true, agentId: 1, companyId: 1, role: 'admin' });
+
+    const res = await request(app).get('/api/meetings');
+    expect(res.status).toBe(200);
+    const demo = res.body.find((r: any) => r.source === 'demo');
+    expect(demo).toBeDefined();
+    expect(demo.customer_name).toBe('Ammar Alkhateeb');
+    expect(demo.customer_phone).toBeNull();
+  });
+
+  it('meeting rows have customer_phone populated and customer_name null', async () => {
+    const { app, setSession } = await buildMeetingApp();
+    const meetingRow = {
+      id: 1, customer_phone: '971501234567', customer_name: null,
+      agent_id: null, agent_name: null, meeting_link: '', meeting_token: null,
+      agreed_time: null, scheduled_at: null, customer_email: null,
+      status: 'pending', created_at: new Date().toISOString(), source: 'meeting',
+    };
+    (pool.query as any).mockResolvedValueOnce({ rows: [meetingRow] });
+    setSession({ authenticated: true, agentId: 1, companyId: 1, role: 'admin' });
+
+    const res = await request(app).get('/api/meetings');
+    expect(res.status).toBe(200);
+    const mtg = res.body.find((r: any) => r.source === 'meeting');
+    expect(mtg).toBeDefined();
+    expect(mtg.customer_phone).toBe('971501234567');
+    expect(mtg.customer_name).toBeNull();
+  });
+
+  it('SQL uses customer_name alias and NULL::text casts for schema alignment', async () => {
+    const { app, setSession } = await buildMeetingApp();
+    (pool.query as any).mockResolvedValueOnce({ rows: [] });
+    setSession({ authenticated: true, agentId: 1, companyId: 1, role: 'admin' });
+
+    await request(app).get('/api/meetings');
+    const [sql] = (pool.query as any).mock.calls[0];
+    expect(sql).toMatch(/NULL::text\s+AS\s+customer_name/i);
+    expect(sql).toMatch(/NULL::text\s+AS\s+customer_phone/i);
+    expect(sql).toMatch(/NULLS LAST/i);
   });
 });
 
