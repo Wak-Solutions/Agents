@@ -109,16 +109,24 @@ export function registerMeetingRoutes(app: Express): void {
     try {
       const companyId = req.companyId;
       const filter = (req.query.filter as string) || 'all';
-      let where = 'WHERE m.company_id = $1';
-      if (filter === 'upcoming') where += " AND status IN ('pending', 'in_progress')";
-      else if (filter === 'completed') where += " AND status = 'completed'";
+      let statusFilter = '';
+      if (filter === 'upcoming') statusFilter = " AND status IN ('pending', 'in_progress')";
+      else if (filter === 'completed') statusFilter = " AND status = 'completed'";
       const result = await pool.query(
         `SELECT m.id, m.customer_phone, m.agent_id, a.name AS agent_name,
                 m.meeting_link, m.meeting_token, m.agreed_time, m.scheduled_at,
-                m.customer_email, m.status, m.created_at
+                m.customer_email, m.status, m.created_at, 'meeting' AS source
          FROM meetings m
          LEFT JOIN agents a ON a.id = m.agent_id
-         ${where} ORDER BY m.created_at DESC`,
+         WHERE m.company_id = $1${statusFilter}
+         UNION ALL
+         SELECT d.id, NULL AS customer_phone, d.agent_id, a.name AS agent_name,
+                d.meeting_link, d.meeting_token, NULL AS agreed_time, d.scheduled_at,
+                d.customer_email, d.status, d.created_at, 'demo' AS source
+         FROM demo_bookings d
+         LEFT JOIN agents a ON a.id = d.agent_id
+         WHERE $1 = 1${statusFilter}
+         ORDER BY scheduled_at DESC`,
         [companyId]
       );
       res.json(result.rows);
@@ -230,7 +238,13 @@ export function registerMeetingRoutes(app: Express): void {
          WHERE scheduled_at >= $1 AND scheduled_at < $2
            AND scheduled_at IS NOT NULL
            AND status != 'completed'
-           AND company_id = $3`,
+           AND company_id = $3
+         UNION ALL
+         SELECT scheduled_at FROM demo_bookings
+         WHERE $3 = 1
+           AND scheduled_at >= $1 AND scheduled_at < $2
+           AND scheduled_at IS NOT NULL
+           AND status != 'completed'`,
         [weekStartUtc, weekEndUtc, companyId]
       );
       const rows = result.rows.map((r: { scheduled_at: Date }) => {
@@ -325,7 +339,12 @@ export function registerMeetingRoutes(app: Express): void {
           `SELECT scheduled_at FROM meetings
            WHERE scheduled_at >= $1 AND scheduled_at < $2
              AND status != 'completed' AND id != $3
-             AND company_id = $4`,
+             AND company_id = $4
+           UNION ALL
+           SELECT scheduled_at FROM demo_bookings
+           WHERE $4 = 1
+             AND scheduled_at >= $1 AND scheduled_at < $2
+             AND status != 'completed'`,
           [windowStart, windowEnd, meeting.id, companyId]
         ),
       ]);

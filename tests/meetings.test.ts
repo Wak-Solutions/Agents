@@ -451,6 +451,96 @@ describe('GET /api/demo-booking/:token (public)', () => {
   });
 });
 
+// ── Demo bookings in meetings dashboard ───────────────────────────────────────
+
+describe('GET /api/meetings — demo_bookings merge for company_id=1', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('returns both meetings and demo_bookings rows for company_id=1', async () => {
+    const { app, setSession } = await buildMeetingApp();
+    const meetingRow = {
+      id: 1, customer_phone: '971501234567', agent_id: null, agent_name: null,
+      meeting_link: '', meeting_token: null, agreed_time: null,
+      scheduled_at: null, customer_email: null, status: 'pending',
+      created_at: new Date().toISOString(), source: 'meeting',
+    };
+    const demoRow = {
+      id: 10, customer_phone: null, agent_id: 2, agent_name: 'Jane',
+      meeting_link: 'https://daily.co/demo', meeting_token: null, agreed_time: null,
+      scheduled_at: new Date().toISOString(), customer_email: 'jane@example.com',
+      status: 'pending', created_at: new Date().toISOString(), source: 'demo',
+    };
+    (pool.query as any).mockResolvedValueOnce({ rows: [meetingRow, demoRow] });
+    setSession({ authenticated: true, agentId: 1, companyId: 1, role: 'admin' });
+
+    const res = await request(app).get('/api/meetings');
+    expect(res.status).toBe(200);
+    const sources = res.body.map((r: any) => r.source);
+    expect(sources).toContain('meeting');
+    expect(sources).toContain('demo');
+  });
+
+  it('SQL includes UNION ALL with demo_bookings for company_id=1', async () => {
+    const { app, setSession } = await buildMeetingApp();
+    (pool.query as any).mockResolvedValueOnce({ rows: [] });
+    setSession({ authenticated: true, agentId: 1, companyId: 1, role: 'admin' });
+
+    await request(app).get('/api/meetings');
+    const [sql, params] = (pool.query as any).mock.calls[0];
+    expect(sql).toMatch(/UNION ALL/i);
+    expect(sql).toMatch(/demo_bookings/i);
+    expect(params).toContain(1);
+  });
+
+  it('returns only meetings rows for company_id=2 (no demo_bookings)', async () => {
+    const { app, setSession } = await buildMeetingApp();
+    const meetingRow = {
+      id: 5, customer_phone: '971509999999', agent_id: null, agent_name: null,
+      meeting_link: '', meeting_token: null, agreed_time: null,
+      scheduled_at: null, customer_email: null, status: 'pending',
+      created_at: new Date().toISOString(), source: 'meeting',
+    };
+    (pool.query as any).mockResolvedValueOnce({ rows: [meetingRow] });
+    setSession({ authenticated: true, agentId: 2, companyId: 2, role: 'admin' });
+
+    const res = await request(app).get('/api/meetings');
+    expect(res.status).toBe(200);
+    // All rows must be source='meeting'; no demo rows
+    res.body.forEach((r: any) => expect(r.source).toBe('meeting'));
+    // The $1 = 1 guard in the UNION means demo_bookings returns nothing for companyId=2
+    const [, params] = (pool.query as any).mock.calls[0];
+    expect(params).toContain(2);
+  });
+});
+
+describe('GET /api/availability/booked — includes demo_bookings for company_id=1', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('SQL includes demo_bookings UNION for company_id=1', async () => {
+    const { app, setSession } = await buildMeetingApp();
+    (pool.query as any).mockResolvedValueOnce({ rows: [] });
+    setSession({ authenticated: true, agentId: 1, companyId: 1, role: 'admin' });
+
+    await request(app).get('/api/availability/booked?weekStart=2026-05-01');
+    const [sql, params] = (pool.query as any).mock.calls[0];
+    expect(sql).toMatch(/demo_bookings/i);
+    expect(sql).toMatch(/UNION ALL/i);
+    expect(params).toContain(1);
+  });
+
+  it('returns 200 for company_id=2 without demo rows', async () => {
+    const { app, setSession } = await buildMeetingApp();
+    (pool.query as any).mockResolvedValueOnce({ rows: [] });
+    setSession({ authenticated: true, agentId: 2, companyId: 2, role: 'admin' });
+
+    const res = await request(app).get('/api/availability/booked?weekStart=2026-05-01');
+    expect(res.status).toBe(200);
+    // The $3 = 1 guard ensures demo rows excluded when companyId=2
+    const [, params] = (pool.query as any).mock.calls[0];
+    expect(params).toContain(2);
+  });
+});
+
 // ── Fix 2 — bookMeeting returns 400 (not 500) when app_url is missing ────────
 
 describe('POST /api/book/:token — app_url guard', () => {

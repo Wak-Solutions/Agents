@@ -10,7 +10,7 @@ type FilterType = "all" | "upcoming" | "completed";
 
 interface Meeting {
   id: number;
-  customer_phone: string;
+  customer_phone: string | null;
   agent_id: number | null;
   agent_name: string | null;
   meeting_link: string;
@@ -19,6 +19,7 @@ interface Meeting {
   scheduled_at: string | null;
   status: MeetingStatus;
   created_at: string;
+  source?: 'meeting' | 'demo';
 }
 
 function formatDate(iso: string): string {
@@ -431,7 +432,16 @@ export default function Meetings() {
                     <tr key={m.id} className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50/50 transition-colors">
                       {/* Customer */}
                       <td className="px-5 py-4">
-                        <span className="font-medium text-gray-900 text-sm">{m.customer_phone}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-gray-900 text-sm">
+                            {m.customer_phone ?? m.agent_name ?? "—"}
+                          </span>
+                          {m.source === 'demo' && (
+                            <span className="inline-flex text-xs font-semibold px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200">
+                              Demo
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Date */}
