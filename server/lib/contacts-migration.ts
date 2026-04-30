@@ -30,6 +30,21 @@ export async function ensureContactCompanies(): Promise<void> {
   await pool.query(
     `CREATE INDEX IF NOT EXISTS contact_companies_company_idx ON contact_companies (company_id)`
   );
+  // Per-company name: each tenant can label a shared contact differently.
+  await pool.query(
+    `ALTER TABLE contact_companies ADD COLUMN IF NOT EXISTS name TEXT`
+  );
+  // Backfill: copy the global contacts.name into every existing link row
+  // so existing data isn't lost. Runs idempotently; already-named rows
+  // (cc.name IS NOT NULL) are left untouched.
+  await pool.query(`
+    UPDATE contact_companies cc
+    SET name = c.name
+    FROM contacts c
+    WHERE cc.contact_id = c.id
+      AND cc.name IS NULL
+      AND c.name IS NOT NULL
+  `);
 
   // Backfill — only useful while the old contacts.company_id column still exists.
   const colCheck = await pool.query(
