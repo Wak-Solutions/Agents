@@ -115,6 +115,73 @@ describe('POST /api/surveys', () => {
   });
 });
 
+describe('POST /api/surveys/:id/activate — per-company isolation', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('deactivate UPDATE is scoped to the requesting company_id only', async () => {
+    const { app, setSession } = await buildSurveysApp();
+    setSession({ authenticated: true, agentId: 99, role: 'admin', companyId: 2 });
+    (pool.query as any)
+      .mockResolvedValueOnce({ rows: [] })  // deactivate UPDATE
+      .mockResolvedValueOnce({ rows: [{ id: 10, is_active: true, company_id: 2 }] }); // activate UPDATE
+    await request(app).post('/api/surveys/10/activate');
+
+    const calls: any[][] = (pool.query as any).mock.calls;
+    const deactivateCall = calls.find(
+      ([sql]) => typeof sql === 'string' && /UPDATE\s+surveys/i.test(sql) && /is_active\s*=\s*false/i.test(sql)
+    );
+    expect(deactivateCall).toBeDefined();
+    // Must include company_id=2 — not a global update touching other tenants
+    expect(deactivateCall![1]).toContain(2);
+    expect(deactivateCall![1]).not.toContain(1);
+  });
+
+  it('Tenant 1 create scopes deactivate to company_id=1 only', async () => {
+    const { app, setSession } = await buildSurveysApp();
+    setSession({ authenticated: true, agentId: 1, role: 'admin', companyId: 1 });
+    (pool.query as any)
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: 45, is_active: true, company_id: 1 }] });
+    const res = await request(app).post('/api/surveys').send({ title: 'Tenant 1 Survey' });
+    expect(res.status).toBe(201);
+    const deactivateCall = (pool.query as any).mock.calls.find(
+      ([sql]: [string]) => /UPDATE\s+surveys/i.test(sql) && /is_active\s*=\s*false/i.test(sql)
+    );
+    expect(deactivateCall![1]).toContain(1);
+    expect(deactivateCall![1]).not.toContain(2);
+  });
+
+  it('Tenant 2 create scopes deactivate to company_id=2 only', async () => {
+    const { app, setSession } = await buildSurveysApp();
+    setSession({ authenticated: true, agentId: 99, role: 'admin', companyId: 2 });
+    (pool.query as any)
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: 72, is_active: true, company_id: 2 }] });
+    const res = await request(app).post('/api/surveys').send({ title: 'Tenant 2 Survey' });
+    expect(res.status).toBe(201);
+    expect(res.body.is_active).toBe(true);
+    const deactivateCall = (pool.query as any).mock.calls.find(
+      ([sql]: [string]) => /UPDATE\s+surveys/i.test(sql) && /is_active\s*=\s*false/i.test(sql)
+    );
+    expect(deactivateCall![1]).toContain(2);
+    expect(deactivateCall![1]).not.toContain(1);
+  });
+
+  it('migration SQL drops global index and creates per-company index', async () => {
+    (pool.query as any).mockResolvedValue({ rows: [] });
+    const { ensureSurveyTables } = await import('../server/surveys');
+    await ensureSurveyTables();
+
+    const allSql: string[] = (pool.query as any).mock.calls.map(([sql]: [string]) => sql);
+    const dropStmt = allSql.find(sql => /DROP\s+INDEX/i.test(sql) && /one_active_survey\b/i.test(sql));
+    const createStmt = allSql.find(sql => /CREATE\s+UNIQUE\s+INDEX/i.test(sql) && /company_id/i.test(sql) && /is_active/i.test(sql));
+    expect(dropStmt).toBeDefined();
+    expect(createStmt).toBeDefined();
+    // New index must NOT be on bare (is_active) — that was the old global form
+    expect(createStmt).not.toMatch(/ON\s+surveys\s*\(\s*is_active\s*\)/i);
+  });
+});
+
 describe('POST /api/survey/:token/submit', () => {
   beforeEach(() => vi.clearAllMocks());
 

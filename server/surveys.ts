@@ -50,10 +50,14 @@ export async function ensureSurveyTables(): Promise<void> {
       answer_yes_no BOOLEAN,
       created_at    TIMESTAMPTZ DEFAULT NOW()
     )`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS one_active_survey ON surveys (is_active) WHERE is_active = true`,
     // ── Column migrations ──
     `ALTER TABLE surveys          ADD COLUMN IF NOT EXISTS is_default    BOOLEAN DEFAULT false`,
     `ALTER TABLE surveys          ADD COLUMN IF NOT EXISTS company_id    INTEGER NOT NULL DEFAULT 1`,
+    // Drop the old global unique index (only one active survey across ALL tenants)
+    // and replace it with a per-company partial index so each tenant can have
+    // their own active survey independently.
+    `DROP INDEX IF EXISTS one_active_survey`,
+    `CREATE UNIQUE INDEX IF NOT EXISTS one_active_survey_per_company ON surveys (company_id) WHERE is_active = true`,
     `ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS agent_id      INTEGER`,
     `ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS escalation_id INTEGER`,
     `ALTER TABLE survey_responses ADD COLUMN IF NOT EXISTS meeting_id    INTEGER REFERENCES meetings(id)`,
