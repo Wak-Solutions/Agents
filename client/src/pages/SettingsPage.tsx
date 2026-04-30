@@ -269,11 +269,12 @@ function WhatsAppPanel({ t }: { t: (k: string) => string }) {
 
 function BrandingPanel({ t }: { t: (k: string) => string }) {
   const [brandName, setBrandName] = useState("");
+  // app_url is still sent on save so the backend value is preserved, but the
+  // input is intentionally hidden from the UI.
   const [appUrl, setAppUrl] = useState("");
   const [loadError, setLoadError] = useState("");
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [saveError, setSaveError] = useState("");
-  const [urlError, setUrlError] = useState("");
 
   useEffect(() => {
     fetch("/api/settings/branding", { credentials: "include" })
@@ -286,12 +287,7 @@ function BrandingPanel({ t }: { t: (k: string) => string }) {
   }, []);
 
   const handleSave = async () => {
-    setUrlError("");
     setSaveError("");
-    if (appUrl && !appUrl.startsWith("http://") && !appUrl.startsWith("https://")) {
-      setUrlError(t("settingsAppUrlInvalid"));
-      return;
-    }
     setSaveStatus("saving");
     try {
       const resp = await fetch("/api/settings/branding", {
@@ -312,7 +308,7 @@ function BrandingPanel({ t }: { t: (k: string) => string }) {
     }
   };
 
-  const canSave = !!(brandName.trim() && appUrl.trim()) && saveStatus !== "saving";
+  const canSave = !!brandName.trim() && saveStatus !== "saving";
 
   if (loadError) {
     return (
@@ -342,20 +338,6 @@ function BrandingPanel({ t }: { t: (k: string) => string }) {
             placeholder="e.g. Acme Corp"
           />
           <p className="text-xs text-gray-400 mt-1">{t("settingsBrandNameHint")}</p>
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1.5">
-            {t("settingsAppUrl")}
-          </label>
-          <input
-            className={inputClass}
-            value={appUrl}
-            onChange={e => { setAppUrl(e.target.value); setSaveStatus("idle"); setUrlError(""); }}
-            placeholder="https://app.example.com"
-          />
-          <p className="text-xs text-gray-400 mt-1">{t("settingsAppUrlHint")}</p>
-          {urlError && <p className="text-xs text-red-500 mt-1">{urlError}</p>}
         </div>
 
         <div className="flex items-center gap-3 pt-1">
