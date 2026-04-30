@@ -3,6 +3,7 @@ import { pool } from './db';
 import { z } from 'zod';
 import { createLogger } from './lib/logger';
 import { getCompanyBranding } from './routes/settings.routes';
+import { sendWhatsAppText } from './lib/whatsapp';
 
 const logger = createLogger('surveys');
 
@@ -94,13 +95,24 @@ export async function sendSurveyToCustomer(
       [surveyId, token, customerPhone, agentId, escalationId, meetingId, companyId]
     );
 
-    const { appUrl, brandName } = await getCompanyBranding(companyId);
-    const surveyLink = `${appUrl}/survey/${token}`;
+    let appUrl = '';
+    let brandName = 'Our team';
+    try {
+      const branding = await getCompanyBranding(companyId);
+      appUrl = branding.appUrl;
+      brandName = branding.brandName;
+    } catch {
+      logger.warn('getCompanyBranding failed for survey — sending without link', `companyId: ${companyId}`);
+    }
+
+    const surveyLink = appUrl ? `${appUrl}/survey/${token}` : null;
     const message =
       `Thank you for contacting ${brandName}! 😊\n` +
       `We'd love to hear your feedback — it only takes 1 minute:\n` +
-      `${surveyLink}\n` +
+      (surveyLink ? `${surveyLink}\n` : '') +
       `This link expires in 24 hours.`;
+
+    await sendWhatsAppText(companyId, customerPhone, message);
 
   } catch (e: any) {
     logger.error('sendSurveyToCustomer failed', e.message);

@@ -90,16 +90,16 @@ describe('GET /api/settings/branding', () => {
     expect(res.status).toBe(401);
   });
 
-  it('returns branding for authenticated admin', async () => {
+  it('returns brandName for authenticated admin', async () => {
     const { app, setSession } = await buildSettingsApp();
     setSession(adminSession);
     (pool.query as any).mockResolvedValueOnce({
-      rows: [{ app_url: 'https://app.example.com', brand_name: 'Acme Corp' }],
+      rows: [{ brand_name: 'Acme Corp' }],
     });
     const res = await request(app).get('/api/settings/branding');
     expect(res.status).toBe(200);
-    expect(res.body.appUrl).toBe('https://app.example.com');
     expect(res.body.brandName).toBe('Acme Corp');
+    expect(res.body.appUrl).toBeUndefined();
   });
 });
 
@@ -128,25 +128,16 @@ describe('PUT /api/settings/branding', () => {
     expect(res.status).toBe(200);
   });
 
-  it('returns 400 when appUrl does not start with http', async () => {
-    const { app, setSession } = await buildSettingsApp();
-    setSession(adminSession);
-    const res = await request(app)
-      .put('/api/settings/branding')
-      .send({ brandName: 'Acme Corp', appUrl: 'app.example.com' });
-    expect(res.status).toBe(400);
-  });
-
   it('returns 400 when brandName is missing', async () => {
     const { app, setSession } = await buildSettingsApp();
     setSession(adminSession);
     const res = await request(app)
       .put('/api/settings/branding')
-      .send({ appUrl: 'https://app.example.com' });
+      .send({});
     expect(res.status).toBe(400);
   });
 
-  it('strips trailing slash from appUrl before saving', async () => {
+  it('ignores appUrl in request body — only brandName is saved', async () => {
     const { app, setSession } = await buildSettingsApp();
     setSession(adminSession);
     (pool.query as any).mockResolvedValueOnce({ rows: [] });
@@ -154,8 +145,9 @@ describe('PUT /api/settings/branding', () => {
       .put('/api/settings/branding')
       .send({ brandName: 'Acme Corp', appUrl: 'https://app.example.com/' });
     const [sql, params] = (pool.query as any).mock.calls[0];
-    expect(params).toContain('https://app.example.com');
-    expect(params).not.toContain('https://app.example.com/');
     expect(sql).toContain('UPDATE');
+    expect(params).toContain('Acme Corp');
+    expect(params).not.toContain('https://app.example.com/');
+    expect(params).not.toContain('https://app.example.com');
   });
 });

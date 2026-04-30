@@ -239,6 +239,10 @@ describe('PATCH /api/meetings/:id/complete', () => {
     const updateCall = calls.find(([sql]) => typeof sql === 'string' && /UPDATE/i.test(sql));
     expect(updateCall![0]).toMatch(/UPDATE\s+meetings/i);
     expect(sendSurveyToCustomer).toHaveBeenCalled();
+    // companyId (1 from adminSession) must be passed — not the default
+    const [phone, , , , passedCompanyId] = (sendSurveyToCustomer as any).mock.calls[0];
+    expect(phone).toBe('971501234567');
+    expect(passedCompanyId).toBe(1);
   });
 });
 

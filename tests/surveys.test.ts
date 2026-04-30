@@ -19,9 +19,21 @@ vi.mock('../server/lib/trial', () => ({
   getTrialDays: vi.fn().mockResolvedValue(14),
 }));
 
+vi.mock('../server/lib/whatsapp', () => ({
+  sendWhatsAppText: vi.fn().mockResolvedValue(true),
+}));
+
+vi.mock('../server/routes/settings.routes', () => ({
+  getCompanyBranding: vi.fn().mockResolvedValue({ appUrl: 'https://app.example.com', brandName: 'ACME' }),
+  registerSettingsRoutes: vi.fn(),
+  getWorkHours: vi.fn().mockResolvedValue({}),
+}));
+
 import { pool } from '../server/db';
 import { requireAdmin, requireAuth } from '../server/middleware/auth';
 import { adminSession, buildApp } from './helpers/app';
+import { sendWhatsAppText } from '../server/lib/whatsapp';
+import { getCompanyBranding } from '../server/routes/settings.routes';
 
 async function buildSurveysApp() {
   const { app, setSession } = buildApp();
@@ -102,5 +114,68 @@ describe('POST /api/survey/:token/submit', () => {
       .post('/api/survey/valid-token/submit')
       .send({ answers: [{ question_id: 1, answer_text: 'Great!' }] });
     expect([200, 201]).toContain(res.status);
+  });
+});
+
+// ── sendSurveyToCustomer unit tests ──────────────────────────────────────────
+
+describe('sendSurveyToCustomer', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (pool.query as any).mockReset();
+  });
+
+  it('calls sendWhatsAppText with the customer phone and a message containing the survey link', async () => {
+    const { sendSurveyToCustomer } = await import('../server/surveys');
+    // survey lookup returns an active survey; INSERT returns nothing relevant
+    (pool.query as any)
+      .mockResolvedValueOnce({ rows: [{ id: 42 }] })  // SELECT active survey
+      .mockResolvedValueOnce({ rows: [] });            // INSERT survey_response
+
+    await sendSurveyToCustomer('971501234567', null, null, 1, 1);
+
+    expect(sendWhatsAppText).toHaveBeenCalledOnce();
+    const [passedCompanyId, passedPhone, passedMessage] = (sendWhatsAppText as any).mock.calls[0];
+    expect(passedCompanyId).toBe(1);
+    expect(passedPhone).toBe('971501234567');
+    expect(passedMessage).toContain('https://app.example.com/survey/');
+    expect(passedMessage).toContain('ACME');
+  });
+
+  it('uses the passed companyId for the survey lookup — not the default 1', async () => {
+    const { sendSurveyToCustomer } = await import('../server/surveys');
+    (pool.query as any)
+      .mockResolvedValueOnce({ rows: [{ id: 99 }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    await sendSurveyToCustomer('971509999999', null, null, null, 7);
+
+    const surveyQuery = (pool.query as any).mock.calls[0];
+    expect(surveyQuery[1]).toContain(7); // companyId=7 in SELECT params
+    expect(sendWhatsAppText).toHaveBeenCalledOnce();
+    expect((sendWhatsAppText as any).mock.calls[0][0]).toBe(7); // passed to sendWhatsAppText
+  });
+
+  it('does not send if no active survey exists for the company', async () => {
+    const { sendSurveyToCustomer } = await import('../server/surveys');
+    (pool.query as any).mockResolvedValueOnce({ rows: [] }); // no active survey
+
+    await sendSurveyToCustomer('971501234567', null, null, null, 1);
+
+    expect(sendWhatsAppText).not.toHaveBeenCalled();
+  });
+
+  it('does not throw if getCompanyBranding fails — still sends message with fallback branding', async () => {
+    const { sendSurveyToCustomer } = await import('../server/surveys');
+    (getCompanyBranding as any).mockRejectedValueOnce(new Error('app_url not set'));
+    (pool.query as any)
+      .mockResolvedValueOnce({ rows: [{ id: 42 }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    await expect(sendSurveyToCustomer('971501234567', null, null, 1, 1)).resolves.not.toThrow();
+    // Should still send — with fallback brandName and no link
+    expect(sendWhatsAppText).toHaveBeenCalledOnce();
+    const message = (sendWhatsAppText as any).mock.calls[0][2];
+    expect(message).toContain('Our team');
   });
 });

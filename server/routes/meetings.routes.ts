@@ -199,7 +199,7 @@ export function registerMeetingRoutes(app: Express): void {
       if (result.rows.length === 0) return res.status(404).json({ message: 'Meeting not found' });
       const meeting = result.rows[0];
       logger.info('Meeting completed', `meetingId: ${req.params.id}`);
-      sendSurveyToCustomer(meeting.customer_phone, null, null, meeting.id);
+      sendSurveyToCustomer(meeting.customer_phone, null, null, meeting.id, companyId);
       res.json(meeting);
     } catch (err: any) {
       logger.error('completeMeeting failed', `meetingId: ${req.params.id}, error: ${err.message}`);
