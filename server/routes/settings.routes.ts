@@ -182,40 +182,35 @@ export function registerSettingsRoutes(app: Express): void {
     }
   });
 
-  // GET /api/settings/branding — return app_url and brand_name (admin only)
+  // GET /api/settings/branding — return brand_name (admin only)
   app.get('/api/settings/branding', requireAuth, requireAdmin, async (req: any, res: any) => {
     try {
       const companyId: number = req.companyId;
       const result = await pool.query(
-        `SELECT app_url, brand_name FROM companies WHERE id = $1`,
+        `SELECT brand_name FROM companies WHERE id = $1`,
         [companyId]
       );
       const row = result.rows[0] ?? {};
-      res.json({ appUrl: row.app_url ?? '', brandName: row.brand_name ?? '' });
+      res.json({ brandName: row.brand_name ?? '' });
     } catch (err: any) {
       logger.error('getBranding failed', err.message);
       res.status(500).json({ message: 'Internal error' });
     }
   });
 
-  // PUT /api/settings/branding — save app_url and brand_name (admin only)
+  // PUT /api/settings/branding — save brand_name (admin only)
   app.put('/api/settings/branding', requireAuth, requireAdmin, async (req: any, res: any) => {
     try {
       const companyId: number = req.companyId;
-      const appUrl = typeof req.body?.appUrl === 'string' ? req.body.appUrl.trim() : '';
       const brandName = typeof req.body?.brandName === 'string' ? req.body.brandName.trim() : '';
 
-      if (!appUrl) return res.status(400).json({ message: 'appUrl is required' });
       if (!brandName) return res.status(400).json({ message: 'brandName is required' });
-      if (!/^https?:\/\/.+/.test(appUrl)) {
-        return res.status(400).json({ message: 'appUrl must start with http:// or https://' });
-      }
 
       await pool.query(
-        `UPDATE companies SET app_url = $1, brand_name = $2 WHERE id = $3`,
-        [appUrl.replace(/\/$/, ''), brandName, companyId]
+        `UPDATE companies SET brand_name = $1 WHERE id = $2`,
+        [brandName, companyId]
       );
-      logger.info('setBranding', `companyId: ${companyId}, appUrl: ${appUrl}`);
+      logger.info('setBranding', `companyId: ${companyId}, brandName: ${brandName}`);
       res.json({ success: true });
     } catch (err: any) {
       logger.error('setBranding failed', err.message);

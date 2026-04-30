@@ -269,9 +269,6 @@ function WhatsAppPanel({ t }: { t: (k: string) => string }) {
 
 function BrandingPanel({ t }: { t: (k: string) => string }) {
   const [brandName, setBrandName] = useState("");
-  // app_url is still sent on save so the backend value is preserved, but the
-  // input is intentionally hidden from the UI.
-  const [appUrl, setAppUrl] = useState("");
   const [loadError, setLoadError] = useState("");
   const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
   const [saveError, setSaveError] = useState("");
@@ -279,9 +276,8 @@ function BrandingPanel({ t }: { t: (k: string) => string }) {
   useEffect(() => {
     fetch("/api/settings/branding", { credentials: "include" })
       .then(r => r.ok ? r.json() : Promise.reject(r))
-      .then((data: { brandName: string; appUrl: string }) => {
+      .then((data: { brandName: string }) => {
         setBrandName(data.brandName || "");
-        setAppUrl(data.appUrl || "");
       })
       .catch(() => setLoadError(t("settingsLoadError")));
   }, []);
@@ -294,7 +290,7 @@ function BrandingPanel({ t }: { t: (k: string) => string }) {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ brandName, appUrl }),
+        body: JSON.stringify({ brandName }),
       });
       if (!resp.ok) {
         const d = await resp.json().catch(() => ({}));
@@ -523,8 +519,8 @@ function BrandingWarningBanner() {
   useEffect(() => {
     fetch("/api/settings/branding", { credentials: "include" })
       .then(r => r.ok ? r.json() : null)
-      .then((data: { appUrl: string; brandName: string } | null) => {
-        if (data && (!data.appUrl || !data.brandName)) setShow(true);
+      .then((data: { brandName: string } | null) => {
+        if (data && !data.brandName) setShow(true);
       })
       .catch(() => {});
   }, []);
@@ -533,7 +529,7 @@ function BrandingWarningBanner() {
   return (
     <div className="mb-6 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 text-sm text-amber-800 flex items-center gap-2">
       <span>⚠</span>
-      <span>Booking links won't work until you set your App URL and Brand Name below.</span>
+      <span>Please set your Brand Name in Settings → Branding.</span>
     </div>
   );
 }

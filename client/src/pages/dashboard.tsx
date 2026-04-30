@@ -13,8 +13,8 @@ function BrandingWarning() {
   useEffect(() => {
     fetch("/api/settings/branding", { credentials: "include" })
       .then(r => r.ok ? r.json() : null)
-      .then((data: { appUrl: string; brandName: string } | null) => {
-        if (data && (!data.appUrl || !data.brandName)) setShow(true);
+      .then((data: { brandName: string } | null) => {
+        if (data && !data.brandName) setShow(true);
       })
       .catch(() => {});
   }, []);
@@ -24,7 +24,7 @@ function BrandingWarning() {
     <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-sm text-amber-800 flex items-center gap-2">
       <span>⚠</span>
       <span>
-        Booking links won't work until you set your App URL in{" "}
+        Please set your Brand Name in{" "}
         <a href="/settings" className="underline font-medium">Settings → Branding</a>.
       </span>
     </div>
