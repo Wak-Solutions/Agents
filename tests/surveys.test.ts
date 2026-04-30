@@ -78,14 +78,40 @@ describe('POST /api/surveys', () => {
 
   it('creates survey and returns 201', async () => {
     const { app, setSession } = await buildSurveysApp();
-    (pool.query as any).mockResolvedValue({
-      rows: [{ id: 1, title: 'Post-chat survey', is_active: false, company_id: 1 }],
-    });
+    // First call: UPDATE deactivate existing; second: INSERT returning new row
+    (pool.query as any)
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: 1, title: 'Post-chat survey', is_active: true, company_id: 1 }] });
     setSession(adminSession);
     const res = await request(app)
       .post('/api/surveys')
       .send({ title: 'Post-chat survey', questions: [] });
     expect(res.status).toBe(201);
+    expect(res.body.is_active).toBe(true);
+  });
+
+  it('new survey INSERT sets is_active=true and deactivates prior active survey', async () => {
+    const { app, setSession } = await buildSurveysApp();
+    (pool.query as any)
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [{ id: 2, title: 'New Survey', is_active: true, company_id: 1 }] });
+    setSession(adminSession);
+    await request(app).post('/api/surveys').send({ title: 'New Survey' });
+
+    const calls: any[][] = (pool.query as any).mock.calls;
+
+    const deactivateCall = calls.find(
+      ([sql]) => typeof sql === 'string' && /UPDATE\s+surveys/i.test(sql) && /is_active\s*=\s*false/i.test(sql)
+    );
+    expect(deactivateCall).toBeDefined();
+    expect(deactivateCall![1]).toContain(1); // companyId scoped
+
+    const insertCall = calls.find(
+      ([sql]) => typeof sql === 'string' && /INSERT\s+INTO\s+surveys/i.test(sql)
+    );
+    expect(insertCall).toBeDefined();
+    expect(insertCall![0]).toMatch(/is_active/i);
+    expect(insertCall![0]).toMatch(/true/i);
   });
 });
 

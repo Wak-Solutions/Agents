@@ -200,8 +200,14 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
         title: z.string().min(1),
         description: z.string().optional().default(''),
       }).parse(req.body);
+      // Deactivate any existing active survey first so the unique index
+      // (one_active_survey) is satisfied before the INSERT.
+      await pool.query(
+        `UPDATE surveys SET is_active=false, updated_at=NOW() WHERE company_id=$1`,
+        [companyId]
+      );
       const result = await pool.query(
-        `INSERT INTO surveys (title, description, company_id) VALUES ($1, $2, $3) RETURNING *`,
+        `INSERT INTO surveys (title, description, company_id, is_active) VALUES ($1, $2, $3, true) RETURNING *`,
         [title, description, companyId]
       );
       res.status(201).json(result.rows[0]);
