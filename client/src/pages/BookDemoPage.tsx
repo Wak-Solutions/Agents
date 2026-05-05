@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
+import { apiRequest } from "@/lib/queryClient";
 import { CalendarDays, Clock, CheckCircle2, ChevronLeft, AlertCircle, Video } from "lucide-react";
 
 interface DaySlots {
@@ -51,12 +52,7 @@ export default function BookDemoPage() {
     setConfirming(true);
     setErrorMsg("");
     try {
-      const res = await fetch("/api/demo-booking/book", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ date: selectedDate, time: selectedTime }),
-      });
+      const res = await apiRequest("POST", "/api/demo-booking/book", { date: selectedDate, time: selectedTime });
       const data = await res.json();
       if (!res.ok) {
         setErrorMsg(data.message || "Booking failed. Please try another slot.");
