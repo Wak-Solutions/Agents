@@ -12,12 +12,31 @@
  */
 
 import bcrypt from 'bcrypt';
+import { z } from 'zod';
 import type { Express } from 'express';
 import { pool } from '../db';
 import { requireAuth } from '../middleware/auth';
 import { createLogger } from '../lib/logger';
 import { sendEmail } from '../email';
 import { getCompanyBranding } from './settings.routes';
+
+const RegisterStep1Schema = z.object({
+  firstName: z.string().min(1).max(100),
+  lastName:  z.string().min(1).max(100),
+  email:     z.string().email().max(255).optional().or(z.literal('')),
+  phone:     z.string().regex(/^\+?[0-9]{7,15}$/),
+  password:  z.string().min(8).max(128),
+});
+
+const InviteSchema = z.object({
+  agents: z.array(
+    z.object({
+      email: z.string().email().max(255),
+      name:  z.string().min(1).max(100),
+      role:  z.string().optional(),
+    })
+  ).min(1).max(50),
+});
 
 const logger = createLogger('register');
 
@@ -57,14 +76,11 @@ export function registerRegistrationRoutes(app: Express): void {
 
   // ── Step 1: Create account ──────────────────────────────────────────────
   app.post('/api/register', async (req: any, res: any) => {
-    const { firstName, lastName, email, password, phone } = req.body;
-
-    if (!firstName || !lastName || !phone || !password) {
-      return res.status(400).json({ error: 'Missing required fields' });
+    const parsed = RegisterStep1Schema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ error: parsed.error.issues[0]?.message ?? 'Invalid input' });
     }
-    if (password.length < 8) {
-      return res.status(400).json({ error: 'Password must be at least 8 characters' });
-    }
+    const { firstName, lastName, email, password, phone } = parsed.data;
 
     const client = await pool.connect();
     try {
@@ -91,6 +107,10 @@ export function registerRegistrationRoutes(app: Express): void {
         await client.query('ROLLBACK');
         return res.status(409).json({ error: 'An account with this mobile number already exists' });
       }
+
+      // Sync sequences before INSERT to guard against drift from manual DB ops.
+      await client.query(`SELECT setval('companies_id_seq', COALESCE((SELECT MAX(id) FROM companies), 0) + 1, false)`);
+      await client.query(`SELECT setval('agents_id_seq',   COALESCE((SELECT MAX(id) FROM agents),    0) + 1, false)`);
 
       // 1. Create company (Removed 'plan' and 'trial_ends_at' columns here)
       const companyName = `${firstName} ${lastName}'s Company`;
@@ -148,6 +168,13 @@ export function registerRegistrationRoutes(app: Express): void {
       await client.query('ROLLBACK');
       if (err.code === '23505' && err.constraint === 'agents_phone_uniq') {
         return res.status(409).json({ error: 'An account with this phone number already exists.' });
+      }
+      if (err.code === '23505' &&
+          (err.constraint === 'companies_pkey' || err.constraint === 'agents_pkey')) {
+        logger.warn('PK collision on registration — resyncing sequences', `constraint: ${err.constraint}`);
+        await pool.query(`SELECT setval('companies_id_seq', (SELECT MAX(id) FROM companies), true)`);
+        await pool.query(`SELECT setval('agents_id_seq',   (SELECT MAX(id) FROM agents),    true)`);
+        return res.status(503).json({ error: 'Registration temporarily unavailable. Please try again.' });
       }
       logger.error('Registration failed', `error: ${err.message}`);
       res.status(500).json({ error: 'Registration failed' });
@@ -286,7 +313,11 @@ export function registerRegistrationRoutes(app: Express): void {
 
   // ── Step 5: Invite agents ───────────────────────────────────────────────
   app.post('/api/register/invite', requireAuth, async (req: any, res: any) => {
-    const { agents } = req.body;
+    const parsedInvite = InviteSchema.safeParse(req.body);
+    if (!parsedInvite.success) {
+      return res.status(400).json({ error: parsedInvite.error.issues[0]?.message ?? 'Invalid input' });
+    }
+    const { agents } = parsedInvite.data;
     const companyId = req.companyId;
     const invited: Array<{ email: string }> = [];
 

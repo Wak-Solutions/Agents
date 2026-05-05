@@ -124,6 +124,9 @@ export function registerCustomerRoutes(app: Express): void {
   // GET /api/customers/:phone/journey — full sorted timeline for one customer
   app.get('/api/customers/:phone/journey', requireAdmin, async (req: any, res: any) => {
     const phone = decodeURIComponent(req.params.phone);
+    if (!/^\+?[0-9]{7,15}$/.test(phone)) {
+      return res.status(400).json({ message: 'Invalid phone number format' });
+    }
     const companyId = req.companyId;
     try {
       const [msgRes, escRes, meetRes, survRes, ordRes, contactRes] = await Promise.all([
@@ -405,34 +408,46 @@ export function registerCustomerRoutes(app: Express): void {
   app.post('/api/contacts/import', requireAdmin, async (req: any, res: any) => {
     const { contacts: rows } = req.body;
     if (!Array.isArray(rows)) return res.status(400).json({ message: 'Invalid payload' });
+    if (rows.length > 10_000) return res.status(400).json({ message: 'Import exceeds 10,000 row limit' });
     const companyId = req.companyId;
     let added = 0, duplicates = 0, invalid = 0;
-    for (const row of rows) {
-      const phone = String(row.phone || '').trim().replace(/[\s\-().]/g, '');
-      const name  = String(row.name  || '').trim() || null;
-      if (!/^\+?\d{7,15}$/.test(phone)) { invalid++; continue; }
-      try {
-        const upsert = await pool.query(
-          `INSERT INTO contacts (phone_number, source)
-           VALUES ($1, 'imported')
-           ON CONFLICT (phone_number) DO NOTHING
-           RETURNING id`,
-          [phone]
-        );
-        const contactId: number = upsert.rows[0]?.id ?? (
-          await pool.query(`SELECT id FROM contacts WHERE phone_number = $1`, [phone])
-        ).rows[0].id;
-        const link = await pool.query(
-          `INSERT INTO contact_companies (contact_id, company_id, source, name)
-           VALUES ($1, $2, 'imported', $3)
-           ON CONFLICT (contact_id, company_id) DO NOTHING
-           RETURNING contact_id`,
-          [contactId, companyId, name]
-        );
-        if ((link.rowCount ?? 0) > 0) added++; else duplicates++;
-      } catch (_) {
-        invalid++;
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      for (const row of rows) {
+        const phone = String(row.phone || '').trim().replace(/[\s\-().]/g, '');
+        const name  = String(row.name  || '').trim() || null;
+        if (!/^\+?\d{7,15}$/.test(phone)) { invalid++; continue; }
+        try {
+          const upsert = await client.query(
+            `INSERT INTO contacts (phone_number, source)
+             VALUES ($1, 'imported')
+             ON CONFLICT (phone_number) DO NOTHING
+             RETURNING id`,
+            [phone]
+          );
+          const contactId: number = upsert.rows[0]?.id ?? (
+            await client.query(`SELECT id FROM contacts WHERE phone_number = $1`, [phone])
+          ).rows[0].id;
+          const link = await client.query(
+            `INSERT INTO contact_companies (contact_id, company_id, source, name)
+             VALUES ($1, $2, 'imported', $3)
+             ON CONFLICT (contact_id, company_id) DO NOTHING
+             RETURNING contact_id`,
+            [contactId, companyId, name]
+          );
+          if ((link.rowCount ?? 0) > 0) added++; else duplicates++;
+        } catch (_) {
+          invalid++;
+        }
       }
+      await client.query('COMMIT');
+    } catch (err: any) {
+      await client.query('ROLLBACK').catch(() => {});
+      logger.error('importContacts failed', err.message);
+      return res.status(500).json({ message: 'Internal error' });
+    } finally {
+      client.release();
     }
     logger.info('Contacts import complete', `added: ${added}, duplicates: ${duplicates}, invalid: ${invalid}`);
     res.json({ added, duplicates, invalid });

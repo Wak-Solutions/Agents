@@ -152,7 +152,7 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
       const { name, email, password, role } = z.object({
         name:     z.string().min(1),
         email:    z.string().email(),
-        password: z.string().min(6),
+        password: z.string().min(8),
         role:     z.enum(['agent', 'admin']),
       }).parse(req.body);
       const hash = await bcrypt.hash(password, 10);
@@ -242,7 +242,7 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
   app.patch('/api/agents/:id/reset-password', requireAdmin, async (req: any, res: any) => {
     try {
       const companyId: number = req.companyId;
-      const { new_password } = z.object({ new_password: z.string().min(6) }).parse(req.body);
+      const { new_password } = z.object({ new_password: z.string().min(8) }).parse(req.body);
       const hash = await bcrypt.hash(new_password, 10);
       const result = await pool.query(
         `UPDATE agents SET password_hash=$1 WHERE id=$2 AND company_id=$3 RETURNING id`,

@@ -38,6 +38,7 @@ import { ensureContactCompanies } from './lib/contacts-migration';
 import { ensureAgentsTable, registerAgentRoutes } from './agents';
 import { ensureSurveyTables, registerSurveyRoutes } from './surveys';
 import { requireAuth, requireAdmin }   from './middleware/auth';
+import { setCsrfCookie, verifyCsrf }   from './middleware/csrf';
 
 export async function registerRoutes(
   httpServer: Server,
@@ -103,6 +104,7 @@ export async function registerRoutes(
   app.use('/api/book/', bookingLimiter);
   app.use('/api/register', authLimiter);
   app.use('/api/auth/login', authLimiter);
+  app.use('/api/auth/webauthn/login/verify', authLimiter);
 
   // ── Trial config endpoints ────────────────────────────────────────────────
   // Public: lets the landing/register pages render the trial length without
@@ -128,6 +130,37 @@ export async function registerRoutes(
       console.error('[ERROR] /api/me/trial failed:', err.message);
       res.status(500).json({ message: 'Internal error' });
     }
+  });
+
+  // ── CSRF protection ───────────────────────────────────────────────────────
+  // setCsrfCookie runs on every request to keep the cookie fresh.
+  // verifyCsrf is applied only to authenticated state-changing methods;
+  // webhook routes (no session) and public routes are intentionally excluded.
+  app.use(setCsrfCookie);
+  app.use((req, res, next) => {
+    const method = req.method;
+    if (method !== 'POST' && method !== 'PUT' && method !== 'PATCH' && method !== 'DELETE') {
+      return next();
+    }
+    const webhookPaths = [
+      '/api/incoming',
+      '/api/human-requested',
+      '/api/meetings/create-token',
+      '/api/book/',
+    ];
+    if (webhookPaths.some((p) => req.path.startsWith(p))) return next();
+    const publicPaths = [
+      '/api/auth/login',
+      '/api/auth/logout',
+      '/api/auth/webauthn',
+      '/api/register',
+      '/api/auth/forgot-password',
+      '/api/auth/reset-password',
+      '/api/push/subscribe',
+    ];
+    if (publicPaths.some((p) => req.path.startsWith(p))) return next();
+    if (!req.session.authenticated) return next();
+    verifyCsrf(req, res, next);
   });
 
   // ── Route modules ─────────────────────────────────────────────────────────

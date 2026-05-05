@@ -10,6 +10,7 @@
  */
 
 import type { Express } from 'express';
+import rateLimit from 'express-rate-limit';
 import OpenAI from 'openai';
 
 import { pool } from '../db';
@@ -189,11 +190,28 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
     }
   });
 
+  const openAiLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 10,
+    keyGenerator: (req: any) => `openai:${req.companyId ?? req.ip ?? 'unknown'}`,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: 'Too many AI requests, try again later' },
+  });
+
   // POST /api/chatbot-config — save config (compiles structured → prompt)
   app.post('/api/chatbot-config', requireAuth, async (req: any, res: any) => {
     try {
       const { structured_config, override_active, raw_prompt, demo_conversation } = req.body;
       const companyId: number = req.companyId;
+
+      if (raw_prompt && raw_prompt.length > 50_000) {
+        return res.status(400).json({ message: 'System prompt exceeds 50,000 character limit' });
+      }
+
+      if (structured_config && JSON.stringify(structured_config).length > 100_000) {
+        return res.status(400).json({ message: 'Structured config exceeds 100,000 character limit' });
+      }
 
       // Reject payloads with menu nesting deeper than 3 levels
       const menuItems: any[] = (structured_config || {}).menuConfig || [];
@@ -239,7 +257,7 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
 
   // POST /api/chatbot-config/generate-conversation
   // Calls OpenAI to produce a realistic demo WhatsApp conversation JSON array.
-  app.post('/api/chatbot-config/generate-conversation', requireAuth, async (req: any, res: any) => {
+  app.post('/api/chatbot-config/generate-conversation', requireAuth, openAiLimiter, async (req: any, res: any) => {
     try {
       const { companyName, description, services, feedback, menuConfig } = req.body;
       if (!process.env.OPENAI_API_KEY) {
@@ -310,7 +328,7 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
   // POST /api/chatbot-config/suggest
   // Takes a natural-language suggestion, asks OpenAI to return an updated
   // structured_config JSON, then saves using the exact same flow as POST /api/chatbot-config.
-  app.post('/api/chatbot-config/suggest', requireAuth, async (req: any, res: any) => {
+  app.post('/api/chatbot-config/suggest', requireAuth, openAiLimiter, async (req: any, res: any) => {
     try {
       const { suggestion } = req.body;
       const companyId: number = req.companyId;

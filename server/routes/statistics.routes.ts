@@ -64,7 +64,7 @@ export function registerStatisticsRoutes(app: Express): void {
       const msgBlock = msgs
         .map(
           (m) =>
-            `[${new Date(m.created_at!).toLocaleDateString()}] ${m.customer_phone}: ${m.message_text.slice(0, 200)}`
+            `[${new Date(m.created_at!).toLocaleDateString()}] ${m.customer_phone.replace(/^(.*)(.{4})$/, '****$2')}: ${m.message_text.slice(0, 200)}`
         )
         .join('\n');
 

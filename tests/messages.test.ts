@@ -19,10 +19,13 @@ vi.mock('../server/lib/trial', () => ({
   getTrialDays: vi.fn().mockResolvedValue(14),
 }));
 
+const _notifiedSet = new Set<string>();
 vi.mock('../server/push', () => ({
   notifyAgent: vi.fn().mockResolvedValue(undefined),
   notifyAll: vi.fn().mockResolvedValue(undefined),
-  notifiedChats: new Set(),
+  addNotified: vi.fn((k: string) => { _notifiedSet.add(k); }),
+  hasNotified: vi.fn((k: string) => _notifiedSet.has(k)),
+  deleteNotified: vi.fn((k: string) => { _notifiedSet.delete(k); }),
   VAPID_PUBLIC_KEY: '',
 }));
 
@@ -80,10 +83,9 @@ describe('POST /api/incoming', () => {
 // ── TEN-020: cross-tenant push key collision ─────────────────────────────────
 
 describe('POST /api/incoming — notifiedChats keyed by companyId+phone', () => {
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.clearAllMocks();
-    const pushMod = await import('../server/push');
-    (pushMod.notifiedChats as Set<string>).clear();
+    _notifiedSet.clear();
   });
 
   it('does NOT suppress new-chat notification when same phone hits two tenants', async () => {

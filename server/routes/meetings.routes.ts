@@ -12,7 +12,6 @@ import type { Express } from 'express';
 
 import { pool } from '../db';
 import { requireAuth } from '../middleware/auth';
-import { requireWebhookSecret } from '../middleware/auth';
 import { resolveCompanyFromSecret } from '../helpers/resolveCompanyFromSecret';
 import { notifyAgent, notifyAll } from '../push';
 import { notifyManagerNewBooking, sendEmail } from '../email';
@@ -446,9 +445,6 @@ export function registerMeetingRoutes(app: Express): void {
       if (new Date(meeting.token_expires_at) < new Date()) {
         return res.status(410).json({ message: 'This booking link has expired.' });
       }
-      if (meeting.scheduled_at) {
-        return res.status(409).json({ message: 'This meeting is already booked.' });
-      }
 
       // Validate requested slot is within company work hours
       const workHours = await getWorkHours(companyId);
@@ -461,36 +457,7 @@ export function registerMeetingRoutes(app: Express): void {
       const h = time === '00:00' ? 24 : parseInt(time.split(':')[0]);
       const scheduledUtc = new Date(Date.UTC(yr, mo - 1, dy, h - 3, 0, 0, 0));
 
-      // Verify slot is still available. For Tenant 1 the demo calendar shares
-      // the same slot space, so a demo booking also blocks regular bookings.
-      const [takenRes, blockedRes] = await Promise.all([
-        pool.query(
-          `SELECT 1 FROM meetings
-           WHERE scheduled_at >= $1 AND scheduled_at < $2
-             AND status NOT IN ('completed', 'cancelled') AND id != $3
-             AND company_id = $4
-           UNION
-           SELECT 1 FROM demo_bookings
-           WHERE $4 = 1
-             AND scheduled_at >= $1 AND scheduled_at < $2
-             AND status NOT IN ('completed', 'cancelled')`,
-          [scheduledUtc, new Date(scheduledUtc.getTime() + 3600000), meeting.id, companyId]
-        ),
-        // Multi-tenant isolation: check only this company's blocked slots
-        pool.query(
-          'SELECT 1 FROM blocked_slots WHERE company_id=$1 AND date=$2::date AND time=$3',
-          [companyId, new Date(Date.UTC(yr, mo - 1, dy) - KSA_OFFSET_MS).toISOString().slice(0, 10), time]
-        ),
-      ]);
-
-      if (takenRes.rows.length > 0) {
-        return res.status(409).json({ message: 'This time slot was just taken. Please choose another.' });
-      }
-      if (blockedRes.rows.length > 0) {
-        return res.status(409).json({ message: 'This slot is not available. Please choose another.' });
-      }
-
-      // Create Daily.co room
+      // Create Daily.co room before acquiring lock (external call, keep outside tx)
       const room = await createDailyRoom();
       const meetingLink = room.url;
 
@@ -506,10 +473,67 @@ export function registerMeetingRoutes(app: Express): void {
       }
       const brandedLink = `${appUrl}/meeting/${meeting.meeting_token}`;
 
-      await pool.query(
-        `UPDATE meetings SET meeting_link=$1, scheduled_at=$2, link_sent=FALSE, customer_email=$3 WHERE id=$4 AND company_id=$5`,
-        [meetingLink, scheduledUtc, customerEmail || null, meeting.id, companyId]
-      );
+      const client = await pool.connect();
+      try {
+        await client.query('BEGIN');
+
+        // Lock the meeting row to serialize concurrent booking attempts
+        const lockResult = await client.query(
+          `SELECT id, scheduled_at FROM meetings WHERE meeting_token = $1 FOR UPDATE`,
+          [token]
+        );
+        if (lockResult.rows.length === 0) {
+          await client.query('ROLLBACK');
+          return res.status(404).json({ message: 'Not found' });
+        }
+        if (lockResult.rows[0].scheduled_at) {
+          await client.query('ROLLBACK');
+          return res.status(409).json({ message: 'This meeting is already booked.' });
+        }
+
+        // Verify slot is still available. For Tenant 1 the demo calendar shares
+        // the same slot space, so a demo booking also blocks regular bookings.
+        const [takenRes, blockedRes] = await Promise.all([
+          client.query(
+            `SELECT 1 FROM meetings
+             WHERE scheduled_at >= $1 AND scheduled_at < $2
+               AND status NOT IN ('completed', 'cancelled') AND id != $3
+               AND company_id = $4
+             UNION
+             SELECT 1 FROM demo_bookings
+             WHERE $4 = 1
+               AND scheduled_at >= $1 AND scheduled_at < $2
+               AND status NOT IN ('completed', 'cancelled')`,
+            [scheduledUtc, new Date(scheduledUtc.getTime() + 3600000), meeting.id, companyId]
+          ),
+          // Multi-tenant isolation: check only this company's blocked slots
+          client.query(
+            'SELECT 1 FROM blocked_slots WHERE company_id=$1 AND date=$2::date AND time=$3',
+            [companyId, new Date(Date.UTC(yr, mo - 1, dy) - KSA_OFFSET_MS).toISOString().slice(0, 10), time]
+          ),
+        ]);
+
+        if (takenRes.rows.length > 0) {
+          await client.query('ROLLBACK');
+          return res.status(409).json({ message: 'This time slot was just taken. Please choose another.' });
+        }
+        if (blockedRes.rows.length > 0) {
+          await client.query('ROLLBACK');
+          return res.status(409).json({ message: 'This slot is not available. Please choose another.' });
+        }
+
+        await client.query(
+          `UPDATE meetings SET meeting_link=$1, scheduled_at=$2, link_sent=FALSE, customer_email=$3 WHERE id=$4 AND company_id=$5`,
+          [meetingLink, scheduledUtc, customerEmail || null, meeting.id, companyId]
+        );
+
+        await client.query('COMMIT');
+      } catch (err) {
+        await client.query('ROLLBACK');
+        throw err;
+      } finally {
+        client.release();
+      }
 
       const ksaDt = new Date(scheduledUtc.getTime() + KSA_OFFSET_MS);
       const ksaLabel = formatKsaDateTime(ksaDt);

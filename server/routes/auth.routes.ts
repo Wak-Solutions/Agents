@@ -94,12 +94,12 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
       }
       const agent = agentRes.rows[0];
       if (!agent.is_active) {
-        logger.warn('Login rejected — account deactivated', `email: ${email}`);
+        logger.warn('Login rejected — account deactivated', `email: ${email.replace(/^[^@]+/, '***')}`);
         return res.status(403).json({ error: 'Your account has been deactivated. Please contact your administrator.' });
       }
       const valid = await bcrypt.compare(password, agent.password_hash);
       if (!valid) {
-        logger.warn('Login failed — wrong password', `email: ${email}`);
+        logger.warn('Login failed — wrong password', `email: ${email.replace(/^[^@]+/, '***')}`);
         return res.status(401).json({ message: 'Invalid credentials' });
       }
       // Trial gate: block login for companies whose trial has expired.
@@ -126,6 +126,7 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
       req.session.companyId = agent.company_id;
       req.session.role = agent.role;
       req.session.agentName = agent.name;
+      req.session.isActive = true;
       (req.session as any).termsAcceptedAt = termsAcceptedAt;
       return req.session.save((err: any) => {
         if (err) {
@@ -382,6 +383,7 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
         req.session.companyId = stored.company_id;
         req.session.role = stored.role;
         req.session.agentName = stored.agent_name;
+        req.session.isActive = true;
         (req.session as any).termsAcceptedAt = waTermsAcceptedAt;
         (req.session as any).webauthnChallenge = undefined;
         req.session.save((err: any) => {
@@ -552,7 +554,12 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
         [tokenHash]
       );
       const reset = r.rows[0];
-      if (!reset || reset.used_at || new Date(reset.expires_at) < new Date()) {
+      if (!reset) {
+        // Normalize timing so token existence cannot be inferred from response time.
+        await bcrypt.compare('dummy', '$2b$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ012345');
+        return res.status(400).json({ message: 'This reset link is invalid or has expired.' });
+      }
+      if (reset.used_at || new Date(reset.expires_at) < new Date()) {
         return res.status(400).json({ message: 'This reset link is invalid or has expired.' });
       }
 

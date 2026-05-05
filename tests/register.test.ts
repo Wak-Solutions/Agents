@@ -131,13 +131,15 @@ describe('POST /api/register — phone uniqueness', () => {
     (pool.connect as any).mockResolvedValue(client);
 
     client.query
-      .mockResolvedValueOnce(undefined) // BEGIN
-      .mockResolvedValueOnce({ rows: [] }) // phone check: no existing agent
+      .mockResolvedValueOnce(undefined)           // BEGIN
+      .mockResolvedValueOnce({ rows: [] })         // phone check: no existing agent
+      .mockResolvedValueOnce({ rows: [{ setval: 11 }] }) // setval companies_id_seq
+      .mockResolvedValueOnce({ rows: [{ setval: 9  }] }) // setval agents_id_seq
       .mockResolvedValueOnce({ rows: [{ id: 10 }] }) // INSERT companies
-      .mockResolvedValueOnce({ rows: [] }) // INSERT subscriptions
+      .mockResolvedValueOnce({ rows: [] })         // INSERT subscriptions
       .mockResolvedValueOnce({ rows: [{ id: 20 }] }) // INSERT agents
-      .mockResolvedValueOnce({ rows: [] }) // INSERT chatbot_config
-      .mockResolvedValueOnce(undefined); // COMMIT
+      .mockResolvedValueOnce({ rows: [] })         // INSERT chatbot_config
+      .mockResolvedValueOnce(undefined);           // COMMIT
 
     const res = await request(app).post('/api/register').send(validBody);
     expect(res.status).toBe(200);
@@ -167,5 +169,26 @@ describe('POST /api/register — phone uniqueness', () => {
     // Not a phone constraint — falls through to generic 500
     expect(res.status).toBe(500);
     expect(res.body.error).toBe('Registration failed');
+  });
+
+  it('returns 503 and resyncs sequences on PK collision (companies_pkey)', async () => {
+    const client = makeClient();
+    (pool.connect as any).mockResolvedValue(client);
+    (pool.query as any).mockResolvedValue({ rows: [{ setval: 13 }] }); // pool.query for resyncs
+
+    const pkErr = Object.assign(new Error('duplicate key'), {
+      code: '23505',
+      constraint: 'companies_pkey',
+    });
+    client.query
+      .mockResolvedValueOnce(undefined)    // BEGIN
+      .mockResolvedValueOnce({ rows: [] }) // phone check
+      .mockResolvedValueOnce({ rows: [{ setval: 12 }] }) // setval companies_id_seq
+      .mockResolvedValueOnce({ rows: [{ setval: 10 }] }) // setval agents_id_seq
+      .mockRejectedValueOnce(pkErr);       // INSERT companies → PK collision
+
+    const res = await request(app).post('/api/register').send(validBody);
+    expect(res.status).toBe(503);
+    expect(res.body.error).toMatch(/try again/i);
   });
 });

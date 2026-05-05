@@ -7,11 +7,12 @@
  */
 
 import type { Express } from 'express';
+import rateLimit from 'express-rate-limit';
 
 import { pool } from '../db';
 import { storage } from '../storage';
-import { requireAuth, requireWebhookSecret } from '../middleware/auth';
-import { notifyAgent, notifyAll, notifiedChats } from '../push';
+import { requireAuth } from '../middleware/auth';
+import { notifyAgent, notifyAll, addNotified, hasNotified, deleteNotified } from '../push';
 import { createLogger, maskPhone } from '../lib/logger';
 import { api } from '@shared/routes';
 import { resolveCompanyFromSecret } from '../helpers/resolveCompanyFromSecret';
@@ -20,9 +21,21 @@ const logger = createLogger('messages');
 
 export function registerMessageRoutes(app: Express): void {
 
+  const messagesLimiter = rateLimit({
+    windowMs: 60 * 1000,
+    max: 30,
+    keyGenerator: (req: any) => `msgs:${req.companyId ?? req.ip ?? 'unknown'}`,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: 'Too many requests' },
+  });
+
   // GET /api/messages/:phone — conversation history
-  app.get(api.messages.list.path, requireAuth, async (req: any, res: any) => {
+  app.get(api.messages.list.path, requireAuth, messagesLimiter, async (req: any, res: any) => {
     const phone = req.params.phone;
+    if (!/^\+?[0-9]{7,15}$/.test(phone)) {
+      return res.status(400).json({ message: 'Invalid phone number format' });
+    }
     const companyId = req.companyId;
     try {
       const result = await pool.query(
@@ -175,8 +188,8 @@ export function registerMessageRoutes(app: Express): void {
       const convId: string | null = convRow.rows[0]?.conversation_id ?? null;
       const notifKey = convId ? `conv:${convId}` : `new:${companyId}:${data.customer_phone}`;
 
-      if (!notifiedChats.has(notifKey)) {
-        notifiedChats.add(notifKey);
+      if (!hasNotified(notifKey)) {
+        addNotified(notifKey);
         await notifyAll(
           {
             title: 'New Chat',
@@ -197,11 +210,15 @@ export function registerMessageRoutes(app: Express): void {
 
   // POST /api/human-requested — Python bot signals customer wants a human agent
   // Does NOT interact with the escalations table; push notification only.
-  app.post('/api/human-requested', requireWebhookSecret, async (req: any, res: any) => {
+  app.post('/api/human-requested', async (req: any, res: any) => {
     try {
-      const { customer_phone, company_id } = req.body;
+      const { customer_phone } = req.body;
       if (!customer_phone) return res.status(400).json({ message: 'customer_phone is required' });
-      const companyId = parseInt(company_id) || 1;
+      const company = await resolveCompanyFromSecret(req.headers['x-webhook-secret'] as string);
+      if (!company) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+      const companyId = company.id;
       logger.info('Human agent requested', `phone: ${maskPhone(customer_phone)}`);
       await notifyAll(
         {
@@ -230,9 +247,9 @@ export function registerMessageRoutes(app: Express): void {
       [phone, companyId]
     ).catch(() => ({ rows: [] as any[] }));
     for (const row of convRow.rows) {
-      notifiedChats.delete(`conv:${row.conversation_id}`);
+      deleteNotified(`conv:${row.conversation_id}`);
     }
-    notifiedChats.delete(`new:${companyId}:${phone}`);
+    deleteNotified(`new:${companyId}:${phone}`);
     res.json({ success: true });
   });
 }

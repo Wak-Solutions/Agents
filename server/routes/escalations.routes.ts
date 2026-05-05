@@ -10,7 +10,7 @@ import type { Express } from 'express';
 
 import { pool } from '../db';
 import { storage } from '../storage';
-import { requireAuth, requireAdmin, requireWebhookSecret } from '../middleware/auth';
+import { requireAuth, requireAdmin } from '../middleware/auth';
 import { notifyAdmins } from '../push';
 import { sendSurveyToCustomer } from '../surveys';
 import { createLogger } from '../lib/logger';

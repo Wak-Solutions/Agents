@@ -38,7 +38,19 @@ export default function DashboardLayout({
   const { lang, toggleLang, t } = useLanguage();
   const isRtl = lang === "ar";
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
   const { showBanner, showInstallPrompt, enableNotifications, dismissInstallPrompt } = usePushNotifications(isAuthenticated, isAuthLoading);
+
+  useEffect(() => {
+    const handleOnline  = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener("online",  handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online",  handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     if (!isAuthLoading && !isAuthenticated) {
@@ -108,11 +120,17 @@ export default function DashboardLayout({
       {/* ─── Desktop Sidebar ─── */}
       <aside className="hidden md:flex flex-col w-[232px] bg-[#0F510F] shrink-0">
         {/* Logo */}
-        <div className="px-4 py-5 flex items-center gap-2.5 border-b border-white/10">
-          <div className="bg-white rounded-lg px-2 py-1 shrink-0">
-            <img src="/logo.png" alt="WAK Solutions" className="h-7 w-auto" />
-          </div>
-          <span className="text-white/90 font-semibold text-sm tracking-tight">WAK Solutions</span>
+        <div className="px-4 py-5 flex items-center justify-between border-b border-white/10">
+          <Link href="/dashboard" className="flex items-center gap-2.5 cursor-pointer">
+            <div className="bg-white rounded-lg px-2 py-1 shrink-0">
+              <img src="/logo.png" alt="WAK Solutions" className="h-7 w-auto" />
+            </div>
+            <span className="text-white/90 font-semibold text-sm tracking-tight">WAK Solutions</span>
+          </Link>
+          <span
+            className={`w-2.5 h-2.5 rounded-full animate-pulse shrink-0 ${isOnline ? "bg-green-400" : "bg-yellow-400"}`}
+            title={isOnline ? "Online" : "Reconnecting..."}
+          />
         </div>
 
         {/* Nav */}
@@ -193,12 +211,16 @@ export default function DashboardLayout({
 
       {/* ─── Mobile header + menu ─── */}
       <div className="md:hidden fixed top-0 inset-x-0 z-50 bg-[#0F510F] h-[56px] flex items-center justify-between px-4 shadow-sm">
-        <div className="flex items-center gap-2.5">
+        <Link href="/dashboard" className="flex items-center gap-2.5 cursor-pointer">
           <div className="bg-white rounded-lg px-2 py-0.5 shrink-0">
             <img src="/logo.png" alt="WAK Solutions" className="h-6 w-auto" />
           </div>
           <span className="text-white/90 font-semibold text-sm">WAK Solutions</span>
-        </div>
+          <span
+            className={`w-2 h-2 rounded-full animate-pulse shrink-0 ${isOnline ? "bg-green-400" : "bg-yellow-400"}`}
+            title={isOnline ? "Online" : "Reconnecting..."}
+          />
+        </Link>
         <div className="flex items-center gap-2">
           <Link href="/book-demo">
             <a className="inline-flex items-center gap-1 text-white/80 border border-white/30 hover:border-white/60 text-[10px] font-semibold px-2 py-1 rounded-md transition-colors">

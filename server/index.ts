@@ -3,6 +3,7 @@ import express, { type Request, Response, NextFunction } from "express";
 import { createServer } from "http";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
+import helmet from "helmet";
 
 const PgSession = connectPgSimple(session);
 const app = express();
@@ -29,8 +30,12 @@ declare module "express-session" {
     companyId?: number | null;
     role?: string;
     agentName?: string;
+    csrfToken?: string;
+    isActive?: boolean;
   }
 }
+
+app.use(helmet());
 
 app.use(
   express.json({
@@ -159,6 +164,7 @@ app.use((req, res, next) => {
     `);
   } catch (err) {
     slog('WARN', 'db', 'Session table migration error (continuing)', String(err));
+    if (process.env.NODE_ENV === 'production') { slog('ERROR', 'db', 'Fatal migration failure — exiting'); process.exit(1); }
   }
 
   try {
@@ -188,6 +194,7 @@ app.use((req, res, next) => {
     slog('INFO', 'db', 'Startup migrations applied successfully');
   } catch (err) {
     slog('WARN', 'db', 'Migration error (continuing)', String(err));
+    if (process.env.NODE_ENV === 'production') { slog('ERROR', 'db', 'Fatal migration failure — exiting'); process.exit(1); }
   }
 
   // ── Additive column migrations (safe to run repeatedly) ─────────────────
@@ -199,6 +206,7 @@ app.use((req, res, next) => {
     slog('INFO', 'db', 'Column migrations applied successfully');
   } catch (err) {
     slog('WARN', 'db', 'Migration error (continuing)', String(err));
+    if (process.env.NODE_ENV === 'production') { slog('ERROR', 'db', 'Fatal migration failure — exiting'); process.exit(1); }
   }
 
   // ── conversation_id migration ────────────────────────────────────────────
@@ -223,6 +231,7 @@ app.use((req, res, next) => {
     slog('INFO', 'db', 'conversation_id migration applied');
   } catch (err) {
     slog('WARN', 'db', 'conversation_id migration error (continuing)', String(err));
+    if (process.env.NODE_ENV === 'production') { slog('ERROR', 'db', 'Fatal migration failure — exiting'); process.exit(1); }
   }
 
   // ── push_subscriptions — persists Web Push endpoints across restarts ──────
@@ -248,6 +257,7 @@ app.use((req, res, next) => {
     slog('INFO', 'db', 'push_subscriptions migration applied');
   } catch (err) {
     slog('WARN', 'db', 'push_subscriptions migration error (continuing)', String(err));
+    if (process.env.NODE_ENV === 'production') { slog('ERROR', 'db', 'Fatal migration failure — exiting'); process.exit(1); }
   }
 
   const [{ registerRoutes }, { serveStatic }] = await Promise.all([
@@ -271,7 +281,7 @@ app.use((req, res, next) => {
       return next(err);
     }
 
-    return res.status(status).json({ message });
+    return res.status(status).json({ message: 'Internal error' });
   });
 
   // importantly only setup vite in development and after
@@ -299,4 +309,13 @@ app.use((req, res, next) => {
       log(`serving on http://${host}:${port}`);
     },
   );
+
+  process.on('unhandledRejection', (reason) => {
+    logger.error('Unhandled promise rejection', reason);
+  });
+
+  process.on('uncaughtException', (err) => {
+    logger.error('Uncaught exception', err);
+    process.exit(1);
+  });
 })();

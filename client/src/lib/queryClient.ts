@@ -7,14 +7,27 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+function getCsrfToken(): string {
+  return (
+    document.cookie
+      .split('; ')
+      .find((r) => r.startsWith('csrf-token='))
+      ?.split('=')[1] ?? ''
+  );
+}
+
 export async function apiRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
 ): Promise<Response> {
+  const isStateChanging = method !== 'GET' && method !== 'HEAD';
   const res = await fetch(url, {
     method,
-    headers: data ? { "Content-Type": "application/json" } : {},
+    headers: {
+      ...(data ? { "Content-Type": "application/json" } : {}),
+      ...(isStateChanging ? { "x-csrf-token": getCsrfToken() } : {}),
+    },
     body: data ? JSON.stringify(data) : undefined,
     credentials: "include",
   });

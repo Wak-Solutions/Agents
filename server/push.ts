@@ -42,8 +42,26 @@ export { VAPID_PUBLIC_KEY };
  * Tracks which conversation sessions have already triggered a "New Chat"
  * notification. Keyed on `conv:<conversation_id>` so each new session fires
  * exactly once. Cleared via POST /api/notifications/mark-read/:phone.
+ * Capped at MAX_NOTIFIED entries; oldest entry evicted when limit is reached.
  */
-export const notifiedChats = new Set<string>();
+const MAX_NOTIFIED = 10_000;
+const notifiedChats = new Map<string, true>();
+
+export function addNotified(key: string): void {
+  if (notifiedChats.size >= MAX_NOTIFIED) {
+    const oldest = notifiedChats.keys().next().value;
+    notifiedChats.delete(oldest!);
+  }
+  notifiedChats.set(key, true);
+}
+
+export function hasNotified(key: string): boolean {
+  return notifiedChats.has(key);
+}
+
+export function deleteNotified(key: string): void {
+  notifiedChats.delete(key);
+}
 
 // ---------------------------------------------------------------------------
 // DB-backed subscription management

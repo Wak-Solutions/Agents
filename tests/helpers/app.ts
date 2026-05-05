@@ -20,6 +20,7 @@ export interface TestSession {
   companyId?: number;
   role?: string;
   agentName?: string;
+  isActive?: boolean;
 }
 
 /**
@@ -45,10 +46,15 @@ export function buildApp() {
     }),
   );
 
-  // Middleware that injects the pending session before every handler
+  // Middleware that injects the pending session before every handler.
+  // isActive defaults to true for authenticated sessions so tests that
+  // don't explicitly set it still pass requireAuth without a DB round-trip.
   app.use((req: any, _res, next) => {
     if (pendingSession) {
       Object.assign(req.session, pendingSession);
+      if (req.session.authenticated && req.session.isActive === undefined) {
+        req.session.isActive = true;
+      }
       pendingSession = null;
     }
     next();
@@ -68,6 +74,7 @@ export const adminSession: TestSession = {
   companyId: 1,
   role: 'admin',
   agentName: 'Test Admin',
+  isActive: true,
 };
 
 /** Pre-built authenticated agent (non-admin) session. */
@@ -77,4 +84,5 @@ export const agentSession: TestSession = {
   companyId: 1,
   role: 'agent',
   agentName: 'Test Agent',
+  isActive: true,
 };

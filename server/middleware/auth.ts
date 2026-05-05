@@ -10,6 +10,7 @@ import { timingSafeEqual } from 'crypto';
 import type { Request, Response, NextFunction } from 'express';
 import { isCompanyTrialExpired, getCompanyTrialStatus } from '../lib/trial';
 import { requireCompanyId, getCompanyId } from './requireCompanyId';
+import { pool } from '../db';
 
 export { requireCompanyId, getCompanyId };
 
@@ -62,6 +63,21 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     return;
   }
   req.companyId = cid;
+  // Use cached is_active from session to avoid a DB hit on every request.
+  // Fall back to DB for sessions created before this field was stored.
+  let isActive = req.session.isActive;
+  if (isActive === undefined) {
+    const agent = await pool.query(
+      'SELECT is_active FROM agents WHERE id = $1',
+      [req.session.agentId]
+    );
+    isActive = agent.rows[0]?.is_active;
+  }
+  if (!isActive) {
+    req.session.destroy(() => {});
+    res.status(401).json({ message: 'Account deactivated' });
+    return;
+  }
   if (!(await trialGate(req, res))) return;
   next();
 }
@@ -85,22 +101,3 @@ export async function requireAdmin(req: Request, res: Response, next: NextFuncti
 }
 
 export { isCompanyTrialExpired };
-
-/**
- * Reject requests that don't carry the correct x-webhook-secret header.
- * Used on routes called by the Python bot to prevent unauthorised writes.
- */
-export function requireWebhookSecret(req: Request, res: Response, next: NextFunction): void {
-  const incoming = req.headers['x-webhook-secret'];
-  const expected = process.env.WEBHOOK_SECRET;
-  if (
-    typeof incoming !== 'string' ||
-    !expected ||
-    incoming.length !== expected.length ||
-    !timingSafeEqual(Buffer.from(incoming), Buffer.from(expected))
-  ) {
-    res.status(401).json({ message: 'Invalid webhook secret' });
-    return;
-  }
-  next();
-}
