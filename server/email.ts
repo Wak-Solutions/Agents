@@ -12,43 +12,6 @@ import { getCompanyBranding } from "./routes/settings.routes";
 
 const logger = createLogger("email");
 
-// ── SMTP DISABLED — Railway blocks outbound SMTP (ports 25, 465, 587)
-// ── Kept for reference in case SMTP becomes available later
-// ── All email sending now goes through Brevo HTTP API
-//
-// import nodemailer from 'nodemailer';
-//
-// const transporter = nodemailer.createTransport({
-//   service: 'gmail',
-//   auth: {
-//     user: process.env.GMAIL_ADDRESS,
-//     pass: process.env.GMAIL_APP_PASSWORD,
-//   },
-// });
-//
-// /** Send an email via Gmail SMTP using nodemailer. Fire-and-forget safe. */
-// export async function sendEmail(to: string, subject: string, body: string): Promise<void> {
-//   const gmailAddress = process.env.GMAIL_ADDRESS;
-//   if (!gmailAddress) {
-//     logger.warn("sendEmail — GMAIL_ADDRESS not set, skipping email", `to: ${maskEmail(to)}`);
-//     return;
-//   }
-//   console.log(`[EMAIL] BEFORE send — to: ${to}, subject: ${subject}`);
-//   try {
-//     const info = await transporter.sendMail({
-//       from: `WAK Solutions <${gmailAddress}>`,
-//       to,
-//       subject,
-//       html: body,
-//     });
-//     console.log(`[EMAIL] AFTER send — messageId: ${info.messageId}`);
-//     logger.info("sendEmail — sent", `to: ${maskEmail(to)}, messageId: ${info.messageId}`);
-//   } catch (err: any) {
-//     console.log(`[EMAIL] ERROR send — ${err.message}`);
-//     logger.error("sendEmail — failed", `to: ${maskEmail(to)}, error: ${err.message}`);
-//   }
-// }
-
 const brevoClient = new BrevoClient({ apiKey: process.env.BREVO_API_KEY! });
 
 function maskEmail(email: string): string {
@@ -117,10 +80,8 @@ export async function sendEmail(to: string, subject: string, body: string): Prom
       subject,
       htmlContent: body,
     });
-    console.log('[EMAIL] Brevo sent —', to);
     logger.info("sendEmail — sent via Brevo", `to: ${maskEmail(to)}, messageId: ${(result as any)?.messageId ?? 'n/a'}`);
   } catch (error: any) {
-    console.error('[EMAIL] Brevo error —', error.message);
     logger.error("sendEmail — Brevo failed", `to: ${maskEmail(to)}, error: ${error.message}`);
   }
 }

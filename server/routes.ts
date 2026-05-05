@@ -18,7 +18,7 @@
  */
 
 import type { Express } from 'express';
-import { createServer, type Server } from 'http';
+import { type Server } from 'http';
 import rateLimit from 'express-rate-limit';
 import { pool } from './db';
 

@@ -6,7 +6,6 @@
  * receiving them as parameters or re-defining them.
  */
 
-import { timingSafeEqual } from 'crypto';
 import type { Request, Response, NextFunction } from 'express';
 import { isCompanyTrialExpired, getCompanyTrialStatus } from '../lib/trial';
 import { requireCompanyId, getCompanyId } from './requireCompanyId';

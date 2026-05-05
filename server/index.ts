@@ -4,7 +4,9 @@ import { createServer } from "http";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import helmet from "helmet";
+import { createLogger } from "./lib/logger";
 
+const logger = createLogger("index");
 const PgSession = connectPgSimple(session);
 const app = express();
 const httpServer = createServer(app);
@@ -311,11 +313,11 @@ app.use((req, res, next) => {
   );
 
   process.on('unhandledRejection', (reason) => {
-    logger.error('Unhandled promise rejection', reason);
+    logger.error('Unhandled promise rejection', String(reason));
   });
 
   process.on('uncaughtException', (err) => {
-    logger.error('Uncaught exception', err);
+    logger.error('Uncaught exception', err?.stack ?? String(err));
     process.exit(1);
   });
 })();
