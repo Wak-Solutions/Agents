@@ -215,6 +215,9 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
         }
       }
       await pool.query(`UPDATE agents SET is_active=false WHERE id=$1 AND company_id=$2`, [id, companyId]);
+      // Purge all live sessions for this agent so lockout is immediate,
+      // not deferred until their next request hits requireAuth.
+      await pool.query(`DELETE FROM session WHERE sess->>'agentId' = $1::text`, [id]);
       logger.info('Agent deactivated', `agentId: ${id}`);
       res.json({ success: true });
     } catch (err: any) {
