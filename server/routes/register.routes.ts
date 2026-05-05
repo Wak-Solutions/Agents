@@ -111,8 +111,8 @@ export function registerRegistrationRoutes(app: Express): void {
       // 1. Create company (Removed 'plan' and 'trial_ends_at' columns here)
       const companyName = `${firstName} ${lastName}'s Company`;
       const companyRes = await client.query(
-        `INSERT INTO companies (name, email, phone, onboarding_step)
-         VALUES ($1, $2, $3, 2)
+        `INSERT INTO companies (name, email, phone, onboarding_step, webhook_secret)
+         VALUES ($1, $2, $3, 2, encode(gen_random_bytes(32), 'hex'))
          RETURNING id`,
         [companyName, email || null, phone]
       );
