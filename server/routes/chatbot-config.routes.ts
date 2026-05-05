@@ -10,7 +10,7 @@
  */
 
 import type { Express } from 'express';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import OpenAI from 'openai';
 
 import { pool } from '../db';
@@ -193,7 +193,7 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
   const openAiLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 10,
-    keyGenerator: (req: any) => `openai:${req.companyId ?? req.ip ?? 'unknown'}`,
+    keyGenerator: (req: any) => req.companyId ? `openai:${req.companyId}` : ipKeyGenerator(req.ip ?? ''),
     standardHeaders: true,
     legacyHeaders: false,
     message: { message: 'Too many AI requests, try again later' },
