@@ -110,11 +110,12 @@ export function registerRegistrationRoutes(app: Express): void {
 
       // 1. Create company (Removed 'plan' and 'trial_ends_at' columns here)
       const companyName = `${firstName} ${lastName}'s Company`;
+      const appUrl = process.env.APP_URL || (req.headers.origin as string) || '';
       const companyRes = await client.query(
-        `INSERT INTO companies (name, email, phone, onboarding_step, webhook_secret)
-         VALUES ($1, $2, $3, 2, encode(gen_random_bytes(32), 'hex'))
+        `INSERT INTO companies (name, email, phone, onboarding_step, webhook_secret, brand_name, app_url)
+         VALUES ($1, $2, $3, 2, encode(gen_random_bytes(32), 'hex'), $1, $4)
          RETURNING id`,
-        [companyName, email || null, phone]
+        [companyName, email || null, phone, appUrl]
       );
       const companyId = companyRes.rows[0].id;
 
