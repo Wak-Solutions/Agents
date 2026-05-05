@@ -108,10 +108,6 @@ export function registerRegistrationRoutes(app: Express): void {
         return res.status(409).json({ error: 'An account with this mobile number already exists' });
       }
 
-      // Sync sequences before INSERT to guard against drift from manual DB ops.
-      await client.query(`SELECT setval('companies_id_seq', COALESCE((SELECT MAX(id) FROM companies), 0) + 1, false)`);
-      await client.query(`SELECT setval('agents_id_seq',   COALESCE((SELECT MAX(id) FROM agents),    0) + 1, false)`);
-
       // 1. Create company (Removed 'plan' and 'trial_ends_at' columns here)
       const companyName = `${firstName} ${lastName}'s Company`;
       const companyRes = await client.query(
