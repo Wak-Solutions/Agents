@@ -39,6 +39,7 @@ import { ensureAgentsTable, registerAgentRoutes } from './agents';
 import { ensureSurveyTables, registerSurveyRoutes } from './surveys';
 import { requireAuth, requireAdmin }   from './middleware/auth';
 import { setCsrfCookie, verifyCsrf }   from './middleware/csrf';
+import { api }                         from '@shared/routes';
 
 export async function registerRoutes(
   httpServer: Server,
@@ -115,7 +116,7 @@ export async function registerRoutes(
   });
   app.use('/api/book/', bookingLimiter);
   app.use('/api/register', authLimiter);
-  app.use('/api/auth/login', authLimiter);
+  app.use(api.auth.login.path, authLimiter);
   app.use('/api/auth/webauthn/login/verify', authLimiter);
 
   // ── Trial config endpoints ────────────────────────────────────────────────
@@ -161,9 +162,12 @@ export async function registerRoutes(
       '/api/book/',
     ];
     if (webhookPaths.some((p) => req.path.startsWith(p))) return next();
+    // Paths that must accept POST without a CSRF token. Sourced from
+    // shared/routes.ts where possible so the allowlist can never drift away
+    // from the actual route paths (this drift caused a P0 login 403).
     const publicPaths = [
-      '/api/auth/login',
-      '/api/auth/logout',
+      api.auth.login.path,
+      api.auth.logout.path,
       '/api/auth/webauthn',
       '/api/register',
       '/api/auth/forgot-password',

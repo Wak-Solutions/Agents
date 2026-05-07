@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@shared/routes";
 import { z } from "zod";
+import { apiRequest } from "@/lib/queryClient";
 
 export function useAuth() {
   const { data, isLoading, error } = useQuery({
@@ -41,17 +42,22 @@ export function useLogin() {
 
   return useMutation({
     mutationFn: async ({ identifier, password }: { identifier: string; password: string }) => {
-      const res = await fetch(api.auth.login.path, {
-        method: api.auth.login.method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: identifier, password }),
-        credentials: "include",
-      });
-
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({}));
-        if (res.status === 403) throw new Error(body.error || "Account deactivated");
-        if (res.status === 402) throw new Error(body.message || "Your free trial has expired. Please contact support to continue.");
+      // Use apiRequest so the CSRF header is always included. Hitting fetch()
+      // directly skipped the header and 403'd whenever a stale authed session
+      // cookie survived from a prior login.
+      let res: Response;
+      try {
+        res = await apiRequest(api.auth.login.method, api.auth.login.path, { email: identifier, password });
+      } catch (err: any) {
+        // apiRequest throws on non-2xx with the message "<status>: <body>".
+        // Recover the status + body so we can preserve the existing error UX.
+        const m = /^(\d+):\s*([\s\S]*)$/.exec(err?.message ?? '');
+        const status = m ? Number(m[1]) : 0;
+        const rawBody = m ? m[2] : '';
+        let body: any = {};
+        try { body = JSON.parse(rawBody); } catch { /* not JSON */ }
+        if (status === 403) throw new Error(body.error || "Account deactivated");
+        if (status === 402) throw new Error(body.message || "Your free trial has expired. Please contact support to continue.");
         throw new Error(body.message || "Invalid credentials");
       }
       return res.json();
@@ -74,11 +80,7 @@ export function useLogout() {
 
   return useMutation({
     mutationFn: async () => {
-      const res = await fetch(api.auth.logout.path, {
-        method: api.auth.logout.method,
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to logout");
+      const res = await apiRequest(api.auth.logout.method, api.auth.logout.path);
       return api.auth.logout.responses[200].parse(await res.json());
     },
     onSuccess: () => {
