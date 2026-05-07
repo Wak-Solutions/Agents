@@ -67,7 +67,7 @@ function compilePrompt(cfg: any): string {
     ? (cfg.customTone || 'professional')
     : (cfg.tone || 'Professional').toLowerCase();
   const greeting     = cfg.greeting     || 'Welcome! How can I help you today?';
-  const closing      = cfg.closingMessage || 'Thank you for contacting us. A member of our team will be in touch shortly.';
+  const closing      = cfg.closingMessage || 'Thank you for contacting us — please let us know if there\'s anything else we can help with.';
 
   const questions: any[]   = cfg.questions      || [];
   const faqItems: any[]    = cfg.faq            || [];
