@@ -226,7 +226,7 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
       // Reject payloads with menu nesting deeper than 3 levels
       const menuItems: any[] = (structured_config || {}).menuConfig || [];
       if (!menuDepthValid(menuItems)) {
-        return res.status(400).json({ message: 'Menu config exceeds limits (max 3 levels deep, 50 items per level, 200 chars per label)' });
+        return res.status(400).json({ message: 'Menu config exceeds depth limit (max 3 levels deep, 50 items per level, 200 chars per label)' });
       }
 
       const activePrompt = override_active

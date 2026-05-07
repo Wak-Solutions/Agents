@@ -93,7 +93,7 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
         return res.status(401).json({ message: 'Invalid credentials' });
       }
       const agent = agentRes.rows[0];
-      if (!agent.is_active) {
+      if (agent.is_active === false) {
         logger.warn('Login rejected — account deactivated', `email: ${email.replace(/^[^@]+/, '***')}`);
         return res.status(403).json({ error: 'Your account has been deactivated. Please contact your administrator.' });
       }

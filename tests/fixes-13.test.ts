@@ -173,7 +173,7 @@ describe('SEC-003 — GET /api/settings/whatsapp masks token and appSecret', () 
     expect(res.body.accessToken).toContain('*');
   });
 
-  it('appSecret is masked to last 4 chars visible', async () => {
+  it('appSecret is fully masked (FINAL-034: last-4 would leak entropy on a 32-char hex secret)', async () => {
     const { app, setSession } = await buildSettingsApp();
     setSession({ ...adminSession });
     (pool.query as any).mockResolvedValueOnce({
@@ -186,8 +186,8 @@ describe('SEC-003 — GET /api/settings/whatsapp masks token and appSecret', () 
     });
     const res = await request(app).get('/api/settings/whatsapp');
     expect(res.status).toBe(200);
-    expect(res.body.appSecret).toMatch(/5678$/);
-    expect(res.body.appSecret).toContain('*');
+    expect(res.body.appSecret).toBe('*'.repeat('mysecret5678'.length));
+    expect(res.body.appSecret).not.toContain('5678');
   });
 
   it('empty token returns empty string without error', async () => {

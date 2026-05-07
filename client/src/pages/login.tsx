@@ -64,8 +64,10 @@ export default function Login() {
   }, []);
 
   // Re-check passkey registration whenever the identifier changes.
-  // Scoped to the typed email so the endpoint cannot leak global counts.
+  // Only fires when biometrics are available — skips the fetch entirely on
+  // devices that don't support passkeys, eliminating unnecessary requests.
   useEffect(() => {
+    if (!biometricAvailable) return;
     const id = identifier.trim();
     if (!id) {
       setBiometricRegistered(false);
@@ -82,7 +84,7 @@ export default function Login() {
       }
     })();
     return () => { cancelled = true; };
-  }, [identifier]);
+  }, [identifier, biometricAvailable]);
 
   const handleBiometricLogin = async () => {
     setBiometricError("");

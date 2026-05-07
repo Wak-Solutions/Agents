@@ -566,7 +566,7 @@ export function registerSurveyRoutes(app: any, requireAuth: any, requireAdmin: a
         answer_yes_no: z.boolean().optional().nullable(),
       })).parse(req.body.answers ?? []);
 
-      if (!response.company_id) throw new Error('Missing company_id on survey_response');
+      if (!response.company_id) return res.status(400).json({ message: 'Missing company_id on survey_response' });
       for (const a of answers) {
         await pool.query(
           `INSERT INTO survey_answers (response_id, question_id, answer_text, answer_rating, answer_yes_no, company_id)

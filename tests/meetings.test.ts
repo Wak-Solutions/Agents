@@ -29,6 +29,7 @@ vi.mock('../server/push', () => ({
 vi.mock('../server/email', () => ({
   notifyManagerNewBooking: vi.fn().mockResolvedValue(undefined),
   sendEmail: vi.fn().mockResolvedValue(undefined),
+  esc: (v: string) => v ?? '',
 }));
 
 vi.mock('../server/integrations/daily', () => ({
