@@ -65,7 +65,7 @@ export async function addNotified(key: string): Promise<void> {
     `INSERT INTO chat_notified (key, notified_at) VALUES ($1, NOW())
      ON CONFLICT (key) DO UPDATE SET notified_at = NOW()`,
     [key],
-  ).catch((err: any) => logger.error('chat_notified insert failed', err.message));
+  ).catch((err: any) => logger.error('chat_notified insert failed', `key: ${key}, error: ${err.message}`));
 }
 
 export async function hasNotified(key: string): Promise<boolean> {
@@ -83,7 +83,7 @@ export async function hasNotified(key: string): Promise<boolean> {
       return true;
     }
   } catch (err: any) {
-    logger.error('chat_notified lookup failed', err.message);
+    logger.error('chat_notified lookup failed', `key: ${key}, error: ${err.message}`);
   }
   return false;
 }
@@ -91,7 +91,7 @@ export async function hasNotified(key: string): Promise<boolean> {
 export async function deleteNotified(key: string): Promise<void> {
   notifiedChats.delete(key);
   pool.query('DELETE FROM chat_notified WHERE key = $1', [key])
-    .catch((err: any) => logger.error('chat_notified delete failed', err.message));
+    .catch((err: any) => logger.error('chat_notified delete failed', `key: ${key}, error: ${err.message}`));
 }
 
 // ---------------------------------------------------------------------------
@@ -199,6 +199,6 @@ export async function notifyAdmins(payload: object, companyId?: number): Promise
     await Promise.all(res.rows.map((row: any) => sendPush(row, payload)));
     logger.info('Push sent to admins', `subscriptions: ${res.rows.length}`);
   } catch (err: any) {
-    logger.error('notifyAdmins failed', err.message);
+    logger.error('notifyAdmins failed', `payloadTitle: ${(payload as any)?.title ?? '(none)'}, error: ${err.message}`);
   }
 }

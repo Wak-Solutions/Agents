@@ -12,6 +12,7 @@
  */
 
 import bcrypt from 'bcrypt';
+import { z } from 'zod';
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import type { Express } from 'express';
 import { pool } from '../db';
@@ -39,6 +40,21 @@ const ALL_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 function isValidTime(t: string): boolean {
   return /^\d{2}:\d{2}$/.test(t);
 }
+
+// Zod schemas — encode the same per-field rules used by the legacy hand-rolled
+// validation. Each field is validated independently so we can keep emitting the
+// same per-field error messages on rejection.
+const _DAY_ENUM = z.enum(['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']);
+const _TIME_REGEX = /^\d{2}:\d{2}$/;
+
+const workHoursDaysSchema = z.array(_DAY_ENUM);
+const workHoursTimeSchema = z.string().regex(_TIME_REGEX);
+const workHoursTimezoneSchema = z.string().min(1).max(64);
+
+const whatsappPhoneNumberIdSchema = z.coerce.string().min(1).max(64);
+const whatsappWabaIdSchema        = z.coerce.string().min(1).max(64);
+const whatsappAccessTokenSchema   = z.coerce.string().min(1).max(512);
+const whatsappAppSecretSchema     = z.coerce.string().max(128);
 
 export interface CompanyBranding {
   appUrl: string;
@@ -88,7 +104,7 @@ export function registerSettingsRoutes(app: Express): void {
       logger.info('getWorkHours', `companyId: ${companyId}`);
       res.json(wh);
     } catch (err: any) {
-      logger.error('getWorkHours failed', err.message);
+      logger.error('getWorkHours failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -97,22 +113,22 @@ export function registerSettingsRoutes(app: Express): void {
   app.put('/api/settings/work-hours', requireAuth, async (req: any, res: any) => {
     try {
       const companyId: number = req.companyId;
-      const { days, start, end, timezone } = req.body;
+      const { days, start, end, timezone } = req.body ?? {};
 
-      // Validate
-      if (!Array.isArray(days) || days.some((d: any) => !ALL_DAYS.includes(d))) {
+      // Per-field Zod validation — same rules as before, same error messages.
+      if (!workHoursDaysSchema.safeParse(days).success) {
         return res.status(400).json({ message: 'Invalid days — must be subset of Sun Mon Tue Wed Thu Fri Sat' });
       }
-      if (!isValidTime(start) || !isValidTime(end)) {
+      if (!workHoursTimeSchema.safeParse(start).success || !workHoursTimeSchema.safeParse(end).success) {
         return res.status(400).json({ message: 'start and end must be HH:MM' });
       }
-      if (!timezone || typeof timezone !== 'string') {
+      if (typeof timezone !== 'string' || timezone.length === 0) {
         return res.status(400).json({ message: 'timezone is required' });
       }
-      if (timezone.length > 64) {
+      if (!workHoursTimezoneSchema.safeParse(timezone).success) {
         return res.status(400).json({ message: 'timezone value is too long' });
       }
-      // Validate IANA timezone
+      // Validate IANA timezone — Intl.DateTimeFormat throws on unknown zones.
       try { Intl.DateTimeFormat(undefined, { timeZone: timezone }); }
       catch { return res.status(400).json({ message: `Unknown timezone: ${timezone}` }); }
 
@@ -128,7 +144,7 @@ export function registerSettingsRoutes(app: Express): void {
       );
       res.json(wh);
     } catch (err: any) {
-      logger.error('setWorkHours failed', err.message);
+      logger.error('setWorkHours failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -162,7 +178,7 @@ export function registerSettingsRoutes(app: Express): void {
         appSecret:     maskFull(row.whatsapp_app_secret ?? ''),
       });
     } catch (err: any) {
-      logger.error('getWhatsAppSettings failed', err.message);
+      logger.error('getWhatsAppSettings failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -171,21 +187,24 @@ export function registerSettingsRoutes(app: Express): void {
   app.put('/api/settings/whatsapp', requireAuth, requireAdmin, async (req: any, res: any) => {
     try {
       const companyId: number = req.companyId;
-      const { phoneNumberId, wabaId, accessToken, appSecret } = req.body;
+      const { phoneNumberId, wabaId, accessToken, appSecret } = req.body ?? {};
 
+      // Per-field Zod validation — same rules and error messages as before.
+      // The "required (truthy)" gate fires first to preserve the original
+      // combined error message; only after that do per-field length checks run.
       if (!phoneNumberId || !wabaId || !accessToken) {
         return res.status(400).json({ message: 'phoneNumberId, wabaId, and accessToken are required' });
       }
-      if (String(phoneNumberId).length > 64) {
+      if (!whatsappPhoneNumberIdSchema.safeParse(phoneNumberId).success) {
         return res.status(400).json({ message: 'phoneNumberId is too long' });
       }
-      if (String(wabaId).length > 64) {
+      if (!whatsappWabaIdSchema.safeParse(wabaId).success) {
         return res.status(400).json({ message: 'wabaId is too long' });
       }
-      if (String(accessToken).length > 512) {
+      if (!whatsappAccessTokenSchema.safeParse(accessToken).success) {
         return res.status(400).json({ message: 'accessToken is too long' });
       }
-      if (appSecret && String(appSecret).length > 128) {
+      if (appSecret && !whatsappAppSecretSchema.safeParse(appSecret).success) {
         return res.status(400).json({ message: 'appSecret is too long' });
       }
 
@@ -222,7 +241,7 @@ export function registerSettingsRoutes(app: Express): void {
       logger.info('setWhatsAppSettings', `companyId: ${companyId}, phoneNumberId: ${phoneNumberId}`);
       res.json({ success: true });
     } catch (err: any) {
-      logger.error('setWhatsAppSettings failed', err.message);
+      logger.error('setWhatsAppSettings failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -238,7 +257,7 @@ export function registerSettingsRoutes(app: Express): void {
       const row = result.rows[0] ?? {};
       res.json({ brandName: row.brand_name ?? '' });
     } catch (err: any) {
-      logger.error('getBranding failed', err.message);
+      logger.error('getBranding failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -258,7 +277,7 @@ export function registerSettingsRoutes(app: Express): void {
       logger.info('setBranding', `companyId: ${companyId}, brandName: ${brandName}`);
       res.json({ success: true });
     } catch (err: any) {
-      logger.error('setBranding failed', err.message);
+      logger.error('setBranding failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -308,7 +327,7 @@ export function registerSettingsRoutes(app: Express): void {
       // Never return a password or hash in the response.
       res.json({ success: true });
     } catch (err: any) {
-      logger.error('changePassword failed', err.message);
+      logger.error('changePassword failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Failed to change password' });
     }
   });

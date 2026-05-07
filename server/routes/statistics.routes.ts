@@ -41,7 +41,7 @@ export function registerStatisticsRoutes(app: Express): void {
       ]);
       res.json({ totalCustomers, perDay });
     } catch (err: any) {
-      logger.error('getStatistics failed', err.message);
+      logger.error('getStatistics failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -129,7 +129,7 @@ export function registerStatisticsRoutes(app: Express): void {
       logger.info('OpenAI summary success', `model: ${process.env.OPENAI_MODEL ?? 'gpt-4o-mini'}, summary_chars: ${summary.length}`);
       res.json({ summary });
     } catch (err: any) {
-      logger.error('getSummary failed', err.message);
+      logger.error('getSummary failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });

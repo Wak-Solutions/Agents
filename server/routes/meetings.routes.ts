@@ -111,7 +111,7 @@ export function registerMeetingRoutes(app: Express): void {
       logger.info('Meeting token created', `phone: ${maskPhone(customer_phone)}`);
       return res.json({ token });
     } catch (err: any) {
-      logger.error('create-token failed', err.message);
+      logger.error('create-token failed', `token: ${req.params?.token ?? '(none)'}, ip: ${req.ip ?? 'unknown'}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -151,7 +151,7 @@ export function registerMeetingRoutes(app: Express): void {
       );
       res.json(result.rows);
     } catch (err: any) {
-      logger.error('listMeetings failed', err.message);
+      logger.error('listMeetings failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -236,7 +236,7 @@ export function registerMeetingRoutes(app: Express): void {
       );
       res.json(result.rows);
     } catch (err: any) {
-      logger.error('getAvailability failed', err.message);
+      logger.error('getAvailability failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -267,7 +267,7 @@ export function registerMeetingRoutes(app: Express): void {
         res.json({ blocked: true });
       }
     } catch (err: any) {
-      logger.error('toggleAvailability failed', err.message);
+      logger.error('toggleAvailability failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -305,7 +305,7 @@ export function registerMeetingRoutes(app: Express): void {
       });
       res.json(rows);
     } catch (err: any) {
-      logger.error('getBookedSlots failed', err.message);
+      logger.error('getBookedSlots failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -332,7 +332,7 @@ export function registerMeetingRoutes(app: Express): void {
         status: m.status,
       });
     } catch (err: any) {
-      logger.error('getMeeting failed', err.message);
+      logger.error('getMeeting failed', `token: ${req.params?.token ?? '(none)'}, ip: ${req.ip ?? 'unknown'}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -433,7 +433,7 @@ export function registerMeetingRoutes(app: Express): void {
 
       res.json({ valid: true, days });
     } catch (err: any) {
-      logger.error('getBookingSlots failed', err.message);
+      logger.error('getBookingSlots failed', `token: ${req.params?.token ?? '(none)'}, ip: ${req.ip ?? 'unknown'}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -646,7 +646,7 @@ export function registerMeetingRoutes(app: Express): void {
 
       res.json({ success: true, ksa_label: ksaLabel });
     } catch (err: any) {
-      logger.error('bookMeeting failed', err.message);
+      logger.error('bookMeeting failed', `token: ${req.params?.token ?? '(none)'}, ip: ${req.ip ?? 'unknown'}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -676,7 +676,7 @@ export function registerMeetingRoutes(app: Express): void {
         },
       });
     } catch (err: any) {
-      logger.error('getMyDemoBooking failed', err.message);
+      logger.error('getMyDemoBooking failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -762,7 +762,7 @@ export function registerMeetingRoutes(app: Express): void {
 
       res.json({ days });
     } catch (err: any) {
-      logger.error('getDemoBookingSlots failed', err.message);
+      logger.error('getDemoBookingSlots failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -914,7 +914,7 @@ export function registerMeetingRoutes(app: Express): void {
 
       res.json({ success: true, ksa_label: ksaLabel, meeting_link: meetingLink });
     } catch (err: any) {
-      logger.error('bookAuthDemo failed', err.message);
+      logger.error('bookAuthDemo failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -938,7 +938,7 @@ export function registerMeetingRoutes(app: Express): void {
         status: m.status,
       });
     } catch (err: any) {
-      logger.error('getDemoBooking failed', err.message);
+      logger.error('getDemoBooking failed', `token: ${req.params?.token ?? '(none)'}, ip: ${req.ip ?? 'unknown'}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });

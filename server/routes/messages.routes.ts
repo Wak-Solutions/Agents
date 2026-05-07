@@ -160,8 +160,8 @@ export function registerMessageRoutes(app: Express): void {
       );
       res.json({ success: true });
     } catch (err: any) {
-      logger.error('send failed', err.message);
-      res.status(400).json({ message: err.message });
+      logger.error('send failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, phone: ${maskPhone(req.body?.customer_phone ?? '')}, error: ${err.message}`);
+      res.status(400).json({ message: 'Failed to send message' });
     }
   });
 
@@ -207,7 +207,7 @@ export function registerMessageRoutes(app: Express): void {
 
       res.json({ success: true });
     } catch (err: any) {
-      logger.error('incoming webhook failed', err.message);
+      logger.error('incoming webhook failed', `phone: ${maskPhone(req.body?.customer_phone ?? '')}, error: ${err.message}`);
       res.status(400).json({ message: 'Bad request' });
     }
   });
@@ -235,7 +235,7 @@ export function registerMessageRoutes(app: Express): void {
       );
       res.json({ success: true });
     } catch (err: any) {
-      logger.error('human-requested webhook failed', err.message);
+      logger.error('human-requested webhook failed', `phone: ${maskPhone(req.body?.customer_phone ?? '')}, error: ${err.message}`);
       res.status(400).json({ message: 'Bad request' });
     }
   });

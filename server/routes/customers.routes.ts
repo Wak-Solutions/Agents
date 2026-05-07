@@ -88,7 +88,7 @@ export function registerCustomerRoutes(app: Express): void {
         page,
       });
     } catch (err: any) {
-      logger.error('getCustomers failed', err.message);
+      logger.error('getCustomers failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -116,7 +116,7 @@ export function registerCustomerRoutes(app: Express): void {
         ],
       });
     } catch (err: any) {
-      logger.error('getFunnel failed', err.message);
+      logger.error('getFunnel failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -283,7 +283,7 @@ export function registerCustomerRoutes(app: Express): void {
       );
       res.json(result.rows);
     } catch (err: any) {
-      logger.error('getContacts failed', err.message);
+      logger.error('getContacts failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -330,7 +330,7 @@ export function registerCustomerRoutes(app: Express): void {
       });
     } catch (err: any) {
       await client.query('ROLLBACK').catch(() => {});
-      logger.error('createContact failed', err.message);
+      logger.error('createContact failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     } finally {
       client.release();
@@ -400,21 +400,37 @@ export function registerCustomerRoutes(app: Express): void {
       logger.info('Contacts bulk deleted', `count: ${ids.length}`);
       res.json({ success: true });
     } catch (err: any) {
-      logger.error('bulkDeleteContacts failed', err.message);
+      logger.error('bulkDeleteContacts failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
 
+  // Body envelope schema — matches the original two manual checks 1:1:
+  // 1) `contacts` must be an array (else return 'Invalid payload')
+  // 2) array length must be ≤ 10,000 (else return 'Import exceeds 10,000 row limit')
+  // Each row's contents are validated imperatively below — invalid rows are
+  // *counted*, not rejected, so a messy CSV import still succeeds.
+  const importBodySchema = z.object({
+    contacts: z.array(z.unknown()).max(10_000),
+  });
+
   app.post('/api/contacts/import', requireAdmin, async (req: any, res: any) => {
-    const { contacts: rows } = req.body;
-    if (!Array.isArray(rows)) return res.status(400).json({ message: 'Invalid payload' });
-    if (rows.length > 10_000) return res.status(400).json({ message: 'Import exceeds 10,000 row limit' });
+    let rows: unknown[];
+    try {
+      ({ contacts: rows } = importBodySchema.parse(req.body));
+    } catch (err: any) {
+      const tooMany = err?.issues?.some?.((i: any) => i.code === 'too_big');
+      return res.status(400).json({
+        message: tooMany ? 'Import exceeds 10,000 row limit' : 'Invalid payload',
+      });
+    }
     const companyId = req.companyId;
     let added = 0, duplicates = 0, invalid = 0;
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
-      for (const row of rows) {
+      for (const rawRow of rows) {
+        const row = (rawRow ?? {}) as { phone?: unknown; name?: unknown };
         const phone = String(row.phone || '').trim().replace(/[\s\-().]/g, '');
         const rawName = String(row.name || '').trim();
         if (rawName.length > 255) { invalid++; continue; }
@@ -446,7 +462,7 @@ export function registerCustomerRoutes(app: Express): void {
       await client.query('COMMIT');
     } catch (err: any) {
       await client.query('ROLLBACK').catch(() => {});
-      logger.error('importContacts failed', err.message);
+      logger.error('importContacts failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       return res.status(500).json({ message: 'Internal error' });
     } finally {
       client.release();

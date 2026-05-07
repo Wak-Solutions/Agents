@@ -195,7 +195,7 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
       const system_prompt_preview = compilePrompt(structuredCfg);
       return res.json({ ...row, system_prompt_preview });
     } catch (err: any) {
-      logger.error('getChatbotConfig failed', err.message);
+      logger.error('getChatbotConfig failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -260,7 +260,7 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
       const system_prompt_preview = compilePrompt(structured_config || {});
       return res.json({ ...result.rows[0], system_prompt_preview });
     } catch (err: any) {
-      logger.error('saveChatbotConfig failed', err.message);
+      logger.error('saveChatbotConfig failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -319,7 +319,7 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
       logger.info('generateConversation', `companyId: ${req.companyId}, messages: ${conversation.length}`);
       return res.json({ conversation });
     } catch (err: any) {
-      logger.error('generateConversation failed', err.message);
+      logger.error('generateConversation failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -330,7 +330,7 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
       const compiled = compilePrompt(req.body.structured_config || {});
       res.json({ prompt: compiled });
     } catch (err: any) {
-      logger.error('previewChatbotConfig failed', err.message);
+      logger.error('previewChatbotConfig failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -426,7 +426,7 @@ Apply the change to whichever field makes semantic sense. If the instruction say
       const system_prompt_preview = compilePrompt(newConfig);
       return res.json({ ...result.rows[0], system_prompt_preview });
     } catch (err: any) {
-      logger.error('suggestChatbotConfig failed', err.message);
+      logger.error('suggestChatbotConfig failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });

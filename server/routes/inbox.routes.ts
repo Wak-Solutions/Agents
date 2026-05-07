@@ -52,7 +52,7 @@ export function registerInboxRoutes(app: Express): void {
       `, [companyId, isAdmin, agentId]);
       res.json(result.rows);
     } catch (err: any) {
-      logger.error('getConversations failed', err.message);
+      logger.error('getConversations failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -140,7 +140,7 @@ export function registerInboxRoutes(app: Express): void {
 
       res.json(items);
     } catch (err: any) {
-      logger.error('getInbox failed', err.message);
+      logger.error('getInbox failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });

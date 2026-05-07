@@ -217,7 +217,7 @@ export function registerSurveyRoutes(app: any, requireAuth: any, requireAdmin: a
       res.status(201).json(result.rows[0]);
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: 'Invalid input' });
-      logger.error('createSurvey failed', err.message);
+      logger.error('createSurvey failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -255,7 +255,7 @@ export function registerSurveyRoutes(app: any, requireAuth: any, requireAdmin: a
       res.json(result.rows[0]);
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: 'Invalid input' });
-      logger.error('updateSurvey failed', err.message);
+      logger.error('updateSurvey failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -332,7 +332,7 @@ export function registerSurveyRoutes(app: any, requireAuth: any, requireAdmin: a
       res.status(201).json(result.rows[0]);
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: 'Invalid input' });
-      logger.error('createSurveyQuestion failed', err.message);
+      logger.error('createSurveyQuestion failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -369,7 +369,7 @@ export function registerSurveyRoutes(app: any, requireAuth: any, requireAdmin: a
       res.json({ success: true });
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: 'Invalid input' });
-      logger.error('reorderSurveyQuestions failed', err.message);
+      logger.error('reorderSurveyQuestions failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -399,7 +399,7 @@ export function registerSurveyRoutes(app: any, requireAuth: any, requireAdmin: a
       res.json(result.rows[0]);
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: 'Invalid input' });
-      logger.error('updateSurveyQuestion failed', err.message);
+      logger.error('updateSurveyQuestion failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -582,7 +582,7 @@ export function registerSurveyRoutes(app: any, requireAuth: any, requireAdmin: a
       res.json({ success: true });
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: 'Invalid input' });
-      logger.error('submitSurvey failed', err.message);
+      logger.error('submitSurvey failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });

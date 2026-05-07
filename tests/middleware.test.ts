@@ -37,6 +37,8 @@ function buildAppWithSession(sessionData: Record<string, unknown> | null) {
 }
 
 describe('requireCompanyId middleware', () => {
+  beforeEach(() => vi.clearAllMocks());
+
   it('returns 401 when companyId is missing from session', async () => {
     const app = buildAppWithSession({});
     app.get('/x', requireCompanyId, (_req, res) => res.json({ ok: true }));

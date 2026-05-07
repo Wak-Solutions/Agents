@@ -87,7 +87,7 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
       req.session.save(() => {});
       res.json({ success: true, termsAcceptedAt: acceptedAt });
     } catch (err: any) {
-      logger.error('acceptTerms failed', err.message);
+      logger.error('acceptTerms failed', `agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -135,22 +135,39 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
         period === 'week'  ? `AND e.created_at >= DATE_TRUNC('week', NOW() AT TIME ZONE 'UTC')` :
         period === 'month' ? `AND e.created_at >= DATE_TRUNC('month', NOW() AT TIME ZONE 'UTC')` :
         '';
+      // Pre-aggregate the per-agent meetings_completed and avg_survey_rating in
+      // CTEs so they run as a single scan per metric instead of one correlated
+      // subquery per agent (was N+1 for N agents). The LEFT JOIN below leaves
+      // agents with no matching rows producing NULL — same as the original
+      // subqueries' behavior for avg_survey_rating; meetings_completed is
+      // COALESCEd to 0 to match the original `COUNT(*)::int` returning 0.
       const result = await pool.query(`
+        WITH meetings_per_agent AS (
+          SELECT m.agent_id, COUNT(*)::int AS meetings_completed
+          FROM meetings m
+          WHERE m.status = 'completed' AND m.company_id = $1
+          GROUP BY m.agent_id
+        ),
+        survey_per_agent AS (
+          SELECT sr.agent_id, ROUND(AVG(sa.answer_rating)::numeric, 1) AS avg_survey_rating
+          FROM survey_answers sa
+          JOIN survey_responses sr ON sr.id = sa.response_id
+          WHERE sr.company_id = $1 AND sa.answer_rating IS NOT NULL
+          GROUP BY sr.agent_id
+        )
         SELECT
           a.id, a.name, a.email, a.role, a.is_active, a.last_login,
           COUNT(e.customer_phone) FILTER (
             WHERE e.status = 'closed' AND e.company_id = $1 ${dateFilter}
           )::int AS resolved_chats,
-          (SELECT COUNT(*)::int FROM meetings m
-           WHERE m.agent_id = a.id AND m.status = 'completed' AND m.company_id = $1) AS meetings_completed,
-          (SELECT ROUND(AVG(sa.answer_rating)::numeric, 1)
-           FROM survey_answers sa
-           JOIN survey_responses sr ON sr.id = sa.response_id
-           WHERE sr.agent_id = a.id AND sr.company_id = $1 AND sa.answer_rating IS NOT NULL) AS avg_survey_rating
+          COALESCE(mc.meetings_completed, 0) AS meetings_completed,
+          sp.avg_survey_rating AS avg_survey_rating
         FROM agents a
         LEFT JOIN escalations e ON e.assigned_agent_id = a.id
+        LEFT JOIN meetings_per_agent mc ON mc.agent_id = a.id
+        LEFT JOIN survey_per_agent sp ON sp.agent_id = a.id
         WHERE a.company_id = $1
-        GROUP BY a.id
+        GROUP BY a.id, mc.meetings_completed, sp.avg_survey_rating
         ORDER BY a.created_at
       `, [companyId]);
       res.json(result.rows);
@@ -182,7 +199,7 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: 'Invalid input' });
       if (err.code === '23505') return res.status(409).json({ message: 'Email already in use.' });
-      logger.error('createAgent failed', err.message);
+      logger.error('createAgent failed', `companyId: ${req.companyId}, actorAgentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -205,7 +222,7 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
       res.json(result.rows[0]);
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: 'Invalid input' });
-      logger.error('updateAgent failed', err.message);
+      logger.error('updateAgent failed', `companyId: ${req.companyId}, targetAgentId: ${req.params?.id}, actorAgentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -274,7 +291,7 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
       res.json({ success: true });
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: 'Invalid input' });
-      logger.error('resetAgentPassword failed', err.message);
+      logger.error('resetAgentPassword failed', `companyId: ${req.companyId}, targetAgentId: ${req.params?.id}, actorAgentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });

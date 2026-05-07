@@ -146,7 +146,7 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
         });
       });
     } catch (err: any) {
-      logger.error('Login error', err.message);
+      logger.error('Login error', `email: ${email?.replace(/^[^@]+/, '***') ?? '***'}, error: ${err.message}`);
       return res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -233,7 +233,7 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
       logger.info('WebAuthn register options generated', `agentId: ${req.session.agentId}`);
       res.json(options);
     } catch (err: any) {
-      logger.error('WebAuthn register options error', err.message);
+      logger.error('WebAuthn register options error', `agentId: ${req.session.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -269,7 +269,7 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
         res.status(400).json({ message: 'Verification failed' });
       }
     } catch (err: any) {
-      logger.error('WebAuthn register verify error', err.message);
+      logger.error('WebAuthn register verify error', `agentId: ${req.session.agentId}, error: ${err.message}`);
       res.status(400).json({ message: 'Biometric registration failed' });
     }
   });
@@ -303,7 +303,8 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
       req.session.save(() => {});
       res.json(options);
     } catch (err: any) {
-      logger.error('WebAuthn login options error', err.message);
+      const _emailRaw = typeof req.body?.email === 'string' ? req.body.email : '';
+      logger.error('WebAuthn login options error', `email: ${_emailRaw ? _emailRaw.replace(/^[^@]+/, '***') : '(none)'}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -388,7 +389,7 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
         (req.session as any).webauthnChallenge = undefined;
         req.session.save((err: any) => {
           if (err) {
-            logger.error('Session save failed after WebAuthn login', err.message);
+            logger.error('Session save failed after WebAuthn login', `agentId: ${stored.agent_id}, error: ${err.message}`);
             return res.status(500).json({ message: 'Session error' });
           }
           logger.info('WebAuthn login success', `agentId: ${stored.agent_id}, companyId: ${stored.company_id}`);
@@ -406,7 +407,7 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
         res.status(401).json({ message: 'Biometric verification failed' });
       }
     } catch (err: any) {
-      logger.error('WebAuthn login verify error', err.message);
+      logger.error('WebAuthn login verify error', `credentialId: ${req.body?.id ?? '(none)'}, error: ${err.message}`);
       res.status(401).json({ message: 'Biometric authentication failed' });
     }
   });
@@ -533,7 +534,7 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
       logger.info('forgotPassword — reset email dispatched', `agentId: ${agent.id}`);
       return res.json(generic);
     } catch (err: any) {
-      logger.error('forgotPassword failed', err.message);
+      logger.error('forgotPassword failed', `identifier: ${identifier ? identifier.slice(0, 3) + '***' : '(none)'}, error: ${err.message}`);
       // Still return the generic success so attackers cannot infer errors.
       return res.json(generic);
     }
@@ -582,7 +583,7 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
       // Never return a password or hash.
       return res.json({ success: true });
     } catch (err: any) {
-      logger.error('resetPassword failed', err.message);
+      logger.error('resetPassword failed', `ip: ${req.ip ?? 'unknown'}, error: ${err.message}`);
       return res.status(500).json({ message: 'Could not reset password. Please try again.' });
     }
   });

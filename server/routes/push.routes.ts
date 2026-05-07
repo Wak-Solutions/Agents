@@ -27,7 +27,7 @@ export function registerPushRoutes(app: Express): void {
       await registerSubscription(agentId, companyId, subscription);
       res.json({ success: true });
     } catch (err: any) {
-      logger.error('Subscribe failed', err.message);
+      logger.error('Subscribe failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -41,7 +41,7 @@ export function registerPushRoutes(app: Express): void {
       logger.info('Push subscription removed', `agentId: ${agentId}`);
       res.json({ success: true });
     } catch (err: any) {
-      logger.error('Unsubscribe failed', err.message);
+      logger.error('Unsubscribe failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
