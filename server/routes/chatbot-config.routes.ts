@@ -203,7 +203,7 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
   const openAiLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 10,
-    keyGenerator: (req: any) => req.companyId ? `openai:${req.companyId}` : ipKeyGenerator(req.ip ?? ''),
+    keyGenerator: (req: any) => req.companyId ? `openai:${req.companyId}` : ipKeyGenerator(req),
     standardHeaders: true,
     legacyHeaders: false,
     message: { message: 'Too many AI requests, try again later' },

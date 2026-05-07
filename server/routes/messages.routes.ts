@@ -7,7 +7,7 @@
  */
 
 import type { Express } from 'express';
-import rateLimit from 'express-rate-limit';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
 import { pool } from '../db';
 import { requireAuth } from '../middleware/auth';
@@ -23,7 +23,7 @@ export function registerMessageRoutes(app: Express): void {
   const messagesLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 30,
-    keyGenerator: (req: any) => `msgs:${req.session?.agentId ?? req.ip ?? 'unknown'}:${req.params?.phone ?? ''}`,
+    keyGenerator: (req: any) => `msgs:${req.session?.agentId ?? ipKeyGenerator(req) ?? 'unknown'}:${req.params?.phone ?? ''}`,
     standardHeaders: true,
     legacyHeaders: false,
     message: { message: 'Too many requests' },
