@@ -150,7 +150,7 @@ export default function Login() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!password) return;
-    console.log("[login] submitting login, identifier:", identifier ? "set" : "empty");
+    console.log("[login] submitting login, identifier:", identifier.trim());
     login(
       { identifier: identifier.trim(), password },
       {

@@ -64,6 +64,8 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   req.companyId = cid;
   // Use cached is_active from session to avoid a DB hit on every request.
   // Fall back to DB for sessions created before this field was stored.
+  // Treat a missing/unresolvable value as active (backwards-compatible);
+  // only explicitly false blocks the request.
   let isActive = req.session.isActive;
   if (isActive === undefined) {
     const agent = await pool.query(
@@ -72,7 +74,7 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     );
     isActive = agent.rows[0]?.is_active;
   }
-  if (!isActive) {
+  if (isActive === false) {
     req.session.destroy(() => {});
     res.status(401).json({ message: 'Account deactivated' });
     return;
@@ -99,7 +101,7 @@ export async function requireAdmin(req: Request, res: Response, next: NextFuncti
   }
   req.companyId = cid;
   // Use cached is_active from session; fall back to DB for older sessions.
-  // Deactivation purges sessions immediately, so this is defense-in-depth only.
+  // Treat missing/unresolvable as active — only explicit false blocks.
   let isActive = req.session.isActive;
   if (isActive === undefined) {
     const agent = await pool.query(
@@ -108,7 +110,7 @@ export async function requireAdmin(req: Request, res: Response, next: NextFuncti
     );
     isActive = agent.rows[0]?.is_active;
   }
-  if (!isActive) {
+  if (isActive === false) {
     req.session.destroy(() => {});
     res.status(401).json({ message: 'Account deactivated' });
     return;
