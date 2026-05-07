@@ -109,6 +109,9 @@ export function registerSettingsRoutes(app: Express): void {
       if (!timezone || typeof timezone !== 'string') {
         return res.status(400).json({ message: 'timezone is required' });
       }
+      if (timezone.length > 64) {
+        return res.status(400).json({ message: 'timezone value is too long' });
+      }
       // Validate IANA timezone
       try { Intl.DateTimeFormat(undefined, { timeZone: timezone }); }
       catch { return res.status(400).json({ message: `Unknown timezone: ${timezone}` }); }
@@ -131,6 +134,15 @@ export function registerSettingsRoutes(app: Express): void {
   });
 
   // GET /api/settings/whatsapp — return WhatsApp credentials for the company (admin only)
+  //
+  // SECURITY NOTE (FINAL-034): Tokens are masked before being returned so that
+  // the full secret is never transmitted over the wire or captured in browser
+  // DevTools / HAR exports. accessToken shows the last 4 chars (****abcd) so
+  // admins can identify which token is active without exposing it. appSecret is
+  // fully masked (*****) because its last 4 chars would leak ~16 bits of a 32-char
+  // hex secret. Masked values round-trip safely: the PUT handler detects any value
+  // containing '*' and skips updating that field, preserving the stored credential.
+  // This is the intended, documented behaviour — not a gap.
   app.get('/api/settings/whatsapp', requireAuth, requireAdmin, async (req: any, res: any) => {
     try {
       const companyId: number = req.companyId;
@@ -141,12 +153,13 @@ export function registerSettingsRoutes(app: Express): void {
       );
       const row = result.rows[0] ?? {};
       logger.info('getWhatsAppSettings', `companyId: ${companyId}`);
-      const maskSecret = (s: string) => s ? s.replace(/.(?=.{4})/g, '*') : '';
+      const maskToken = (s: string) => s ? s.replace(/.(?=.{4})/g, '*') : '';
+      const maskFull  = (s: string) => s ? '*'.repeat(s.length) : '';
       res.json({
         phoneNumberId: row.whatsapp_phone_number_id ?? '',
         wabaId:        row.whatsapp_waba_id         ?? '',
-        accessToken:   maskSecret(row.whatsapp_token     ?? ''),
-        appSecret:     maskSecret(row.whatsapp_app_secret ?? ''),
+        accessToken:   maskToken(row.whatsapp_token     ?? ''),
+        appSecret:     maskFull(row.whatsapp_app_secret ?? ''),
       });
     } catch (err: any) {
       logger.error('getWhatsAppSettings failed', err.message);
@@ -163,15 +176,47 @@ export function registerSettingsRoutes(app: Express): void {
       if (!phoneNumberId || !wabaId || !accessToken) {
         return res.status(400).json({ message: 'phoneNumberId, wabaId, and accessToken are required' });
       }
+      if (String(phoneNumberId).length > 64) {
+        return res.status(400).json({ message: 'phoneNumberId is too long' });
+      }
+      if (String(wabaId).length > 64) {
+        return res.status(400).json({ message: 'wabaId is too long' });
+      }
+      if (String(accessToken).length > 512) {
+        return res.status(400).json({ message: 'accessToken is too long' });
+      }
+      if (appSecret && String(appSecret).length > 128) {
+        return res.status(400).json({ message: 'appSecret is too long' });
+      }
 
+      // A value that contains '*' came from the masked GET response — treat as "unchanged".
+      const isMasked = (v: string) => v.includes('*');
+
+      const setClauses: string[] = [
+        'whatsapp_phone_number_id = $1',
+        'whatsapp_waba_id = $2',
+      ];
+      const params: any[] = [String(phoneNumberId).trim(), String(wabaId).trim()];
+      let idx = 3;
+
+      const tokenStr = String(accessToken).trim();
+      if (!isMasked(tokenStr)) {
+        setClauses.push(`whatsapp_token = $${idx++}`);
+        params.push(tokenStr);
+      }
+
+      if (appSecret !== undefined && appSecret !== null && appSecret !== '') {
+        const secretStr = String(appSecret).trim();
+        if (!isMasked(secretStr)) {
+          setClauses.push(`whatsapp_app_secret = $${idx++}`);
+          params.push(secretStr);
+        }
+      }
+
+      params.push(companyId);
       await pool.query(
-        `UPDATE companies
-         SET whatsapp_phone_number_id = $1,
-             whatsapp_waba_id         = $2,
-             whatsapp_token           = $3,
-             whatsapp_app_secret      = $4
-         WHERE id = $5`,
-        [String(phoneNumberId).trim(), String(wabaId).trim(), String(accessToken).trim(), appSecret ? String(appSecret).trim() : null, companyId]
+        `UPDATE companies SET ${setClauses.join(', ')} WHERE id = $${idx}`,
+        params
       );
 
       logger.info('setWhatsAppSettings', `companyId: ${companyId}, phoneNumberId: ${phoneNumberId}`);
@@ -239,6 +284,9 @@ export function registerSettingsRoutes(app: Express): void {
       }
       if (newPassword.length < 8) {
         return res.status(400).json({ message: 'New password must be at least 8 characters' });
+      }
+      if (newPassword.length > 128) {
+        return res.status(400).json({ message: 'New password must be at most 128 characters' });
       }
       if (newPassword === currentPassword) {
         return res.status(400).json({ message: 'New password must be different from the current password' });

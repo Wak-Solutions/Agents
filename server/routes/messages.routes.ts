@@ -23,7 +23,7 @@ export function registerMessageRoutes(app: Express): void {
   const messagesLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 30,
-    keyGenerator: (req: any) => `msgs:${req.companyId ?? req.ip ?? 'unknown'}`,
+    keyGenerator: (req: any) => `msgs:${req.session?.agentId ?? req.ip ?? 'unknown'}:${req.params?.phone ?? ''}`,
     standardHeaders: true,
     legacyHeaders: false,
     message: { message: 'Too many requests' },
@@ -65,7 +65,9 @@ export function registerMessageRoutes(app: Express): void {
         return;
       }
       const { audio_data, mime_type } = result.rows[0];
-      res.setHeader('Content-Type', mime_type || 'audio/ogg');
+      const AUDIO_MIME_ALLOWLIST = new Set(['audio/ogg', 'audio/mpeg', 'audio/wav', 'audio/webm']);
+      const safeType = AUDIO_MIME_ALLOWLIST.has(mime_type) ? mime_type : 'audio/ogg';
+      res.setHeader('Content-Type', safeType);
       res.setHeader('Cache-Control', 'private, max-age=86400');
       res.send(audio_data);
     } catch (err: any) {
@@ -110,6 +112,7 @@ export function registerMessageRoutes(app: Express): void {
           type: 'text',
           text: { body: data.message },
         }),
+        signal: AbortSignal.timeout(10_000),
       });
 
       if (!metaRes.ok) {
@@ -133,7 +136,9 @@ export function registerMessageRoutes(app: Express): void {
         return res.status(502).json({ message: userMessage, metaCode });
       }
 
-      // Save the outbound message — reuse or start a conversation_id (24-hour session)
+      // Save the outbound message — reuse or start a conversation_id (24-hour session).
+      // The 24-hour window is the only conversation boundary in the schema; looking
+      // further back would attach replies to stale sessions (working-as-designed per CR-014).
       const convRes = await pool.query(
         `SELECT conversation_id FROM messages
          WHERE customer_phone = $1 AND company_id = $2
@@ -187,8 +192,8 @@ export function registerMessageRoutes(app: Express): void {
       const convId: string | null = convRow.rows[0]?.conversation_id ?? null;
       const notifKey = convId ? `conv:${convId}` : `new:${companyId}:${data.customer_phone}`;
 
-      if (!hasNotified(notifKey)) {
-        addNotified(notifKey);
+      if (!await hasNotified(notifKey)) {
+        await addNotified(notifKey);
         await notifyAll(
           {
             title: 'New Chat',
@@ -203,7 +208,7 @@ export function registerMessageRoutes(app: Express): void {
       res.json({ success: true });
     } catch (err: any) {
       logger.error('incoming webhook failed', err.message);
-      res.status(400).json({ message: err.message });
+      res.status(400).json({ message: 'Bad request' });
     }
   });
 
@@ -231,7 +236,7 @@ export function registerMessageRoutes(app: Express): void {
       res.json({ success: true });
     } catch (err: any) {
       logger.error('human-requested webhook failed', err.message);
-      res.status(400).json({ message: err.message });
+      res.status(400).json({ message: 'Bad request' });
     }
   });
 
@@ -246,9 +251,9 @@ export function registerMessageRoutes(app: Express): void {
       [phone, companyId]
     ).catch(() => ({ rows: [] as any[] }));
     for (const row of convRow.rows) {
-      deleteNotified(`conv:${row.conversation_id}`);
+      await deleteNotified(`conv:${row.conversation_id}`);
     }
-    deleteNotified(`new:${companyId}:${phone}`);
+    await deleteNotified(`new:${companyId}:${phone}`);
     res.json({ success: true });
   });
 }

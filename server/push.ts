@@ -3,8 +3,10 @@
  *
  * Subscriptions are persisted in the push_subscriptions PostgreSQL table so
  * they survive Railway restarts and re-deploys. The notifiedChats dedup set
- * remains in-memory (worst case: one extra notification after a restart, which
- * is acceptable).
+ * is backed by the chat_notified PostgreSQL table (24 h TTL) so restarts
+ * do not produce duplicate "New Chat" notifications for ongoing sessions.
+ * The in-memory Map acts as a fast first-layer cache: a DB read only occurs
+ * on the first message of a session after a restart (cache miss path).
  */
 
 import webpush from 'web-push';
@@ -35,32 +37,61 @@ if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
 export { VAPID_PUBLIC_KEY };
 
 // ---------------------------------------------------------------------------
-// In-memory dedup set (resets on restart — acceptable)
+// DB-backed dedup set with in-memory cache
 // ---------------------------------------------------------------------------
 
 /**
  * Tracks which conversation sessions have already triggered a "New Chat"
  * notification. Keyed on `conv:<conversation_id>` so each new session fires
  * exactly once. Cleared via POST /api/notifications/mark-read/:phone.
- * Capped at MAX_NOTIFIED entries; oldest entry evicted when limit is reached.
+ *
+ * The in-memory Map is the fast path: a hit here costs nothing.
+ * On a cache miss (first message after restart) the DB is consulted so
+ * ongoing sessions do not generate duplicate notifications after a redeploy.
+ * Entries in the DB expire after 24 h (same TTL as conversation sessions).
  */
 const MAX_NOTIFIED = 10_000;
 const notifiedChats = new Map<string, true>();
 
-export function addNotified(key: string): void {
+export async function addNotified(key: string): Promise<void> {
   if (notifiedChats.size >= MAX_NOTIFIED) {
     const oldest = notifiedChats.keys().next().value;
     notifiedChats.delete(oldest!);
   }
   notifiedChats.set(key, true);
+  // Persist so the entry survives a restart. Fire-and-forget — a failure
+  // here is non-fatal (worst case: one extra notification after restart).
+  pool.query(
+    `INSERT INTO chat_notified (key, notified_at) VALUES ($1, NOW())
+     ON CONFLICT (key) DO UPDATE SET notified_at = NOW()`,
+    [key],
+  ).catch((err: any) => logger.error('chat_notified insert failed', err.message));
 }
 
-export function hasNotified(key: string): boolean {
-  return notifiedChats.has(key);
+export async function hasNotified(key: string): Promise<boolean> {
+  if (notifiedChats.has(key)) return true;
+  // Cache miss — check the DB (only happens on first message after restart)
+  try {
+    const r = await pool.query(
+      `SELECT 1 FROM chat_notified
+       WHERE key = $1 AND notified_at > NOW() - INTERVAL '24 hours'
+       LIMIT 1`,
+      [key],
+    );
+    if (r.rows.length > 0) {
+      notifiedChats.set(key, true); // warm the cache
+      return true;
+    }
+  } catch (err: any) {
+    logger.error('chat_notified lookup failed', err.message);
+  }
+  return false;
 }
 
-export function deleteNotified(key: string): void {
+export async function deleteNotified(key: string): Promise<void> {
   notifiedChats.delete(key);
+  pool.query('DELETE FROM chat_notified WHERE key = $1', [key])
+    .catch((err: any) => logger.error('chat_notified delete failed', err.message));
 }
 
 // ---------------------------------------------------------------------------
@@ -84,6 +115,13 @@ export async function registerSubscription(
 
 export async function removeSubscription(endpoint: string): Promise<void> {
   await pool.query('DELETE FROM push_subscriptions WHERE endpoint = $1', [endpoint]);
+}
+
+export async function removeSubscriptionForAgent(endpoint: string, agentId: number, companyId: number): Promise<void> {
+  await pool.query(
+    'DELETE FROM push_subscriptions WHERE endpoint = $1 AND agent_id = $2 AND company_id = $3',
+    [endpoint, agentId, companyId],
+  );
 }
 
 // ---------------------------------------------------------------------------

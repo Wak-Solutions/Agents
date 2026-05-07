@@ -37,14 +37,25 @@ export async function ensureAgentsTable(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_escalations_assigned ON escalations(assigned_agent_id)
   `);
 
-  // Seed default admin from DASHBOARD_PASSWORD + SEED_ADMIN_EMAIL if no agents exist
+  // Seed default admin from DASHBOARD_PASSWORD + SEED_ADMIN_EMAIL if no agents exist.
+  // Refuses to seed with any known-weak or reused credential strings.
   const count = await pool.query('SELECT COUNT(*)::int AS n FROM agents');
   if (count.rows[0].n === 0 && process.env.DASHBOARD_PASSWORD) {
     const seedEmail = process.env.SEED_ADMIN_EMAIL;
+    const seedPw = process.env.DASHBOARD_PASSWORD;
+    const WEAK_PASSWORDS = new Set([
+      'w@k.2026.Dev', 'change_me', 'change_me_immediately', 'password',
+      'admin', 'admin123', '123456',
+    ]);
     if (!seedEmail) {
       logger.warn('SEED_ADMIN_EMAIL not set — skipping default admin seed');
+    } else if (seedPw.length < 16 || WEAK_PASSWORDS.has(seedPw)) {
+      logger.error(
+        'DASHBOARD_PASSWORD is too weak or is a known default — refusing to seed admin. ' +
+        'Set a strong unique password (≥16 chars) and restart.'
+      );
     } else {
-      const hash = await bcrypt.hash(process.env.DASHBOARD_PASSWORD, 10);
+      const hash = await bcrypt.hash(seedPw, 10);
       await pool.query(
         `INSERT INTO agents (name, email, password_hash, role, company_id) VALUES ($1, $2, $3, 'admin', 1)`,
         ['Admin', seedEmail, hash]
@@ -76,6 +87,7 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
       req.session.save(() => {});
       res.json({ success: true, termsAcceptedAt: acceptedAt });
     } catch (err: any) {
+      logger.error('acceptTerms failed', err.message);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -97,15 +109,17 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
             WHERE e.status = 'closed' AND e.company_id = $1 AND e.created_at >= DATE_TRUNC('week', NOW())
           )::int AS resolved_this_week,
           COUNT(e.customer_phone) FILTER (WHERE e.status = 'closed' AND e.company_id = $1)::int AS total_resolved,
-          (SELECT COUNT(*)::int FROM meetings m WHERE m.agent_id = a.id AND m.status = 'completed' AND m.company_id = $1) AS meetings_completed
+          COUNT(m2.id)::int AS meetings_completed
         FROM agents a
         LEFT JOIN escalations e ON e.assigned_agent_id = a.id
+        LEFT JOIN meetings m2 ON m2.agent_id = a.id AND m2.status = 'completed' AND m2.company_id = $1
         WHERE a.company_id = $1
         GROUP BY a.id, a.name, a.is_active
         ORDER BY a.name
       `, [companyId]);
       res.json(result.rows);
     } catch (err: any) {
+      logger.error('getWorkload failed', `companyId: ${req.companyId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -141,6 +155,7 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
       `, [companyId]);
       res.json(result.rows);
     } catch (err: any) {
+      logger.error('listAgents failed', `companyId: ${req.companyId}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -152,7 +167,7 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
       const { name, email, password, role } = z.object({
         name:     z.string().min(1),
         email:    z.string().email(),
-        password: z.string().min(8),
+        password: z.string().min(8).max(128),
         role:     z.enum(['agent', 'admin']),
       }).parse(req.body);
       const hash = await bcrypt.hash(password, 10);
@@ -165,9 +180,10 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
       logger.info('Agent created', `agentId: ${result.rows[0].id}, role: ${role}`);
       res.status(201).json(result.rows[0]);
     } catch (err: any) {
+      if (err instanceof z.ZodError) return res.status(400).json({ message: 'Invalid input' });
       if (err.code === '23505') return res.status(409).json({ message: 'Email already in use.' });
       logger.error('createAgent failed', err.message);
-      res.status(400).json({ message: err.message });
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
@@ -188,7 +204,9 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
       if (result.rows.length === 0) return res.status(404).json({ message: 'Agent not found' });
       res.json(result.rows[0]);
     } catch (err: any) {
-      res.status(400).json({ message: err.message });
+      if (err instanceof z.ZodError) return res.status(400).json({ message: 'Invalid input' });
+      logger.error('updateAgent failed', err.message);
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
@@ -237,6 +255,7 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
       if (result.rows.length === 0) return res.status(404).json({ message: 'Agent not found' });
       res.json({ success: true });
     } catch (err: any) {
+      logger.error('activateAgent failed', `agentId: ${req.params.id}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });
@@ -245,7 +264,7 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
   app.patch('/api/agents/:id/reset-password', requireAdmin, async (req: any, res: any) => {
     try {
       const companyId: number = req.companyId;
-      const { new_password } = z.object({ new_password: z.string().min(8) }).parse(req.body);
+      const { new_password } = z.object({ new_password: z.string().min(8).max(128) }).parse(req.body);
       const hash = await bcrypt.hash(new_password, 10);
       const result = await pool.query(
         `UPDATE agents SET password_hash=$1 WHERE id=$2 AND company_id=$3 RETURNING id`,
@@ -254,7 +273,9 @@ export function registerAgentRoutes(app: any, requireAdmin: any, requireAuth: an
       if (result.rows.length === 0) return res.status(404).json({ message: 'Agent not found' });
       res.json({ success: true });
     } catch (err: any) {
-      res.status(400).json({ message: err.message });
+      if (err instanceof z.ZodError) return res.status(400).json({ message: 'Invalid input' });
+      logger.error('resetAgentPassword failed', err.message);
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 }

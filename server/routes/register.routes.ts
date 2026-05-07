@@ -12,12 +12,13 @@
  */
 
 import bcrypt from 'bcrypt';
+import crypto from 'crypto';
 import { z } from 'zod';
 import type { Express } from 'express';
 import { pool } from '../db';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, requireAdmin } from '../middleware/auth';
 import { createLogger } from '../lib/logger';
-import { sendEmail } from '../email';
+import { sendEmail, esc } from '../email';
 import { getCompanyBranding } from './settings.routes';
 
 const RegisterStep1Schema = z.object({
@@ -181,7 +182,7 @@ export function registerRegistrationRoutes(app: Express): void {
   });
 
   // ── Step 2: Business details ────────────────────────────────────────────
-  app.put('/api/register/business', requireAuth, async (req: any, res: any) => {
+  app.put('/api/register/business', requireAdmin, async (req: any, res: any) => {
     const { businessName, industry, country, website, teamSize } = req.body;
     const companyId = req.companyId;
 
@@ -206,7 +207,7 @@ export function registerRegistrationRoutes(app: Express): void {
   });
 
   // ── Step 3: WhatsApp credentials ────────────────────────────────────────
-  app.put('/api/register/whatsapp', requireAuth, async (req: any, res: any) => {
+  app.put('/api/register/whatsapp', requireAdmin, async (req: any, res: any) => {
     const { phoneNumberId, wabaId, accessToken, appSecret } = req.body;
     const companyId = req.companyId;
 
@@ -230,7 +231,7 @@ export function registerRegistrationRoutes(app: Express): void {
   });
 
   // ── Step 3b: Verify WhatsApp credentials ────────────────────────────────
-  app.post('/api/register/whatsapp/verify', requireAuth, async (req: any, res: any) => {
+  app.post('/api/register/whatsapp/verify', requireAdmin, async (req: any, res: any) => {
     const { phoneNumberId, wabaId, accessToken } = req.body;
 
     if (!phoneNumberId || !accessToken || !wabaId) {
@@ -245,7 +246,7 @@ export function registerRegistrationRoutes(app: Express): void {
       // Step 1: Validate phoneNumberId + accessToken directly
       const phoneResp = await fetch(
         `https://graph.facebook.com/v19.0/${phoneNumberId}?fields=display_phone_number,verified_name`,
-        { headers: metaHeaders }
+        { headers: metaHeaders, signal: AbortSignal.timeout(10_000) }
       );
       const phoneData = await phoneResp.json();
 
@@ -259,7 +260,7 @@ export function registerRegistrationRoutes(app: Express): void {
       // Step 2: Validate wabaId by fetching its phone numbers and confirming phoneNumberId belongs to it
       const wabaResp = await fetch(
         `https://graph.facebook.com/v19.0/${wabaId}/phone_numbers?fields=id`,
-        { headers: metaHeaders }
+        { headers: metaHeaders, signal: AbortSignal.timeout(10_000) }
       );
       const wabaData = await wabaResp.json();
 
@@ -293,7 +294,7 @@ export function registerRegistrationRoutes(app: Express): void {
   // after account creation. A blank config row is created in Step 1.
   // This endpoint is kept as a no-op so in-flight frontend calls don't 404
   // during the transition period; it will be removed once the UI is updated.
-  app.put('/api/register/chatbot', requireAuth, async (req: any, res: any) => {
+  app.put('/api/register/chatbot', requireAdmin, async (req: any, res: any) => {
     const companyId = req.companyId;
     try {
       await pool.query(
@@ -309,7 +310,7 @@ export function registerRegistrationRoutes(app: Express): void {
   });
 
   // ── Step 5: Invite agents ───────────────────────────────────────────────
-  app.post('/api/register/invite', requireAuth, async (req: any, res: any) => {
+  app.post('/api/register/invite', requireAdmin, async (req: any, res: any) => {
     const parsedInvite = InviteSchema.safeParse(req.body);
     if (!parsedInvite.success) {
       return res.status(400).json({ error: parsedInvite.error.issues[0]?.message ?? 'Invalid input' });
@@ -337,7 +338,7 @@ export function registerRegistrationRoutes(app: Express): void {
           if (!agent.email || !agent.name) continue;
 
           // Create agent with a temp password (they'll set a real one on first login)
-          const tempPass = Math.random().toString(36).slice(2, 10);
+          const tempPass = crypto.randomBytes(8).toString('base64url').slice(0, 10);
           const hash = await bcrypt.hash(tempPass, 10);
           await pool.query(
             `INSERT INTO agents (name, email, password_hash, role, company_id, is_active)
@@ -359,19 +360,19 @@ export function registerRegistrationRoutes(app: Express): void {
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
         <tr><td style="background:#0F510F;padding:28px 32px;">
-          <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">${_inviteBrand}</h1>
+          <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">${esc(_inviteBrand)}</h1>
           <p style="margin:4px 0 0;color:rgba(255,255,255,0.7);font-size:13px;">You've been invited to join your team</p>
         </td></tr>
         <tr><td style="padding:32px;">
-          <p style="margin:0 0 24px;color:#222;font-size:15px;line-height:1.6;">Hi ${agent.name},</p>
-          <p style="margin:0 0 24px;color:#555;font-size:14px;line-height:1.6;">You've been added as a team member on ${_inviteBrand} — an AI-powered customer engagement platform. Use the credentials below to sign in and get started.</p>
+          <p style="margin:0 0 24px;color:#222;font-size:15px;line-height:1.6;">Hi ${esc(agent.name)},</p>
+          <p style="margin:0 0 24px;color:#555;font-size:14px;line-height:1.6;">You've been added as a team member on ${esc(_inviteBrand)} — an AI-powered customer engagement platform. Use the credentials below to sign in and get started.</p>
           <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f9f0;border:1px solid #c8e6c9;border-radius:10px;margin-bottom:28px;">
             <tr><td style="padding:22px 26px;">
               <p style="margin:0 0 4px;font-size:11px;color:#666;text-transform:uppercase;font-weight:700;">Login Email</p>
-              <p style="margin:0 0 20px;font-size:15px;font-weight:700;color:#222;">${agent.email}</p>
+              <p style="margin:0 0 20px;font-size:15px;font-weight:700;color:#222;">${esc(agent.email)}</p>
               <p style="margin:0 0 4px;font-size:11px;color:#666;text-transform:uppercase;font-weight:700;">Temporary Password</p>
-              <p style="margin:0 0 20px;font-size:15px;font-weight:700;color:#0F510F;letter-spacing:1px;">${tempPass}</p>
-              <a href="${_inviteAppUrl}/login" style="display:inline-block;background:#0F510F;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;">Sign In to Dashboard</a>
+              <p style="margin:0 0 20px;font-size:15px;font-weight:700;color:#0F510F;letter-spacing:1px;">${esc(tempPass)}</p>
+              <a href="${esc(_inviteAppUrl)}/login" style="display:inline-block;background:#0F510F;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;">Sign In to Dashboard</a>
             </td></tr>
           </table>
           <p style="margin:0 0 10px;color:#444;font-size:14px;font-weight:700;">Getting started</p>
@@ -383,7 +384,7 @@ export function registerRegistrationRoutes(app: Express): void {
           <p style="margin:0;color:#555;font-size:13px;line-height:1.6;">If you have any trouble signing in or did not expect this invitation, please contact your team administrator.</p>
         </td></tr>
         <tr><td style="background:#f9f9f9;border-top:1px solid #eee;padding:16px 32px;">
-          <p style="margin:0;font-size:11px;color:#aaa;text-align:center;">&copy; ${_iYear} ${_inviteBrand}. All rights reserved.</p>
+          <p style="margin:0;font-size:11px;color:#aaa;text-align:center;">&copy; ${_iYear} ${esc(_inviteBrand)}. All rights reserved.</p>
         </td></tr>
       </table>
     </td></tr>
@@ -411,7 +412,7 @@ export function registerRegistrationRoutes(app: Express): void {
   });
 
   // ── Step 6: Complete onboarding ─────────────────────────────────────────
-  app.post('/api/register/complete', requireAuth, async (req: any, res: any) => {
+  app.post('/api/register/complete', requireAdmin, async (req: any, res: any) => {
     const companyId = req.companyId;
 
     try {

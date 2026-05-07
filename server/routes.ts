@@ -55,10 +55,22 @@ export async function registerRoutes(
     ON messages(company_id, customer_phone)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_messages_company_created
     ON messages(company_id, created_at DESC)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_messages_conversation_id
+    ON messages(conversation_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_messages_company_phone_created
+    ON messages(company_id, customer_phone, created_at DESC)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_escalations_company_phone
     ON escalations(company_id, customer_phone)`);
   await pool.query(`CREATE INDEX IF NOT EXISTS idx_meetings_company_status
     ON meetings(company_id, status)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_survey_responses_survey_company
+    ON survey_responses(survey_id, company_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_survey_responses_phone_company
+    ON survey_responses(customer_phone, company_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_survey_answers_response_id
+    ON survey_answers(response_id)`);
+  await pool.query(`CREATE INDEX IF NOT EXISTS idx_orders_phone_company
+    ON orders(customer_phone, company_id)`);
 
   // Drop the duplicate escalations index left by a double-migration.
   await pool.query(`DROP INDEX IF EXISTS idx_escalations_assigned`);
@@ -175,7 +187,7 @@ export async function registerRoutes(
   registerCustomerRoutes(app);
   registerPushRoutes(app);
   registerSettingsRoutes(app);
-  registerSurveyRoutes(app, requireAuth);
+  registerSurveyRoutes(app, requireAuth, requireAdmin);
   registerAgentRoutes(app, requireAdmin, requireAuth);
 
   return httpServer;

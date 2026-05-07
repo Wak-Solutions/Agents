@@ -42,6 +42,7 @@ export async function createDailyRoom(): Promise<DailyRoom> {
         exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24, // expires in 24 hours
       },
     }),
+    signal: AbortSignal.timeout(10_000),
   });
 
   if (!response.ok) {

@@ -416,7 +416,9 @@ export function registerCustomerRoutes(app: Express): void {
       await client.query('BEGIN');
       for (const row of rows) {
         const phone = String(row.phone || '').trim().replace(/[\s\-().]/g, '');
-        const name  = String(row.name  || '').trim() || null;
+        const rawName = String(row.name || '').trim();
+        if (rawName.length > 255) { invalid++; continue; }
+        const name = rawName.length > 0 ? rawName : null;
         if (!/^\+?\d{7,15}$/.test(phone)) { invalid++; continue; }
         try {
           const upsert = await client.query(

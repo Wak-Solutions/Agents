@@ -25,7 +25,7 @@ import { requireAuth } from '../middleware/auth';
 import { createLogger } from '../lib/logger';
 import { api } from '@shared/routes';
 import { getCompanyTrialStatus } from '../lib/trial';
-import { sendEmail } from '../email';
+import { sendEmail, esc } from '../email';
 import { getCompanyBranding } from './settings.routes';
 
 const logger = createLogger('auth');
@@ -270,7 +270,7 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
       }
     } catch (err: any) {
       logger.error('WebAuthn register verify error', err.message);
-      res.status(400).json({ message: err.message });
+      res.status(400).json({ message: 'Biometric registration failed' });
     }
   });
 
@@ -407,7 +407,7 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
       }
     } catch (err: any) {
       logger.error('WebAuthn login verify error', err.message);
-      res.status(401).json({ message: err.message });
+      res.status(401).json({ message: 'Biometric authentication failed' });
     }
   });
 
@@ -454,14 +454,17 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
     return crypto.createHash('sha256').update(raw).digest('hex');
   }
 
-  function getAppBaseUrl(req: any): string {
-    const raw = (
+  function getAppBaseUrl(_req: any): string {
+    const trusted =
       process.env.APP_URL ||
       process.env.RAILWAY_PUBLIC_URL ||
-      process.env.RAILWAY_PUBLIC_DOMAIN ||
-      req.headers.host ||
-      'localhost'
-    ).replace(/\/$/, '');
+      process.env.RAILWAY_PUBLIC_DOMAIN;
+    if (!trusted) {
+      // No trusted env var set — safe for local dev, must be configured in production.
+      logger.warn('getAppBaseUrl — no APP_URL/RAILWAY_PUBLIC_URL/RAILWAY_PUBLIC_DOMAIN set; password-reset links will use localhost');
+      return 'http://localhost:5000';
+    }
+    const raw = trusted.replace(/\/$/, '');
     return raw.startsWith('http') ? raw : `https://${raw}`;
   }
 
@@ -509,12 +512,12 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
         <div style="font-family:Arial,Helvetica,sans-serif;background:#f5f5f5;padding:32px 16px;">
           <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;">
             <div style="background:#0F510F;padding:22px 28px;">
-              <h1 style="margin:0;color:#fff;font-size:20px;">${brandName}</h1>
+              <h1 style="margin:0;color:#fff;font-size:20px;">${esc(brandName)}</h1>
               <p style="margin:4px 0 0;color:rgba(255,255,255,0.8);font-size:13px;">Password reset</p>
             </div>
             <div style="padding:28px;color:#333;font-size:14px;line-height:1.6;">
-              <p>Hi ${agent.name || 'there'},</p>
-              <p>We received a request to reset the password for your ${brandName} account. Click the button below to choose a new password. This link is valid for ${RESET_TTL_MINUTES} minutes and can only be used once.</p>
+              <p>Hi ${esc(agent.name) || 'there'},</p>
+              <p>We received a request to reset the password for your ${esc(brandName)} account. Click the button below to choose a new password. This link is valid for ${RESET_TTL_MINUTES} minutes and can only be used once.</p>
               <p style="text-align:center;margin:28px 0;">
                 <a href="${resetUrl}" style="background:#0F510F;color:#fff;text-decoration:none;padding:12px 26px;border-radius:8px;font-weight:600;display:inline-block;">Reset Password</a>
               </p>
@@ -547,6 +550,9 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
       if (newPassword.length < 8) {
         return res.status(400).json({ message: 'New password must be at least 8 characters' });
       }
+      if (newPassword.length > 128) {
+        return res.status(400).json({ message: 'New password must be at most 128 characters' });
+      }
 
       const tokenHash = hashToken(token);
       const r = await pool.query(
@@ -560,6 +566,9 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
         return res.status(400).json({ message: 'This reset link is invalid or has expired.' });
       }
       if (reset.used_at || new Date(reset.expires_at) < new Date()) {
+        // Pad timing to match the "not found" path so existence of an expired
+        // token cannot be inferred from response time.
+        await bcrypt.compare('dummy', '$2b$10$abcdefghijklmnopqrstuuABCDEFGHIJKLMNOPQRSTUVWXYZ012345');
         return res.status(400).json({ message: 'This reset link is invalid or has expired.' });
       }
 

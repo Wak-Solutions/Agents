@@ -125,7 +125,7 @@ export async function sendSurveyToCustomer(
 
 // ── Route registration ────────────────────────────────────────────────────────
 
-export function registerSurveyRoutes(app: any, requireAuth: any): void {
+export function registerSurveyRoutes(app: any, requireAuth: any, requireAdmin: any): void {
 
   // ── Admin: summary for Statistics tab ─────────────────────────────────────
   // Must come before /api/surveys/:id to avoid "active-summary" matching as id
@@ -197,7 +197,7 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
     }
   });
 
-  app.post('/api/surveys', requireAuth, async (req: any, res: any) => {
+  app.post('/api/surveys', requireAdmin, async (req: any, res: any) => {
     try {
       const companyId: number = req.companyId;
       const { title, description } = z.object({
@@ -216,7 +216,9 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
       );
       res.status(201).json(result.rows[0]);
     } catch (err: any) {
-      res.status(400).json({ message: err.message });
+      if (err instanceof z.ZodError) return res.status(400).json({ message: 'Invalid input' });
+      logger.error('createSurvey failed', err.message);
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
@@ -238,7 +240,7 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
     }
   });
 
-  app.put('/api/surveys/:id', requireAuth, async (req: any, res: any) => {
+  app.put('/api/surveys/:id', requireAdmin, async (req: any, res: any) => {
     try {
       const companyId: number = req.companyId;
       const { title, description } = z.object({
@@ -252,11 +254,13 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
       if (result.rows.length === 0) return res.status(404).json({ message: 'Survey not found' });
       res.json(result.rows[0]);
     } catch (err: any) {
-      res.status(400).json({ message: err.message });
+      if (err instanceof z.ZodError) return res.status(400).json({ message: 'Invalid input' });
+      logger.error('updateSurvey failed', err.message);
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
-  app.delete('/api/surveys/:id', requireAuth, async (req: any, res: any) => {
+  app.delete('/api/surveys/:id', requireAdmin, async (req: any, res: any) => {
     try {
       const companyId: number = req.companyId;
       const survey = await pool.query(
@@ -274,7 +278,7 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
     }
   });
 
-  app.post('/api/surveys/:id/activate', requireAuth, async (req: any, res: any) => {
+  app.post('/api/surveys/:id/activate', requireAdmin, async (req: any, res: any) => {
     try {
       const companyId: number = req.companyId;
       await pool.query(`UPDATE surveys SET is_active=false, updated_at=NOW() WHERE company_id=$1`, [companyId]);
@@ -289,7 +293,7 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
     }
   });
 
-  app.post('/api/surveys/:id/deactivate', requireAuth, async (req: any, res: any) => {
+  app.post('/api/surveys/:id/deactivate', requireAdmin, async (req: any, res: any) => {
     try {
       const companyId: number = req.companyId;
       const result = await pool.query(
@@ -305,7 +309,7 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
 
   // ── Admin: Question Management ─────────────────────────────────────────────
 
-  app.post('/api/surveys/:id/questions', requireAuth, async (req: any, res: any) => {
+  app.post('/api/surveys/:id/questions', requireAdmin, async (req: any, res: any) => {
     try {
       // Verify the survey belongs to this company before adding questions
       const companyId: number = req.companyId;
@@ -327,12 +331,14 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
       );
       res.status(201).json(result.rows[0]);
     } catch (err: any) {
-      res.status(400).json({ message: err.message });
+      if (err instanceof z.ZodError) return res.status(400).json({ message: 'Invalid input' });
+      logger.error('createSurveyQuestion failed', err.message);
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
   // IMPORTANT: reorder must come BEFORE /:qid
-  app.put('/api/surveys/:id/questions/reorder', requireAuth, async (req: any, res: any) => {
+  app.put('/api/surveys/:id/questions/reorder', requireAdmin, async (req: any, res: any) => {
     try {
       const companyId: number = req.companyId;
       // Verify survey belongs to this company before touching its questions.
@@ -362,11 +368,13 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
       }
       res.json({ success: true });
     } catch (err: any) {
-      res.status(400).json({ message: err.message });
+      if (err instanceof z.ZodError) return res.status(400).json({ message: 'Invalid input' });
+      logger.error('reorderSurveyQuestions failed', err.message);
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
-  app.put('/api/surveys/:id/questions/:qid', requireAuth, async (req: any, res: any) => {
+  app.put('/api/surveys/:id/questions/:qid', requireAdmin, async (req: any, res: any) => {
     try {
       const companyId: number = req.companyId;
       // Verify survey belongs to this company before updating its questions.
@@ -390,11 +398,13 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
       if (result.rows.length === 0) return res.status(404).json({ message: 'Question not found' });
       res.json(result.rows[0]);
     } catch (err: any) {
-      res.status(400).json({ message: err.message });
+      if (err instanceof z.ZodError) return res.status(400).json({ message: 'Invalid input' });
+      logger.error('updateSurveyQuestion failed', err.message);
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 
-  app.delete('/api/surveys/:id/questions/:qid', requireAuth, async (req: any, res: any) => {
+  app.delete('/api/surveys/:id/questions/:qid', requireAdmin, async (req: any, res: any) => {
     try {
       const companyId: number = req.companyId;
       // Verify survey belongs to this company before deleting its questions.
@@ -551,7 +561,7 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
 
       const answers = z.array(z.object({
         question_id: z.number(),
-        answer_text:   z.string().optional().nullable(),
+        answer_text:   z.string().max(5_000).optional().nullable(),
         answer_rating: z.number().int().min(1).max(5).optional().nullable(),
         answer_yes_no: z.boolean().optional().nullable(),
       })).parse(req.body.answers ?? []);
@@ -571,7 +581,9 @@ export function registerSurveyRoutes(app: any, requireAuth: any): void {
       );
       res.json({ success: true });
     } catch (err: any) {
-      res.status(400).json({ message: err.message });
+      if (err instanceof z.ZodError) return res.status(400).json({ message: 'Invalid input' });
+      logger.error('submitSurvey failed', err.message);
+      res.status(500).json({ message: 'Internal error' });
     }
   });
 }

@@ -9,12 +9,13 @@
 import crypto from 'crypto';
 import { z } from 'zod';
 import type { Express } from 'express';
+import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 
 import { pool } from '../db';
 import { requireAuth } from '../middleware/auth';
 import { resolveCompanyFromSecret } from '../helpers/resolveCompanyFromSecret';
 import { notifyAgent, notifyAll } from '../push';
-import { notifyManagerNewBooking, sendEmail } from '../email';
+import { notifyManagerNewBooking, sendEmail, esc } from '../email';
 import { sendSurveyToCustomer } from '../surveys';
 import { createDailyRoom } from '../integrations/daily';
 import { getCompanyBranding } from './settings.routes';
@@ -76,6 +77,18 @@ export async function ensureBlockedSlotsCompanyId(): Promise<void> {
 }
 
 export function registerMeetingRoutes(app: Express): void {
+
+  // Rate limiter for unauthenticated public token-lookup endpoints.
+  // 20 req / 15 min per IP — enough for a customer clicking their link a
+  // few times; too low to make token-guessing practical.
+  const publicTokenLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    keyGenerator: (req: any) => ipKeyGenerator(req) ?? req.ip ?? 'unknown',
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: 'Too many requests' },
+  });
 
   // ── Internal: create booking token (called by Python bot) ────────────────
   app.post('/api/meetings/create-token', async (req: any, res: any) => {
@@ -151,6 +164,7 @@ export function registerMeetingRoutes(app: Express): void {
       const source = req.body?.source === 'demo' ? 'demo' : 'meeting';
 
       if (source === 'demo') {
+        if (companyId !== 1) return res.status(403).json({ message: 'Forbidden' });
         const result = await pool.query(
           `UPDATE demo_bookings SET status = 'in_progress', agent_id = $2 WHERE id = $1
            RETURNING *, (SELECT name FROM agents WHERE id = $2) AS agent_name`,
@@ -182,6 +196,7 @@ export function registerMeetingRoutes(app: Express): void {
       const source = req.body?.source === 'demo' ? 'demo' : 'meeting';
 
       if (source === 'demo') {
+        if (companyId !== 1) return res.status(403).json({ message: 'Forbidden' });
         const result = await pool.query(
           `UPDATE demo_bookings SET status = 'completed' WHERE id = $1 RETURNING *`,
           [req.params.id]
@@ -296,7 +311,7 @@ export function registerMeetingRoutes(app: Express): void {
   });
 
   // ── Public: get meeting details by token ──────────────────────────────────
-  app.get('/api/meeting/:token', async (req: any, res: any) => {
+  app.get('/api/meeting/:token', publicTokenLimiter, async (req: any, res: any) => {
     try {
       const result = await pool.query(
         `SELECT id, meeting_link, scheduled_at, status, company_id
@@ -312,7 +327,6 @@ export function registerMeetingRoutes(app: Express): void {
         m.status === 'completed' ||
         (m.scheduled_at && new Date(m.scheduled_at).getTime() + 2 * 60 * 60 * 1000 < Date.now());
       res.json({
-        meeting_id: m.id,
         meeting_link: isExpired ? null : (m.meeting_link || null),
         scheduled_time: scheduledTime,
         status: m.status,
@@ -591,18 +605,18 @@ export function registerMeetingRoutes(app: Express): void {
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
         <tr><td style="background:#0F510F;padding:28px 32px;">
-          <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">${brandName}</h1>
+          <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">${esc(brandName)}</h1>
           <p style="margin:4px 0 0;color:rgba(255,255,255,0.7);font-size:13px;">Meeting Confirmation</p>
         </td></tr>
         <tr><td style="padding:32px;">
-          <p style="margin:0 0 24px;color:#222;font-size:15px;line-height:1.6;">Your meeting with ${brandName} is confirmed. We look forward to connecting with you — please save the details below so you have everything you need on the day.</p>
+          <p style="margin:0 0 24px;color:#222;font-size:15px;line-height:1.6;">Your meeting with ${esc(brandName)} is confirmed. We look forward to connecting with you — please save the details below so you have everything you need on the day.</p>
           <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f9f0;border:1px solid #c8e6c9;border-radius:10px;margin-bottom:28px;">
             <tr><td style="padding:22px 26px;">
               <p style="margin:0 0 4px;font-size:11px;color:#666;text-transform:uppercase;font-weight:700;">Date &amp; Time (AST — UTC+3)</p>
-              <p style="margin:0 0 20px;font-size:16px;font-weight:700;color:#0F510F;">${ksaLabel}</p>
+              <p style="margin:0 0 20px;font-size:16px;font-weight:700;color:#0F510F;">${esc(ksaLabel)}</p>
               <p style="margin:0 0 4px;font-size:11px;color:#666;text-transform:uppercase;font-weight:700;">Meeting Link</p>
-              <a href="${brandedLink}" style="font-size:14px;color:#0F510F;font-weight:600;word-break:break-all;">${brandedLink}</a><br />
-              <a href="${brandedLink}" style="display:inline-block;margin-top:12px;background:#0F510F;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;">Join Meeting</a>
+              <a href="${esc(brandedLink)}" style="font-size:14px;color:#0F510F;font-weight:600;word-break:break-all;">${esc(brandedLink)}</a><br />
+              <a href="${esc(brandedLink)}" style="display:inline-block;margin-top:12px;background:#0F510F;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;">Join Meeting</a>
             </td></tr>
           </table>
           <a href="${customerCalUrl}" target="_blank" style="display:inline-block;background:#4285F4;color:#fff;text-decoration:none;padding:11px 22px;border-radius:6px;font-size:14px;font-weight:600;margin-bottom:28px;">&#128197; Add to Google Calendar</a>
@@ -615,7 +629,7 @@ export function registerMeetingRoutes(app: Express): void {
           <p style="margin:0;color:#555;font-size:13px;line-height:1.6;">Need to reschedule or have a question? Simply reply to us on WhatsApp and we will be happy to help.</p>
         </td></tr>
         <tr><td style="background:#f9f9f9;border-top:1px solid #eee;padding:16px 32px;">
-          <p style="margin:0;font-size:11px;color:#aaa;text-align:center;">&copy; ${_year} ${brandName}. All rights reserved.</p>
+          <p style="margin:0;font-size:11px;color:#aaa;text-align:center;">&copy; ${_year} ${esc(brandName)}. All rights reserved.</p>
         </td></tr>
       </table>
     </td></tr>
@@ -759,6 +773,7 @@ export function registerMeetingRoutes(app: Express): void {
   app.post('/api/demo-booking/book', requireAuth, async (req: any, res: any) => {
     try {
       const wakCompanyId = 1;
+      if (req.companyId !== wakCompanyId) return res.status(403).json({ message: 'Forbidden' });
       const agentId = req.session.agentId;
 
       const { date, time } = z.object({
@@ -850,32 +865,32 @@ export function registerMeetingRoutes(app: Express): void {
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
         <tr><td style="background:#0F510F;padding:28px 32px;">
-          <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">${wakBrandName}</h1>
+          <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">${esc(wakBrandName)}</h1>
           <p style="margin:4px 0 0;color:rgba(255,255,255,0.7);font-size:13px;">Demo Booking Confirmation</p>
         </td></tr>
         <tr><td style="padding:32px;">
-          <p style="margin:0 0 24px;color:#222;font-size:15px;line-height:1.6;">Hi ${agent.name || 'there'},</p>
-          <p style="margin:0 0 24px;color:#555;font-size:14px;line-height:1.6;">Your demo session with ${wakBrandName} is confirmed. We're excited to walk you through the platform and show you how it can transform your customer engagement. Please save the details below.</p>
+          <p style="margin:0 0 24px;color:#222;font-size:15px;line-height:1.6;">Hi ${esc(agent.name) || 'there'},</p>
+          <p style="margin:0 0 24px;color:#555;font-size:14px;line-height:1.6;">Your demo session with ${esc(wakBrandName)} is confirmed. We're excited to walk you through the platform and show you how it can transform your customer engagement. Please save the details below.</p>
           <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f9f0;border:1px solid #c8e6c9;border-radius:10px;margin-bottom:28px;">
             <tr><td style="padding:22px 26px;">
               <p style="margin:0 0 4px;font-size:11px;color:#666;text-transform:uppercase;font-weight:700;">Date &amp; Time (AST — UTC+3)</p>
-              <p style="margin:0 0 20px;font-size:16px;font-weight:700;color:#0F510F;">${ksaLabel}</p>
+              <p style="margin:0 0 20px;font-size:16px;font-weight:700;color:#0F510F;">${esc(ksaLabel)}</p>
               <p style="margin:0 0 4px;font-size:11px;color:#666;text-transform:uppercase;font-weight:700;">Meeting Link</p>
-              <a href="${meetingLink}" style="font-size:14px;color:#0F510F;font-weight:600;word-break:break-all;">${meetingLink}</a><br />
-              <a href="${meetingLink}" style="display:inline-block;margin-top:12px;background:#0F510F;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;">Join Demo</a>
+              <a href="${esc(meetingLink)}" style="font-size:14px;color:#0F510F;font-weight:600;word-break:break-all;">${esc(meetingLink)}</a><br />
+              <a href="${esc(meetingLink)}" style="display:inline-block;margin-top:12px;background:#0F510F;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;">Join Demo</a>
             </td></tr>
           </table>
           <a href="${demoCalUrl}" target="_blank" style="display:inline-block;background:#4285F4;color:#fff;text-decoration:none;padding:11px 22px;border-radius:6px;font-size:14px;font-weight:600;margin-bottom:28px;">&#128197; Add to Google Calendar</a>
           <p style="margin:0 0 10px;color:#444;font-size:14px;font-weight:700;">What to expect</p>
           <ul style="margin:0 0 24px;padding-left:20px;color:#555;font-size:13px;line-height:1.9;">
-            <li>A live walkthrough of the ${wakBrandName} platform tailored to your use case.</li>
+            <li>A live walkthrough of the ${esc(wakBrandName)} platform tailored to your use case.</li>
             <li>Time to ask questions and explore how the platform fits your team's workflow.</li>
             <li>No software to install — the meeting runs entirely in your browser.</li>
           </ul>
           <p style="margin:0;color:#555;font-size:13px;line-height:1.6;">If you need to reschedule, please get in touch with us and we'll find a time that works for you.</p>
         </td></tr>
         <tr><td style="background:#f9f9f9;border-top:1px solid #eee;padding:16px 32px;">
-          <p style="margin:0;font-size:11px;color:#aaa;text-align:center;">&copy; ${_dYear} ${wakBrandName}. All rights reserved.</p>
+          <p style="margin:0;font-size:11px;color:#aaa;text-align:center;">&copy; ${_dYear} ${esc(wakBrandName)}. All rights reserved.</p>
         </td></tr>
       </table>
     </td></tr>
@@ -903,7 +918,7 @@ export function registerMeetingRoutes(app: Express): void {
   });
 
   // ── Public: get demo booking details by token ────────────────────────────
-  app.get('/api/demo-booking/:token', async (req: any, res: any) => {
+  app.get('/api/demo-booking/:token', publicTokenLimiter, async (req: any, res: any) => {
     try {
       const result = await pool.query(
         `SELECT id, meeting_link, scheduled_at, status
@@ -916,7 +931,6 @@ export function registerMeetingRoutes(app: Express): void {
         ? new Date(new Date(m.scheduled_at).getTime() + KSA_OFFSET_MS).toISOString()
         : null;
       res.json({
-        meeting_id: m.id,
         meeting_link: m.meeting_link || null,
         scheduled_time: scheduledTime,
         status: m.status,

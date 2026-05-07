@@ -1,7 +1,7 @@
 /**
  * chatbot-config.routes.ts — Chatbot system prompt configuration routes.
  *
- * Handles: get current config (public — Python bot reads this via ?company_id=N),
+ * Handles: get current config (session auth for dashboard; webhook secret for bot callers),
  * save config, preview a compiled structured config without saving.
  *
  * The compilePrompt() function converts the structured UI config (tone, FAQ,
@@ -14,7 +14,7 @@ import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import OpenAI from 'openai';
 
 import { pool } from '../db';
-import { requireAuth } from '../middleware/auth';
+import { requireAuth, requireAdmin } from '../middleware/auth';
 import { createLogger } from '../lib/logger';
 import { resolveCompanyFromSecret } from '../helpers/resolveCompanyFromSecret';
 
@@ -26,14 +26,24 @@ const logger = createLogger('chatbot-config');
 // Depth validator — rejects menuConfig payloads deeper than 3 levels
 // ---------------------------------------------------------------------------
 
+const MENU_MAX_ITEMS = 50;
+const MENU_MAX_LABEL = 200;
+
 function menuDepthValid(items: any[]): boolean {
+  if (items.length > MENU_MAX_ITEMS) return false;
   for (const item of items) {
     if (!item || typeof item !== 'object') continue;
+    if (typeof item.label === 'string' && item.label.length > MENU_MAX_LABEL) return false;
     const subs: any[] = item.subItems || [];
+    if (subs.length > MENU_MAX_ITEMS) return false;
     for (const sub of subs) {
       if (!sub || typeof sub !== 'object') continue;
+      if (typeof sub.label === 'string' && sub.label.length > MENU_MAX_LABEL) return false;
       const subsubs: any[] = sub.subItems || [];
+      if (subsubs.length > MENU_MAX_ITEMS) return false;
       for (const ss of subsubs) {
+        const ssLabel = typeof ss === 'string' ? ss : (typeof ss === 'object' && ss !== null ? ss.label : '');
+        if (typeof ssLabel === 'string' && ssLabel.length > MENU_MAX_LABEL) return false;
         // Level 3 items must be plain strings — no further subItems allowed
         if (typeof ss === 'object' && ss !== null && Array.isArray(ss.subItems) && ss.subItems.length > 0) {
           return false;
@@ -136,8 +146,8 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
       ADD COLUMN IF NOT EXISTS menu_config        JSONB DEFAULT '[]'::jsonb
   `).catch(() => {});
 
-  // GET /api/chatbot-config — no auth required; Python bot reads this.
-  // Bot passes ?company_id=N as a query parameter. Defaults to 1 during migration.
+  // GET /api/chatbot-config — session auth for dashboard; x-webhook-secret for bot callers.
+  // Python bot reads directly from the DB (chatbot_config table) and does not call this endpoint.
   app.get('/api/chatbot-config', async (req: any, res: any) => {
     try {
       let companyId: number;
@@ -200,7 +210,7 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
   });
 
   // POST /api/chatbot-config — save config (compiles structured → prompt)
-  app.post('/api/chatbot-config', requireAuth, async (req: any, res: any) => {
+  app.post('/api/chatbot-config', requireAdmin, async (req: any, res: any) => {
     try {
       const { structured_config, override_active, raw_prompt, demo_conversation } = req.body;
       const companyId: number = req.companyId;
@@ -216,7 +226,7 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
       // Reject payloads with menu nesting deeper than 3 levels
       const menuItems: any[] = (structured_config || {}).menuConfig || [];
       if (!menuDepthValid(menuItems)) {
-        return res.status(400).json({ message: 'Menu nesting exceeds maximum depth of 3 levels' });
+        return res.status(400).json({ message: 'Menu config exceeds limits (max 3 levels deep, 50 items per level, 200 chars per label)' });
       }
 
       const activePrompt = override_active
@@ -257,7 +267,7 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
 
   // POST /api/chatbot-config/generate-conversation
   // Calls OpenAI to produce a realistic demo WhatsApp conversation JSON array.
-  app.post('/api/chatbot-config/generate-conversation', requireAuth, openAiLimiter, async (req: any, res: any) => {
+  app.post('/api/chatbot-config/generate-conversation', requireAdmin, openAiLimiter, async (req: any, res: any) => {
     try {
       const { companyName, description, services, feedback, menuConfig } = req.body;
       if (!process.env.OPENAI_API_KEY) {
@@ -328,7 +338,7 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
   // POST /api/chatbot-config/suggest
   // Takes a natural-language suggestion, asks OpenAI to return an updated
   // structured_config JSON, then saves using the exact same flow as POST /api/chatbot-config.
-  app.post('/api/chatbot-config/suggest', requireAuth, openAiLimiter, async (req: any, res: any) => {
+  app.post('/api/chatbot-config/suggest', requireAdmin, openAiLimiter, async (req: any, res: any) => {
     try {
       const { suggestion } = req.body;
       const companyId: number = req.companyId;

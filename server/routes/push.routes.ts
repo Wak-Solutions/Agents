@@ -3,7 +3,7 @@
  */
 
 import type { Express } from 'express';
-import { VAPID_PUBLIC_KEY, registerSubscription, removeSubscription } from '../push';
+import { VAPID_PUBLIC_KEY, registerSubscription, removeSubscriptionForAgent } from '../push';
 import { requireAuth } from '../middleware/auth';
 import { createLogger } from '../lib/logger';
 import { api } from '@shared/routes';
@@ -35,8 +35,10 @@ export function registerPushRoutes(app: Express): void {
   app.post(api.push.unsubscribe.path, requireAuth, async (req: any, res: any) => {
     try {
       const { endpoint } = req.body;
-      if (endpoint) await removeSubscription(endpoint);
-      logger.info('Push subscription removed', `agentId: ${req.session.agentId}`);
+      const agentId = req.session.agentId as number;
+      const companyId = req.companyId as number;
+      if (endpoint) await removeSubscriptionForAgent(endpoint, agentId, companyId);
+      logger.info('Push subscription removed', `agentId: ${agentId}`);
       res.json({ success: true });
     } catch (err: any) {
       logger.error('Unsubscribe failed', err.message);

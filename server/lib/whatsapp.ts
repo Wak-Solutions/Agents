@@ -42,6 +42,7 @@ export async function sendWhatsAppText(
         type: 'text',
         text: { body },
       }),
+      signal: AbortSignal.timeout(10_000),
     });
     if (!res.ok) {
       const errBody = await res.text().catch(() => '');

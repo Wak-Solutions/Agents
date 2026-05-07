@@ -12,6 +12,17 @@ import { getCompanyBranding } from "./routes/settings.routes";
 
 const logger = createLogger("email");
 
+/** Escape user-supplied strings before interpolating into HTML email bodies. */
+export function esc(value: string | null | undefined): string {
+  if (!value) return '';
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 const brevoClient = new BrevoClient({ apiKey: process.env.BREVO_API_KEY! });
 
 function maskEmail(email: string): string {
@@ -119,7 +130,7 @@ export async function notifyManagerNewBooking(opts: {
     <tr><td align="center">
       <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
         <tr><td style="background:#0F510F;padding:28px 32px;">
-          <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">${brandName}</h1>
+          <h1 style="margin:0;color:#ffffff;font-size:22px;font-weight:700;">${esc(brandName)}</h1>
           <p style="margin:4px 0 0;color:rgba(255,255,255,0.7);font-size:13px;">New Meeting Booking</p>
         </td></tr>
         <tr><td style="padding:32px;">
@@ -127,19 +138,19 @@ export async function notifyManagerNewBooking(opts: {
           <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f9f0;border:1px solid #c8e6c9;border-radius:10px;margin-bottom:28px;">
             <tr><td style="padding:22px 26px;">
               <p style="margin:0 0 4px;font-size:11px;color:#666;text-transform:uppercase;font-weight:700;">Customer</p>
-              <p style="margin:0 0 20px;font-size:16px;font-weight:700;color:#222;">${opts.customerPhone}</p>
+              <p style="margin:0 0 20px;font-size:16px;font-weight:700;color:#222;">${esc(opts.customerPhone)}</p>
               <p style="margin:0 0 4px;font-size:11px;color:#666;text-transform:uppercase;font-weight:700;">Date &amp; Time (AST — UTC+3)</p>
-              <p style="margin:0 0 20px;font-size:16px;font-weight:700;color:#0F510F;">${opts.dateTimeLabel}</p>
+              <p style="margin:0 0 20px;font-size:16px;font-weight:700;color:#0F510F;">${esc(opts.dateTimeLabel)}</p>
               <p style="margin:0 0 4px;font-size:11px;color:#666;text-transform:uppercase;font-weight:700;">Meeting Link</p>
-              <a href="${opts.meetingLink}" style="font-size:14px;color:#0F510F;font-weight:600;word-break:break-all;">${opts.meetingLink}</a><br />
-              <a href="${opts.meetingLink}" style="display:inline-block;margin-top:12px;background:#0F510F;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;">Join Meeting</a>
+              <a href="${esc(opts.meetingLink)}" style="font-size:14px;color:#0F510F;font-weight:600;word-break:break-all;">${esc(opts.meetingLink)}</a><br />
+              <a href="${esc(opts.meetingLink)}" style="display:inline-block;margin-top:12px;background:#0F510F;color:#fff;text-decoration:none;padding:10px 22px;border-radius:6px;font-size:14px;font-weight:600;">Join Meeting</a>
             </td></tr>
           </table>
           <a href="${calUrl}" target="_blank" style="display:inline-block;background:#4285F4;color:#fff;text-decoration:none;padding:11px 22px;border-radius:6px;font-size:14px;font-weight:600;margin-bottom:24px;">&#128197; Add to Google Calendar</a>
           <p style="margin:0;color:#555;font-size:13px;">The customer will receive a WhatsApp reminder 15 minutes before the meeting.</p>
         </td></tr>
         <tr><td style="background:#f9f9f9;border-top:1px solid #eee;padding:16px 32px;">
-          <p style="margin:0;font-size:11px;color:#aaa;text-align:center;">&copy; ${year} ${brandName}. All rights reserved.</p>
+          <p style="margin:0;font-size:11px;color:#aaa;text-align:center;">&copy; ${year} ${esc(brandName)}. All rights reserved.</p>
         </td></tr>
       </table>
     </td></tr>

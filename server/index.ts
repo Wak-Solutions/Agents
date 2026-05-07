@@ -71,13 +71,9 @@ function slog(level: string, module: string, message: string, context?: string) 
 }
 
 function validateStartupEnv() {
-  const missing = ["DATABASE_URL"].filter(
+  const missing = ["DATABASE_URL", "SESSION_SECRET"].filter(
     (key) => !process.env[key],
   );
-
-  if (process.env.NODE_ENV === "production" && !process.env.SESSION_SECRET) {
-    missing.push("SESSION_SECRET");
-  }
 
   if (missing.length === 0) {
     return;
@@ -259,6 +255,22 @@ app.use((req, res, next) => {
     slog('INFO', 'db', 'push_subscriptions migration applied');
   } catch (err) {
     slog('WARN', 'db', 'push_subscriptions migration error (continuing)', String(err));
+    if (process.env.NODE_ENV === 'production') { slog('ERROR', 'db', 'Fatal migration failure — exiting'); process.exit(1); }
+  }
+
+  // ── chat_notified — persists push-notification dedup across restarts ─────
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS chat_notified (
+        key        TEXT        PRIMARY KEY,
+        notified_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+    // Purge entries older than 24 h on startup (same TTL as conversation sessions)
+    await pool.query(`DELETE FROM chat_notified WHERE notified_at < NOW() - INTERVAL '24 hours'`);
+    slog('INFO', 'db', 'chat_notified migration applied');
+  } catch (err) {
+    slog('WARN', 'db', 'chat_notified migration error (continuing)', String(err));
     if (process.env.NODE_ENV === 'production') { slog('ERROR', 'db', 'Fatal migration failure — exiting'); process.exit(1); }
   }
 

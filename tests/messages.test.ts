@@ -23,9 +23,9 @@ const _notifiedSet = new Set<string>();
 vi.mock('../server/push', () => ({
   notifyAgent: vi.fn().mockResolvedValue(undefined),
   notifyAll: vi.fn().mockResolvedValue(undefined),
-  addNotified: vi.fn((k: string) => { _notifiedSet.add(k); }),
-  hasNotified: vi.fn((k: string) => _notifiedSet.has(k)),
-  deleteNotified: vi.fn((k: string) => { _notifiedSet.delete(k); }),
+  addNotified: vi.fn((k: string) => { _notifiedSet.add(k); return Promise.resolve(); }),
+  hasNotified: vi.fn((k: string) => Promise.resolve(_notifiedSet.has(k))),
+  deleteNotified: vi.fn((k: string) => { _notifiedSet.delete(k); return Promise.resolve(); }),
   VAPID_PUBLIC_KEY: '',
 }));
 
@@ -41,7 +41,10 @@ function buildMessagesApp() {
 }
 
 describe('POST /api/incoming', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    _notifiedSet.clear(); // CR-024: prevent notifiedChats state leaking between tests
+  });
 
   it('returns 401 with no x-webhook-secret header', async () => {
     const { app } = await buildMessagesApp();

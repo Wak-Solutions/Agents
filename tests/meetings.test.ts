@@ -523,7 +523,7 @@ describe('GET /api/demo-booking/:token (public)', () => {
     });
     const res = await request(app).get('/api/demo-booking/abc');
     expect(res.status).toBe(200);
-    expect(res.body.meeting_id).toBe(9);
+    expect(res.body.meeting_id).toBeUndefined();
     expect(res.body.meeting_link).toBe('https://daily.co/r/y');
 
     const [sql] = (pool.query as any).mock.calls[0];

@@ -26,6 +26,14 @@ export function registerStatisticsRoutes(app: Express): void {
       if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
         return res.status(400).json({ message: 'Invalid date format' });
       }
+      const MAX_RANGE_DAYS = 366;
+      const rangeDays = (toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24);
+      if (rangeDays < 0) {
+        return res.status(400).json({ message: "'from' must be before 'to'" });
+      }
+      if (rangeDays > MAX_RANGE_DAYS) {
+        return res.status(400).json({ message: `Date range may not exceed ${MAX_RANGE_DAYS} days` });
+      }
       const companyId: number = req.companyId;
       const [totalCustomers, perDay] = await Promise.all([
         storage.getTotalUniqueCustomers(fromDate, toDate, companyId),
@@ -44,6 +52,13 @@ export function registerStatisticsRoutes(app: Express): void {
       const { from, to } = z.object({ from: z.string(), to: z.string() }).parse(req.body);
       const fromDate = new Date(from);
       const toDate = new Date(to);
+      if (isNaN(fromDate.getTime()) || isNaN(toDate.getTime())) {
+        return res.status(400).json({ message: 'Invalid date format' });
+      }
+      const summaryRangeDays = (toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24);
+      if (summaryRangeDays < 0 || summaryRangeDays > 366) {
+        return res.status(400).json({ message: 'Date range must be between 0 and 366 days' });
+      }
       const companyId: number = req.companyId;
 
       const apiKey = process.env.OPENAI_API_KEY;
@@ -98,6 +113,7 @@ export function registerStatisticsRoutes(app: Express): void {
           max_tokens: 400,
           temperature: 0.4,
         }),
+        signal: AbortSignal.timeout(30_000),
       });
 
       if (!openAiRes.ok) {

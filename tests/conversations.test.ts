@@ -22,9 +22,9 @@ vi.mock('../server/lib/trial', () => ({
 vi.mock('../server/push', () => ({
   notifyAgent: vi.fn().mockResolvedValue(undefined),
   notifyAll: vi.fn().mockResolvedValue(undefined),
-  addNotified: vi.fn(),
-  hasNotified: vi.fn().mockReturnValue(false),
-  deleteNotified: vi.fn(),
+  addNotified: vi.fn().mockResolvedValue(undefined),
+  hasNotified: vi.fn().mockResolvedValue(false),
+  deleteNotified: vi.fn().mockResolvedValue(undefined),
   VAPID_PUBLIC_KEY: '',
 }));
 

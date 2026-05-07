@@ -124,10 +124,20 @@ export function registerInboxRoutes(app: Express): void {
         `, [companyId]),
       ]);
 
-      const items = [...escRes.rows, ...meetRes.rows].sort(
-        (a: any, b: any) =>
+      const isAdmin = req.session.role === 'admin';
+      const sessionAgentId: number | null = req.session.agentId ?? null;
+
+      const items = [...escRes.rows, ...meetRes.rows]
+        .sort((a: any, b: any) =>
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
+        )
+        .map((item: any) => {
+          if (!isAdmin && item.meeting_link !== null && item.meeting_agent_id !== sessionAgentId) {
+            return { ...item, meeting_link: null };
+          }
+          return item;
+        });
+
       res.json(items);
     } catch (err: any) {
       logger.error('getInbox failed', err.message);

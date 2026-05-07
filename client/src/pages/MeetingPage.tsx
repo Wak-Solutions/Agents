@@ -3,7 +3,6 @@ import { useParams } from "wouter";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
 
 interface MeetingData {
-  meeting_id: number;
   meeting_link: string | null;
   scheduled_time: string | null;
   status: string;

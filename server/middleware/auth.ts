@@ -91,9 +91,27 @@ export async function requireAdmin(req: Request, res: Response, next: NextFuncti
     res.status(403).json({ message: 'Admin access required' });
     return;
   }
+  // Coerce and hard-fail on invalid companyId — matches requireAuth behaviour.
   const cid = Number(req.session.companyId);
-  if (Number.isInteger(cid) && cid > 0) {
-    req.companyId = cid;
+  if (!Number.isInteger(cid) || cid <= 0) {
+    res.status(401).json({ message: 'Session missing company context — please log in again' });
+    return;
+  }
+  req.companyId = cid;
+  // Use cached is_active from session; fall back to DB for older sessions.
+  // Deactivation purges sessions immediately, so this is defense-in-depth only.
+  let isActive = req.session.isActive;
+  if (isActive === undefined) {
+    const agent = await pool.query(
+      'SELECT is_active FROM agents WHERE id = $1',
+      [req.session.agentId]
+    );
+    isActive = agent.rows[0]?.is_active;
+  }
+  if (!isActive) {
+    req.session.destroy(() => {});
+    res.status(401).json({ message: 'Account deactivated' });
+    return;
   }
   if (!(await trialGate(req, res))) return;
   next();
