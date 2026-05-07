@@ -291,7 +291,7 @@ function ActiveChat({ conversation, onClose }: { conversation: Conversation; onC
   const avatarInitials = phoneStr.startsWith("+") ? phoneStr.slice(1, 3) : phoneStr.slice(-2);
 
   return (
-    <div className="flex-1 flex flex-col h-full relative">
+    <div className="flex-1 flex flex-col h-full min-h-0 relative">
       {/* ─── WhatsApp green header bar ─── */}
       <div className="px-4 py-2 bg-[#008069] flex items-center justify-between shrink-0 shadow-sm">
         <div className="flex items-center gap-3">
@@ -369,7 +369,7 @@ function ActiveChat({ conversation, onClose }: { conversation: Conversation; onC
 
       {/* ─── Messages area with wallpaper ─── */}
       <div
-        className="flex-1 overflow-y-auto px-[6%] md:px-[10%] lg:px-[14%] py-3"
+        className="flex-1 min-h-0 overflow-y-auto px-[6%] md:px-[10%] lg:px-[14%] py-3"
         style={{ background: WA_WALLPAPER, backgroundSize: "400px 400px" }}
       >
         {messages.map((msg, idx) => {

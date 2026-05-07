@@ -56,7 +56,7 @@ export default function Dashboard() {
   return (
     <DashboardLayout noPadding>
       <BrandingWarning />
-      <div className="flex h-full overflow-hidden">
+      <div className="flex h-full min-h-0 overflow-hidden">
         {/* Conversation list */}
         <div className={`${selectedPhone ? "hidden md:flex" : "flex w-full md:w-80"} md:w-80 h-full shrink-0`}>
           {isEscalationsLoading ? (
