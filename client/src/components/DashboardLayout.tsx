@@ -6,9 +6,18 @@ import {
   Bell, Share, Headphones, Settings, CalendarCheck, Infinity,
 } from "lucide-react";
 import { startRegistration } from "@simplewebauthn/browser";
+import { useQuery } from "@tanstack/react-query";
 import { useAuth, useLogout } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/language-context";
 import { usePushNotifications } from "@/hooks/use-push";
+
+interface TrialStatus {
+  trialDays: number;
+  createdAt: string | null;
+  expiresAt: string | null;
+  expired: boolean;
+  daysRemaining: number;
+}
 
 interface NavItem {
   href: string;
@@ -40,6 +49,19 @@ export default function DashboardLayout({
   const [mobileOpen, setMobileOpen] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const { showBanner, showInstallPrompt, enableNotifications, dismissInstallPrompt } = usePushNotifications(isAuthenticated, isAuthLoading);
+
+  // Trial badge — only fetch once authenticated. Server returns the canonical
+  // daysRemaining (computed from companies.created_at + config.trial_days).
+  const { data: trial } = useQuery<TrialStatus>({
+    queryKey: ['/api/me/trial'],
+    enabled: isAuthenticated,
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+  const trialDays = trial?.trialDays ?? 0;
+  const daysRemaining = trial?.daysRemaining ?? 0;
+  const showUnlimited = !trial || trialDays <= 0;
 
   useEffect(() => {
     const handleOnline  = () => setIsOnline(true);
@@ -228,7 +250,11 @@ export default function DashboardLayout({
             </a>
           </Link>
           <span className="inline-flex items-center gap-1 bg-amber-400/20 text-amber-200 text-[10px] font-semibold px-2 py-1 rounded-full border border-amber-300/30">
-            <Infinity className="w-2.5 h-2.5" /> ∞
+            {showUnlimited ? (
+              <><Infinity className="w-2.5 h-2.5" /> ∞</>
+            ) : (
+              <>{daysRemaining}d</>
+            )}
           </span>
           {agentName && (
             <div className="w-7 h-7 rounded-full bg-white/20 flex items-center justify-center">
@@ -304,7 +330,11 @@ export default function DashboardLayout({
         {/* Desktop top bar */}
         <div className="hidden md:flex items-center justify-end gap-3 px-6 py-2.5 border-b border-gray-100 bg-white shrink-0">
           <span className="inline-flex items-center gap-1.5 bg-amber-50 text-amber-700 border border-amber-200 text-[11px] font-semibold px-2.5 py-1 rounded-full">
-            <Infinity className="w-3 h-3" /> Unlimited days remaining
+            {showUnlimited ? (
+              <><Infinity className="w-3 h-3" /> Unlimited days remaining</>
+            ) : (
+              <>{daysRemaining} days remaining</>
+            )}
           </span>
           <Link href="/book-demo">
             <a className="inline-flex items-center gap-1.5 text-[#0F510F] border border-[#0F510F]/40 hover:border-[#0F510F] hover:bg-[#0F510F]/5 text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors">
