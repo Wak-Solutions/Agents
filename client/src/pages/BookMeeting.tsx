@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "wouter";
 import { Video, CalendarDays, Clock, CheckCircle2, ChevronLeft, AlertCircle } from "lucide-react";
+import { csrfFetch } from "@/lib/queryClient";
 
 interface DaySlots {
   date: string;  // YYYY-MM-DD
@@ -47,7 +48,7 @@ export default function BookMeeting() {
     if (!selectedDate || !selectedTime) return;
     setConfirming(true);
     try {
-      const res = await fetch(`/api/book/${token}`, {
+      const res = await csrfFetch(`/api/book/${token}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ date: selectedDate, time: selectedTime }),

@@ -1,4 +1,5 @@
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { csrfFetch } from "@/lib/queryClient";
 
 export interface StatsPerDay {
   date: string;
@@ -15,7 +16,7 @@ export function useStatistics(from: string, to: string) {
     queryKey: ["statistics", from, to],
     queryFn: async () => {
       const params = new URLSearchParams({ from, to });
-      const res = await fetch(`/api/statistics?${params}`, { credentials: "include" });
+      const res = await csrfFetch(`/api/statistics?${params}`, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch statistics");
       return res.json();
     },
@@ -27,7 +28,7 @@ export function useStatistics(from: string, to: string) {
 export function useAiSummary() {
   return useMutation<{ summary: string }, Error, { from: string; to: string }>({
     mutationFn: async ({ from, to }) => {
-      const res = await fetch("/api/statistics/summary", {
+      const res = await csrfFetch("/api/statistics/summary", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

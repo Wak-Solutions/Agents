@@ -1,14 +1,14 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@shared/routes";
 import { z } from "zod";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, csrfFetch } from "@/lib/queryClient";
 
 export function useAuth() {
   const { data, isLoading, error } = useQuery({
     queryKey: [api.auth.me.path],
     queryFn: async () => {
       console.log("[use-auth] fetching /api/me");
-      const res = await fetch(api.auth.me.path, { credentials: "include" });
+      const res = await csrfFetch(api.auth.me.path, { credentials: "include" });
       console.log("[use-auth] /api/me status:", res.status);
       if (res.status === 401) return { authenticated: false, role: undefined, agentId: null, agentName: undefined };
       if (!res.ok) {

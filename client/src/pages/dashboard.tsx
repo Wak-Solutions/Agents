@@ -6,6 +6,7 @@ import { useVisibilityRefetch } from "@/hooks/use-visibility-refetch";
 import DashboardLayout from "@/components/DashboardLayout";
 import { Sidebar } from "@/components/sidebar";
 import { ChatArea } from "@/components/chat-area";
+import { csrfFetch } from "@/lib/queryClient";
 
 function BrandingWarning() {
   const [show, setShow] = useState(false);
@@ -45,9 +46,8 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!selectedPhone || !isAuthenticated) return;
-    fetch(`/api/notifications/mark-read/${encodeURIComponent(selectedPhone)}`, {
+    csrfFetch(`/api/notifications/mark-read/${encodeURIComponent(selectedPhone)}`, {
       method: "POST",
-      credentials: "include",
     }).catch(() => {});
   }, [selectedPhone, isAuthenticated]);
 

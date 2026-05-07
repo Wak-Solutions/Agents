@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { MessageSquare, Eye, EyeOff, Check, AlertCircle, Lock, Building2 } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useLanguage } from "@/lib/language-context";
+import { csrfFetch } from "@/lib/queryClient";
 
 /* ─────────────────────────────────────────────────────────────────────────────
    Types
@@ -71,7 +72,7 @@ function WhatsAppPanel({ t }: { t: (k: string) => string }) {
     setSaveStatus("idle");
     setSaveError("");
     try {
-      const resp = await fetch("/api/register/whatsapp/verify", {
+      const resp = await csrfFetch("/api/register/whatsapp/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -92,7 +93,7 @@ function WhatsAppPanel({ t }: { t: (k: string) => string }) {
 
       // Auto-save on successful verify — no separate Save button.
       setSaveStatus("saving");
-      const saveResp = await fetch("/api/settings/whatsapp", {
+      const saveResp = await csrfFetch("/api/settings/whatsapp", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -286,7 +287,7 @@ function BrandingPanel({ t }: { t: (k: string) => string }) {
     setSaveError("");
     setSaveStatus("saving");
     try {
-      const resp = await fetch("/api/settings/branding", {
+      const resp = await csrfFetch("/api/settings/branding", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -407,7 +408,7 @@ function ChangePasswordPanel({ t }: { t: (k: string) => string }) {
 
     setStatus("saving");
     try {
-      const resp = await fetch("/api/settings/change-password", {
+      const resp = await csrfFetch("/api/settings/change-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",

@@ -36,6 +36,34 @@ export async function apiRequest(
   return res;
 }
 
+/**
+ * Drop-in replacement for `fetch()` that automatically attaches the CSRF
+ * header on state-changing methods. Same return shape and same throwing
+ * behaviour as `fetch` — does NOT throw on non-2xx, so call sites that
+ * inspect `res.ok` / `res.status` keep working unchanged.
+ *
+ * Use this for any internal POST/PATCH/PUT/DELETE that goes through the
+ * authenticated session. Public/webhook endpoints (CSRF-allowlisted) work
+ * with this too — the extra header is harmless when the server doesn't
+ * require it.
+ */
+export async function csrfFetch(
+  url: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const method = (init.method || 'GET').toUpperCase();
+  const isStateChanging = method !== 'GET' && method !== 'HEAD';
+  const headers = new Headers(init.headers);
+  if (isStateChanging && !headers.has('x-csrf-token')) {
+    headers.set('x-csrf-token', getCsrfToken());
+  }
+  return fetch(url, {
+    credentials: 'include',
+    ...init,
+    headers,
+  });
+}
+
 type UnauthorizedBehavior = "returnNull" | "throw";
 export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;

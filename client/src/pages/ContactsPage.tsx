@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/language-context";
 import { format } from "date-fns";
 import DashboardLayout from "@/components/DashboardLayout";
+import { csrfFetch } from "@/lib/queryClient";
 
 interface Contact {
   id: number;
@@ -121,7 +122,7 @@ export default function ContactsPage() {
   const fetchContacts = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/contacts", { credentials: "include" });
+      const res = await csrfFetch("/api/contacts", { credentials: "include" });
       if (res.ok) setContacts(await res.json());
     } catch (_) {}
     finally { setLoading(false); }
@@ -163,7 +164,7 @@ export default function ContactsPage() {
     if (nameErr) { setAddError(nameErr); return; }
     setAddError(""); setAddSaving(true);
     try {
-      const res = await fetch("/api/contacts", {
+      const res = await csrfFetch("/api/contacts", {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: addForm.name, phone_number: addForm.phone }),
@@ -192,7 +193,7 @@ export default function ContactsPage() {
     if (nameErr) { setEditError(nameErr); return; }
     setEditSaving(true); setEditError("");
     try {
-      const res = await fetch(`/api/contacts/${editContact.id}`, {
+      const res = await csrfFetch(`/api/contacts/${editContact.id}`, {
         method: "PATCH", credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: editName }),
@@ -209,7 +210,7 @@ export default function ContactsPage() {
 
   const handleDelete = async (id: number) => {
     if (!confirm(t("contactsDeleteConfirm"))) return;
-    await fetch(`/api/contacts/${id}`, { method: "DELETE", credentials: "include" });
+    await csrfFetch(`/api/contacts/${id}`, { method: "DELETE", credentials: "include" });
     setSelected(prev => { const n = new Set(prev); n.delete(id); return n; });
     fetchContacts();
   };
@@ -220,7 +221,7 @@ export default function ContactsPage() {
     if (!confirm(t("contactsBulkDeleteConfirm").replace("{n}", String(ids.length)))) return;
     setBulkDeleting(true);
     try {
-      await fetch("/api/contacts/bulk-delete", {
+      await csrfFetch("/api/contacts/bulk-delete", {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ids }),
@@ -257,7 +258,7 @@ export default function ContactsPage() {
       phone: row[phoneColIdx] ?? "",
     }));
     try {
-      const res = await fetch("/api/contacts/import", {
+      const res = await csrfFetch("/api/contacts/import", {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ contacts: rows }),

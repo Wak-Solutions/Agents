@@ -4,6 +4,7 @@ import { Inbox, User, Users, Clock, RefreshCw, Calendar, Video, X } from "lucide
 import { useAuth } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/language-context";
 import DashboardLayout from "@/components/DashboardLayout";
+import { csrfFetch } from "@/lib/queryClient";
 
 interface InboxItem {
   item_type: "chat" | "meeting";
@@ -125,7 +126,7 @@ export default function InboxPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch("/api/inbox", { credentials: "include" });
+      const res = await csrfFetch("/api/inbox", { credentials: "include" });
       if (res.ok) setItems(await res.json());
     } catch {}
   }, []);

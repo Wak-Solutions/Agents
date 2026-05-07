@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { api } from "@shared/routes";
 import { urlBase64ToUint8Array } from "@/lib/utils";
+import { csrfFetch } from "@/lib/queryClient";
 
 /** Detect if running as installed PWA (standalone / fullscreen) */
 function isStandalone(): boolean {
@@ -33,7 +34,7 @@ async function doSubscribe(): Promise<void> {
   console.log('[Push] Service worker state:', swState, '— scope:', registration.scope);
 
   // Fetch VAPID key from the backend (always fresh, so it always matches server env).
-  const vapidRes = await fetch(api.push.vapidPublicKey.path, { credentials: 'include' });
+  const vapidRes = await csrfFetch(api.push.vapidPublicKey.path, { credentials: 'include' });
   if (!vapidRes.ok) {
     throw new Error(`[Push] Failed to fetch VAPID key — HTTP ${vapidRes.status}`);
   }
@@ -66,7 +67,7 @@ async function doSubscribe(): Promise<void> {
 }
 
 async function sendSubscriptionToBackend(subscription: PushSubscription): Promise<void> {
-  const res = await fetch(api.push.subscribe.path, {
+  const res = await csrfFetch(api.push.subscribe.path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(subscription),

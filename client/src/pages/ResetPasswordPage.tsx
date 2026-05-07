@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useParams, useLocation } from "wouter";
 import { Lock, Eye, EyeOff, Check, AlertCircle } from "lucide-react";
+import { csrfFetch } from "@/lib/queryClient";
 
 const inputClass =
   "w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#0F510F]/20 focus:border-[#0F510F]/40 transition-colors";
@@ -29,7 +30,7 @@ export default function ResetPasswordPage() {
 
     setStatus("saving");
     try {
-      const res = await fetch("/api/auth/reset-password", {
+      const res = await csrfFetch("/api/auth/reset-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token, newPassword }),

@@ -4,6 +4,7 @@ import { Video, ChevronLeft, ChevronRight, Ban, Clock } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/language-context";
 import DashboardLayout from "@/components/DashboardLayout";
+import { csrfFetch } from "@/lib/queryClient";
 
 type MeetingStatus = "pending" | "in_progress" | "completed";
 type FilterType = "all" | "upcoming" | "completed";
@@ -111,9 +112,8 @@ function WorkHoursPanel() {
   const doSave = useCallback(async () => {
     setSaveStatus("saving");
     try {
-      const res = await fetch("/api/settings/work-hours", {
+      const res = await csrfFetch("/api/settings/work-hours", {
         method: "PUT",
-        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(whRef.current),
       });
@@ -303,8 +303,8 @@ export default function Meetings() {
     setTogglingSlot(key);
     setBlockedSlots(prev => { const next = new Set(prev); if (next.has(key)) next.delete(key); else next.add(key); return next; });
     try {
-      await fetch("/api/availability/toggle", {
-        method: "POST", credentials: "include",
+      await csrfFetch("/api/availability/toggle", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ date, time }),
       });
@@ -319,7 +319,7 @@ export default function Meetings() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/meetings?filter=${filter}`, { credentials: "include" });
+      const res = await csrfFetch(`/api/meetings?filter=${filter}`, { credentials: "include" });
       if (!res.ok) throw new Error(t("meetingsErrorLoad"));
       setMeetings(await res.json());
     } catch (e: any) {
@@ -346,8 +346,8 @@ export default function Meetings() {
     window.open(meetingLink, "_blank", "noopener,noreferrer");
     setStarting(id);
     try {
-      const res = await fetch(`/api/meetings/${id}/start`, {
-        method: "PATCH", credentials: "include",
+      const res = await csrfFetch(`/api/meetings/${id}/start`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ source }),
       });
@@ -361,8 +361,8 @@ export default function Meetings() {
     if (!window.confirm(t("meetingsBtnMarkCompleteConfirm"))) return;
     setCompleting(id);
     try {
-      const res = await fetch(`/api/meetings/${id}/complete`, {
-        method: "PATCH", credentials: "include",
+      const res = await csrfFetch(`/api/meetings/${id}/complete`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ source }),
       });

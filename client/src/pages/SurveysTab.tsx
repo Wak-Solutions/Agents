@@ -7,6 +7,7 @@ import {
   ArrowLeft, Plus, Trash2, ChevronUp, ChevronDown,
   BarChart2, Edit2, CheckCircle2, XCircle, ClipboardList, AlertTriangle,
 } from "lucide-react";
+import { csrfFetch } from "@/lib/queryClient";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -101,7 +102,7 @@ export default function SurveysTab() {
   const fetchSurveys = useCallback(async () => {
     setLoading(true); setListError("");
     try {
-      const res = await fetch("/api/surveys", { credentials: "include" });
+      const res = await csrfFetch("/api/surveys", { credentials: "include" });
       if (!res.ok) throw new Error(t("statisticsFailedLoad"));
       setSurveys(await res.json());
     } catch (e: any) {
@@ -132,7 +133,7 @@ export default function SurveysTab() {
   const openEdit = async (id: number) => {
     setSaveError(""); setDeletedQIds([]);
     try {
-      const res = await fetch(`/api/surveys/${id}`, { credentials: "include" });
+      const res = await csrfFetch(`/api/surveys/${id}`, { credentials: "include" });
       if (!res.ok) throw new Error();
       const data = await res.json();
       setDraft({
@@ -151,7 +152,7 @@ export default function SurveysTab() {
     setResultsLoading(true); setResults(null);
     setView("results");
     try {
-      const res = await fetch(`/api/surveys/${id}/results`, { credentials: "include" });
+      const res = await csrfFetch(`/api/surveys/${id}/results`, { credentials: "include" });
       setResults(await res.json());
     } catch {
       setListError(t("statisticsFailedLoad"));
@@ -161,18 +162,18 @@ export default function SurveysTab() {
   };
 
   const activate = async (id: number) => {
-    await fetch(`/api/surveys/${id}/activate`, { method: "POST", credentials: "include" });
+    await csrfFetch(`/api/surveys/${id}/activate`, { method: "POST", credentials: "include" });
     fetchSurveys();
   };
 
   const deactivate = async (id: number) => {
-    await fetch(`/api/surveys/${id}/deactivate`, { method: "POST", credentials: "include" });
+    await csrfFetch(`/api/surveys/${id}/deactivate`, { method: "POST", credentials: "include" });
     fetchSurveys();
   };
 
   const deleteSurvey = async (id: number, title: string) => {
     if (!confirm(`Delete "${title}"${t("surveysDeleteConfirmSuffix")}`)) return;
-    const res = await fetch(`/api/surveys/${id}`, { method: "DELETE", credentials: "include" });
+    const res = await csrfFetch(`/api/surveys/${id}`, { method: "DELETE", credentials: "include" });
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
       alert(body.message || t("surveysDeleteFailed"));
@@ -216,7 +217,7 @@ export default function SurveysTab() {
     try {
       let surveyId = draft.id;
       if (!surveyId) {
-        const res = await fetch("/api/surveys", {
+        const res = await csrfFetch("/api/surveys", {
           method: "POST", credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ title: draft.title, description: draft.description }),
@@ -224,7 +225,7 @@ export default function SurveysTab() {
         if (!res.ok) throw new Error((await res.json()).message);
         surveyId = (await res.json()).id;
       } else {
-        const res = await fetch(`/api/surveys/${surveyId}`, {
+        const res = await csrfFetch(`/api/surveys/${surveyId}`, {
           method: "PUT", credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ title: draft.title, description: draft.description }),
@@ -232,19 +233,19 @@ export default function SurveysTab() {
         if (!res.ok) throw new Error((await res.json()).message);
       }
       for (const qid of deletedQIds) {
-        await fetch(`/api/surveys/${surveyId}/questions/${qid}`, { method: "DELETE", credentials: "include" });
+        await csrfFetch(`/api/surveys/${surveyId}/questions/${qid}`, { method: "DELETE", credentials: "include" });
       }
       for (const q of draft.questions) {
         const body = { question_text: q.question_text, question_type: q.question_type, order_index: q.order_index };
         if (!q.id) {
-          const res = await fetch(`/api/surveys/${surveyId}/questions`, {
+          const res = await csrfFetch(`/api/surveys/${surveyId}/questions`, {
             method: "POST", credentials: "include",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),
           });
           if (!res.ok) throw new Error((await res.json()).message);
         } else {
-          await fetch(`/api/surveys/${surveyId}/questions/${q.id}`, {
+          await csrfFetch(`/api/surveys/${surveyId}/questions/${q.id}`, {
             method: "PUT", credentials: "include",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(body),

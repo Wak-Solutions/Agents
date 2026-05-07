@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, buildUrl } from "@shared/routes";
 import type { Message } from "@shared/schema";
+import { csrfFetch } from "@/lib/queryClient";
 
 export function useMessages(phone: string | null) {
   return useQuery({
@@ -8,7 +9,7 @@ export function useMessages(phone: string | null) {
     queryFn: async () => {
       if (!phone) return [];
       const url = buildUrl(api.messages.list.path, { phone });
-      const res = await fetch(url, { credentials: "include" });
+      const res = await csrfFetch(url, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch messages");
       const data = await res.json();
       return data as Message[];
@@ -23,7 +24,7 @@ export function useSendMessage() {
   
   return useMutation({
     mutationFn: async ({ customer_phone, message }: { customer_phone: string, message: string }) => {
-      const res = await fetch(api.messages.send.path, {
+      const res = await csrfFetch(api.messages.send.path, {
         method: api.messages.send.method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ customer_phone, message }),

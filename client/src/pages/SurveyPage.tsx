@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useParams } from "wouter";
 import { CheckCircle2, AlertCircle } from "lucide-react";
+import { csrfFetch } from "@/lib/queryClient";
 
 interface Question {
   id: number;
@@ -76,7 +77,7 @@ export default function SurveyPage() {
           answer_text: q.question_type === "free_text" ? (a?.answer_text ?? null) : null,
         };
       });
-      const res = await fetch(`/api/survey/${token}/submit`, {
+      const res = await csrfFetch(`/api/survey/${token}/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ answers: payload }),

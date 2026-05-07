@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useAuth } from "@/hooks/use-auth";
 import DashboardLayout from "@/components/DashboardLayout";
 import { useLanguage } from "@/lib/language-context";
+import { csrfFetch } from "@/lib/queryClient";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -530,7 +531,7 @@ export default function ChatbotConfig() {
     const { config } = savePayloadRef.current;
     setSaveStatus("saving");
     try {
-      const res = await fetch("/api/chatbot-config", {
+      const res = await csrfFetch("/api/chatbot-config", {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },

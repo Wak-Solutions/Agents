@@ -13,6 +13,7 @@ import { format } from "date-fns";
 import { useAuth } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/language-context";
 import DashboardLayout from "@/components/DashboardLayout";
+import { csrfFetch } from "@/lib/queryClient";
 
 // -- Types --------------------------------------------------------------------
 
@@ -222,7 +223,7 @@ export default function CustomersPage() {
     try {
       const params = new URLSearchParams({ page: String(page) });
       if (debouncedSearch) params.set("search", debouncedSearch);
-      const res = await fetch(`/api/customers?${params}`, { credentials: "include" });
+      const res = await csrfFetch(`/api/customers?${params}`, { credentials: "include" });
       if (res.ok) {
         const data = await res.json();
         setCustomers(data.customers);

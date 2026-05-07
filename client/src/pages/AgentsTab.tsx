@@ -5,6 +5,7 @@ import { Plus, UserCheck, UserX, KeyRound, Edit2, Users, RefreshCw, X } from "lu
 import { useAuth } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/language-context";
 import DashboardLayout from "@/components/DashboardLayout";
+import { csrfFetch } from "@/lib/queryClient";
 
 type Period = "today" | "week" | "month" | "all";
 
@@ -133,7 +134,7 @@ export default function AgentsTab() {
 
   const toggleActive = async (agent: Agent) => {
     const endpoint = agent.is_active ? "deactivate" : "activate";
-    const res = await fetch(`/api/agents/${agent.id}/${endpoint}`, {
+    const res = await csrfFetch(`/api/agents/${agent.id}/${endpoint}`, {
       method: "PATCH", credentials: "include",
     });
     if (res.ok) {
@@ -150,7 +151,7 @@ export default function AgentsTab() {
     if (nameErr) { setNewError(nameErr); return; }
     setNewError(""); setNewSaving(true);
     try {
-      const res = await fetch("/api/agents", {
+      const res = await csrfFetch("/api/agents", {
         method: "POST", credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(newAgent),
@@ -174,7 +175,7 @@ export default function AgentsTab() {
     if (nameErr) { setEditError(nameErr); return; }
     setEditError(""); setEditSaving(true);
     try {
-      const res = await fetch(`/api/agents/${editAgent.id}`, {
+      const res = await csrfFetch(`/api/agents/${editAgent.id}`, {
         method: "PUT", credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editForm),
@@ -194,7 +195,7 @@ export default function AgentsTab() {
     if (!resetAgent) return;
     setResetError(""); setResetSaving(true);
     try {
-      const res = await fetch(`/api/agents/${resetAgent.id}/reset-password`, {
+      const res = await csrfFetch(`/api/agents/${resetAgent.id}/reset-password`, {
         method: "PATCH", credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ new_password: newPw }),

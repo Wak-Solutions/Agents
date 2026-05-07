@@ -6,6 +6,7 @@ import { useLanguage } from "@/lib/language-context";
 import { useQueryClient } from "@tanstack/react-query";
 import { api } from "@shared/routes";
 import { startRegistration, startAuthentication } from "@simplewebauthn/browser";
+import { csrfFetch } from "@/lib/queryClient";
 
 export default function Login() {
   const [identifier, setIdentifier] = useState("");
@@ -34,7 +35,7 @@ export default function Login() {
     setTermsAccepting(true);
     try {
       console.log("[login] submitting accept-terms");
-      const res = await fetch("/api/agents/accept-terms", { method: "POST", credentials: "include" });
+      const res = await csrfFetch("/api/agents/accept-terms", { method: "POST", credentials: "include" });
       console.log("[login] accept-terms response status:", res.status);
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -76,7 +77,7 @@ export default function Login() {
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`/api/auth/webauthn/registered?email=${encodeURIComponent(id)}`);
+        const res = await csrfFetch(`/api/auth/webauthn/registered?email=${encodeURIComponent(id)}`);
         const data = await res.json();
         if (!cancelled) setBiometricRegistered(!!data.registered);
       } catch {
@@ -90,7 +91,7 @@ export default function Login() {
     setBiometricError("");
     setBiometricPending(true);
     try {
-      const optRes = await fetch("/api/auth/webauthn/login/options", {
+      const optRes = await csrfFetch("/api/auth/webauthn/login/options", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: identifier.trim() }),
@@ -98,7 +99,7 @@ export default function Login() {
       if (!optRes.ok) throw new Error(t("loginErrorNoBiometric"));
       const options = await optRes.json();
       const assertion = await startAuthentication({ optionsJSON: options });
-      const verifyRes = await fetch("/api/auth/webauthn/login/verify", {
+      const verifyRes = await csrfFetch("/api/auth/webauthn/login/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(assertion),
@@ -131,7 +132,7 @@ export default function Login() {
     setForgotStatus("sending");
     setForgotError("");
     try {
-      const res = await fetch("/api/auth/forgot-password", {
+      const res = await csrfFetch("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ identifier: forgotIdentifier.trim() }),

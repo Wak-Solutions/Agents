@@ -2,13 +2,13 @@ import { useState, useEffect } from "react";
 import { useLocation, Link } from "wouter";
 import { nameError } from "@/lib/validate-name";
 import { useLanguage } from "@/lib/language-context";
-import { queryClient } from "@/lib/queryClient";
 import { api } from "@shared/routes";
 import {
   User, Building2, MessageSquare, Users, Rocket,
   Check, ChevronRight, ChevronLeft, Eye, EyeOff, Globe,
   Plus, Trash2, AlertTriangle,
 } from "lucide-react";
+import { csrfFetch, queryClient } from "@/lib/queryClient";
 
 /* ═══════════════════════════════════════════════════════════════════════════
    TYPES
@@ -434,7 +434,7 @@ function Step3({ form, setForm, t }: { form: FormData; setForm: (f: FormData) =>
     setVerifyError("");
     setWabaError("");
     try {
-      const resp = await fetch("/api/register/whatsapp/verify", {
+      const resp = await csrfFetch("/api/register/whatsapp/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
@@ -792,7 +792,7 @@ export default function RegisterPage() {
 
     try {
       if (step === 1) {
-        const resp = await fetch("/api/register", {
+        const resp = await csrfFetch("/api/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
@@ -811,7 +811,7 @@ export default function RegisterPage() {
           return;
         }
       } else if (step === 2) {
-        const resp2 = await fetch("/api/register/business", {
+        const resp2 = await csrfFetch("/api/register/business", {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
@@ -831,7 +831,7 @@ export default function RegisterPage() {
         }
       } else if (step === 3) {
         if (form.phoneNumberId || form.accessToken) {
-          const resp3 = await fetch("/api/register/whatsapp", {
+          const resp3 = await csrfFetch("/api/register/whatsapp", {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             credentials: "include",
@@ -873,7 +873,7 @@ export default function RegisterPage() {
 
         const validAgents = form.agents.filter((a) => a.name && a.email);
         if (validAgents.length > 0) {
-          const resp5 = await fetch("/api/register/invite", {
+          const resp5 = await csrfFetch("/api/register/invite", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             credentials: "include",
@@ -896,7 +896,7 @@ export default function RegisterPage() {
           }
         }
       } else if (step === 5) {
-        const completeRes = await fetch("/api/register/complete", {
+        const completeRes = await csrfFetch("/api/register/complete", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",

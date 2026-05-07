@@ -10,6 +10,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth, useLogout } from "@/hooks/use-auth";
 import { useLanguage } from "@/lib/language-context";
 import { usePushNotifications } from "@/hooks/use-push";
+import { csrfFetch } from "@/lib/queryClient";
 
 interface TrialStatus {
   trialDays: number;
@@ -94,11 +95,11 @@ export default function DashboardLayout({
 
   const handleRegisterBiometric = async () => {
     try {
-      const optRes = await fetch("/api/auth/webauthn/register/options", { method: "POST", credentials: "include" });
+      const optRes = await csrfFetch("/api/auth/webauthn/register/options", { method: "POST", credentials: "include" });
       if (!optRes.ok) return alert("Failed to start biometric registration");
       const options = await optRes.json();
       const attResp = await startRegistration({ optionsJSON: options });
-      const verifyRes = await fetch("/api/auth/webauthn/register/verify", {
+      const verifyRes = await csrfFetch("/api/auth/webauthn/register/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(attResp),
