@@ -566,11 +566,13 @@ export function registerMeetingRoutes(app: Express): void {
         scheduledUtc,
       }).catch((e: any) => logger.error('Manager email failed', e.message));
 
-      // WhatsApp booking confirmation to customer (non-blocking)
+      // WhatsApp booking confirmation to customer (non-blocking) — include the
+      // join link immediately so the customer has it on hand. The 15-minute
+      // pre-meeting reminder still fires via the Chatbot link_delivery worker.
       sendWhatsAppText(
         companyId,
         meeting.customer_phone,
-        `Your meeting with ${brandName} is confirmed for ${ksaLabel} (KSA time).\n\nYou will receive your meeting link 15 minutes before the start time.`
+        `Your meeting with ${brandName} is confirmed for ${ksaLabel} (KSA time).\n\nJoin here: ${brandedLink}\n\nWe'll send you a reminder 15 minutes before the meeting starts.`
       ).catch((e: any) => logger.error('Booking WhatsApp failed', e.message));
 
       // Push notification
