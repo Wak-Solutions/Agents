@@ -195,7 +195,15 @@ export async function registerChatbotConfigRoutes(app: Express): Promise<void> {
       const system_prompt_preview = compilePrompt(structuredCfg);
       return res.json({ ...row, system_prompt_preview });
     } catch (err: any) {
-      logger.error('getChatbotConfig failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
+      // Dual-auth route: req.companyId is unset (the handler uses a local
+      // companyId), and req.session?.agentId is only present for dashboard
+      // callers. Log only the fields that are meaningful for whichever caller
+      // type is in flight, so logs aren't littered with `undefined`.
+      const _agentId = req.session?.agentId;
+      logger.error(
+        'getChatbotConfig failed',
+        `${_agentId !== undefined ? `agentId: ${_agentId}, ` : ''}ip: ${req.ip ?? 'unknown'}, error: ${err.message}`,
+      );
       res.status(500).json({ message: 'Internal error' });
     }
   });

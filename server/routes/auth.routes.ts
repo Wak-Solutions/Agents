@@ -127,6 +127,7 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
       req.session.role = agent.role;
       req.session.agentName = agent.name;
       req.session.isActive = true;
+      req.session.lastActiveCheck = Date.now();
       (req.session as any).termsAcceptedAt = termsAcceptedAt;
       return req.session.save((err: any) => {
         if (err) {
@@ -385,6 +386,7 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
         req.session.role = stored.role;
         req.session.agentName = stored.agent_name;
         req.session.isActive = true;
+        req.session.lastActiveCheck = Date.now();
         (req.session as any).termsAcceptedAt = waTermsAcceptedAt;
         (req.session as any).webauthnChallenge = undefined;
         req.session.save((err: any) => {

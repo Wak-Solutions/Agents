@@ -10,6 +10,15 @@ import type { Request, Response, NextFunction } from 'express';
 import { isCompanyTrialExpired, getCompanyTrialStatus } from '../lib/trial';
 import { requireCompanyId, getCompanyId } from './requireCompanyId';
 import { pool } from '../db';
+import { createLogger } from '../lib/logger';
+
+const logger = createLogger('auth');
+
+// SR-013: TTL between DB rechecks of agents.is_active for an authenticated
+// session. ~60 s — caps the staleness window for deactivated accounts at
+// roughly one minute, while keeping the per-request DB cost negligible
+// (≤ 1 query per session per minute).
+const ACTIVE_RECHECK_TTL_MS = 60_000;
 
 export { requireCompanyId, getCompanyId };
 
@@ -74,6 +83,35 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
     );
     isActive = agent.rows[0]?.is_active;
   }
+  // SR-013: re-check is_active from the DB at most once per ACTIVE_RECHECK_TTL_MS
+  // so that an admin deactivating an agent invalidates that agent's existing
+  // session within ~60 s instead of waiting up to 7 days for cookie expiry.
+  // Fail-open on DB error — a transient Postgres outage must not lock out
+  // the entire dashboard.
+  const _now = Date.now();
+  const _lastCheck = req.session.lastActiveCheck;
+  if (!_lastCheck || _now - _lastCheck > ACTIVE_RECHECK_TTL_MS) {
+    try {
+      const fresh = await pool.query(
+        'SELECT is_active FROM agents WHERE id = $1',
+        [req.session.agentId]
+      );
+      const freshActive = fresh.rows[0]?.is_active;
+      if (freshActive === false) {
+        req.session.destroy(() => {});
+        res.status(401).json({ message: 'Account deactivated' });
+        return;
+      }
+      if (freshActive !== undefined) {
+        isActive = freshActive;
+        req.session.isActive = freshActive;
+      }
+      req.session.lastActiveCheck = _now;
+    } catch (err: any) {
+      // Fail open — never block requests due to a transient DB error.
+      logger.error('auth recheck failed', `agentId: ${req.session.agentId}, error: ${err?.message}`);
+    }
+  }
   if (isActive === false) {
     req.session.destroy(() => {});
     res.status(401).json({ message: 'Account deactivated' });
@@ -109,6 +147,29 @@ export async function requireAdmin(req: Request, res: Response, next: NextFuncti
       [req.session.agentId]
     );
     isActive = agent.rows[0]?.is_active;
+  }
+  const _now = Date.now();
+  const _lastCheck = req.session.lastActiveCheck;
+  if (!_lastCheck || _now - _lastCheck > ACTIVE_RECHECK_TTL_MS) {
+    try {
+      const fresh = await pool.query(
+        'SELECT is_active FROM agents WHERE id = $1',
+        [req.session.agentId]
+      );
+      const freshActive = fresh.rows[0]?.is_active;
+      if (freshActive === false) {
+        req.session.destroy(() => {});
+        res.status(401).json({ message: 'Account deactivated' });
+        return;
+      }
+      if (freshActive !== undefined) {
+        isActive = freshActive;
+        req.session.isActive = freshActive;
+      }
+      req.session.lastActiveCheck = _now;
+    } catch (err: any) {
+      logger.error('auth recheck failed', `agentId: ${req.session.agentId}, error: ${err?.message}`);
+    }
   }
   if (isActive === false) {
     req.session.destroy(() => {});

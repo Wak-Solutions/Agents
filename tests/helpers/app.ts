@@ -21,6 +21,7 @@ export interface TestSession {
   role?: string;
   agentName?: string;
   isActive?: boolean;
+  lastActiveCheck?: number;
 }
 
 /**
@@ -54,6 +55,12 @@ export function buildApp() {
       Object.assign(req.session, pendingSession);
       if (req.session.authenticated && req.session.isActive === undefined) {
         req.session.isActive = true;
+      }
+      // SR-013: stamp the recheck timer so requireAuth's TTL-bounded DB recheck
+      // is skipped during this synthetic test request — otherwise it would consume
+      // the test's `mockResolvedValueOnce` queue meant for the actual handler.
+      if (req.session.authenticated && req.session.lastActiveCheck === undefined) {
+        req.session.lastActiveCheck = Date.now();
       }
       pendingSession = null;
     }

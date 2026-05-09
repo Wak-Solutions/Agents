@@ -582,7 +582,7 @@ export function registerSurveyRoutes(app: any, requireAuth: any, requireAdmin: a
       res.json({ success: true });
     } catch (err: any) {
       if (err instanceof z.ZodError) return res.status(400).json({ message: 'Invalid input' });
-      logger.error('submitSurvey failed', `companyId: ${req.companyId}, agentId: ${req.session?.agentId}, error: ${err.message}`);
+      logger.error('submitSurvey failed', `token: ${req.params?.token ?? '(none)'}, ip: ${req.ip ?? 'unknown'}, error: ${err.message}`);
       res.status(500).json({ message: 'Internal error' });
     }
   });

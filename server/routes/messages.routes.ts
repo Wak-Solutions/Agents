@@ -23,7 +23,7 @@ export function registerMessageRoutes(app: Express): void {
   const messagesLimiter = rateLimit({
     windowMs: 60 * 1000,
     max: 30,
-    keyGenerator: (req: any) => `msgs:${req.session?.agentId ?? ipKeyGenerator(req) ?? 'unknown'}:${req.params?.phone ?? ''}`,
+    keyGenerator: (req: any) => `msgs:${req.session?.agentId ?? ipKeyGenerator(req) ?? 'unknown'}`,
     standardHeaders: true,
     legacyHeaders: false,
     message: { message: 'Too many requests' },

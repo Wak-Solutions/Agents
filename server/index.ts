@@ -34,6 +34,9 @@ declare module "express-session" {
     agentName?: string;
     csrfToken?: string;
     isActive?: boolean;
+    // SR-013: epoch-ms of the last DB recheck of agents.is_active. Used by
+    // requireAuth to throttle the recheck to ~once per minute per session.
+    lastActiveCheck?: number;
   }
 }
 
