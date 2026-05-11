@@ -121,29 +121,35 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
         ? new Date(agent.terms_accepted_at).toISOString()
         : null;
       await pool.query(`UPDATE agents SET last_login=NOW() WHERE id=$1`, [agent.id]);
-      req.session.authenticated = true;
-      req.session.agentId = agent.id;
-      req.session.companyId = agent.company_id;
-      req.session.role = agent.role;
-      req.session.agentName = agent.name;
-      req.session.isActive = true;
-      req.session.lastActiveCheck = Date.now();
-      (req.session as any).termsAcceptedAt = termsAcceptedAt;
-      return req.session.save((err: any) => {
-        if (err) {
-          logger.error('Session save failed after login', `agentId: ${agent.id}, error: ${err.message}`);
-          return res.status(500).json({ message: 'Session save error' });
+      return req.session.regenerate((regenErr: any) => {
+        if (regenErr) {
+          logger.error('Session regeneration failed after login', `agentId: ${agent.id}, error: ${regenErr.message}`);
+          return res.status(500).json({ error: 'Session error' });
         }
-        logger.info('Login success', `agentId: ${agent.id}, role: ${agent.role}`);
-        // Return the full auth shape so the frontend can populate its cache
-        // immediately without a second /api/me round-trip.
-        res.json({
-          success: true,
-          authenticated: true,
-          role: agent.role,
-          agentId: agent.id,
-          agentName: agent.name,
-          termsAcceptedAt,
+        req.session.authenticated = true;
+        req.session.agentId = agent.id;
+        req.session.companyId = agent.company_id;
+        req.session.role = agent.role;
+        req.session.agentName = agent.name;
+        req.session.isActive = true;
+        req.session.lastActiveCheck = Date.now();
+        (req.session as any).termsAcceptedAt = termsAcceptedAt;
+        req.session.save((err: any) => {
+          if (err) {
+            logger.error('Session save failed after login', `agentId: ${agent.id}, error: ${err.message}`);
+            return res.status(500).json({ message: 'Session save error' });
+          }
+          logger.info('Login success', `agentId: ${agent.id}, role: ${agent.role}`);
+          // Return the full auth shape so the frontend can populate its cache
+          // immediately without a second /api/me round-trip.
+          res.json({
+            success: true,
+            authenticated: true,
+            role: agent.role,
+            agentId: agent.id,
+            agentName: agent.name,
+            termsAcceptedAt,
+          });
         });
       });
     } catch (err: any) {
@@ -380,28 +386,34 @@ export async function registerAuthRoutes(app: Express): Promise<void> {
         const waTermsAcceptedAt = stored.terms_accepted_at
           ? new Date(stored.terms_accepted_at).toISOString()
           : null;
-        req.session.authenticated = true;
-        req.session.agentId = stored.agent_id;
-        req.session.companyId = stored.company_id;
-        req.session.role = stored.role;
-        req.session.agentName = stored.agent_name;
-        req.session.isActive = true;
-        req.session.lastActiveCheck = Date.now();
-        (req.session as any).termsAcceptedAt = waTermsAcceptedAt;
-        (req.session as any).webauthnChallenge = undefined;
-        req.session.save((err: any) => {
-          if (err) {
-            logger.error('Session save failed after WebAuthn login', `agentId: ${stored.agent_id}, error: ${err.message}`);
-            return res.status(500).json({ message: 'Session error' });
+        req.session.regenerate((regenErr: any) => {
+          if (regenErr) {
+            logger.error('Session regeneration failed after WebAuthn login', `agentId: ${stored.agent_id}, error: ${regenErr.message}`);
+            return res.status(500).json({ error: 'Session error' });
           }
-          logger.info('WebAuthn login success', `agentId: ${stored.agent_id}, companyId: ${stored.company_id}`);
-          res.json({
-            success: true,
-            authenticated: true,
-            role: stored.role,
-            agentId: stored.agent_id,
-            agentName: stored.agent_name,
-            termsAcceptedAt: waTermsAcceptedAt,
+          req.session.authenticated = true;
+          req.session.agentId = stored.agent_id;
+          req.session.companyId = stored.company_id;
+          req.session.role = stored.role;
+          req.session.agentName = stored.agent_name;
+          req.session.isActive = true;
+          req.session.lastActiveCheck = Date.now();
+          (req.session as any).termsAcceptedAt = waTermsAcceptedAt;
+          (req.session as any).webauthnChallenge = undefined;
+          req.session.save((err: any) => {
+            if (err) {
+              logger.error('Session save failed after WebAuthn login', `agentId: ${stored.agent_id}, error: ${err.message}`);
+              return res.status(500).json({ message: 'Session error' });
+            }
+            logger.info('WebAuthn login success', `agentId: ${stored.agent_id}, companyId: ${stored.company_id}`);
+            res.json({
+              success: true,
+              authenticated: true,
+              role: stored.role,
+              agentId: stored.agent_id,
+              agentName: stored.agent_name,
+              termsAcceptedAt: waTermsAcceptedAt,
+            });
           });
         });
       } else {
